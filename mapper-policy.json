@@ -1,0 +1,20 @@
+{
+	"Version": "2012-10-17",
+	"Statement": [
+		{
+			"Effect": "Allow",
+			"Action": [
+				"iam:GetRole",
+				"iam:ListUsers",
+				"iam:ListRoles",
+				"iam:ListInstanceProfilesForRole",
+				"iam:SimulatePrincipalPolicy",
+				"iam:GetContextKeysForPrincipalPolicy",
+				"lambda:ListFunctions",
+				"cloudformation:ListStacks",
+				"cloudformation:DescribeStacks"
+			],
+			"Resource": "*"
+		}
+	]
+}
