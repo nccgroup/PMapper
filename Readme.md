@@ -208,7 +208,7 @@ user/PowerUser can change privileges because:
 
 ### Sample Visualization
 
-![Output from visualize subcommand](example_output.png)
+![Example output from visualize subcommand](/example_output.png)
 
 ## Planned TODOs
 
