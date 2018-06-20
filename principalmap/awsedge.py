@@ -11,7 +11,8 @@ class AWSEdge:
 	lookup = {
 		'ADMIN': 'can use existing administrative privileges to access',
 		'IAM_CREATEKEY': 'can create access keys with IAM to access',
-		'IAM_CHANGEPASSWORD': 'can change a password in IAM to access',
+		'IAM_CHANGEPASSWORD': 'can change a password with IAM to access',
+		'IAM_CREATEPASSWORD': 'can create a password with IAM to access', 
 		'STS_ASSUMEROLE': 'can use STS to assume the role',
 		'EC2_MAKEPROFILE': 'can create an EC2 instance and create an instance profile to access',
 		'EC2_USEPROFILE': 'can create an EC2 instance and use an existing instance profile to access',

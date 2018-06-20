@@ -9,9 +9,8 @@ from .iamchecks import IAMChecker
 from .lambdachecks import LambdaChecker
 from .cloudformationchecks import CloudFormationChecker
 from principalmap.awsedge import AWSEdge
+from tqdm import tqdm
 import principalmap.queries
-
-import threading
 
 # Object that launches and manages all the different groups of checks
 class CheckRunner:
@@ -23,11 +22,11 @@ class CheckRunner:
 	# threads to find our edges. We're using threading  because we're making a 
 	# bunch of API calls over the Internet.
 	def runChecks(self):
-		targets = []
 
 		# Huge optimization: figure out the admin users and set "admin" edges
+		print('[+] Pulling info on IAM users and roles, finding admins.')
 		iamclient = self.session.create_client('iam')
-		for node in self.graph.nodes:
+		for node in tqdm(self.graph.nodes, ascii=True, desc='Principals Checked'):
 			node.set_admin(principalmap.queries.privesc.PrivEscQuery.check_self(iamclient, node))
 		for x in self.graph.nodes:
 			for y in self.graph.nodes:
@@ -37,28 +36,18 @@ class CheckRunner:
 					self.graph.edges.append(
 						AWSEdge(x, y, 'ADMIN')
 					)
-
-		# Compose target tuple list, ignore self and admins 
-		for nodeX in self.graph.nodes:
-			for nodeY in self.graph.nodes:
-				if nodeX == nodeY:
-					continue # ignore self-connections
-				if nodeX.get_admin():
-					continue # ignore admin users
-				targets.append((nodeX, nodeY))
+		print('[+] Finished finding admins.')
 
 		# Create each object to run checks
-		checks = [
-			EC2Checker(targets, self.session, self.graph), 
-			IAMChecker(targets, self.session, self.graph), 
-			LambdaChecker(targets, self.session, self.graph),
-			CloudFormationChecker(self.graph.nodes, self.session, self.graph)
+		checkers = [
+			EC2Checker(),
+			IAMChecker(),
+			LambdaChecker(),
+			CloudFormationChecker()
 		]
 		
-		# Run the checks
-		# TODO: threadpool this in the future
-		for check in checks:
-			check.start()
-		for check in checks:
-			check.join()
+		# Run the checks in each checker
+		for checker in checkers:
+			edgelist = checker.performChecks(self.session, self.graph.nodes)
+			self.graph.edges.extend(edgelist)
 

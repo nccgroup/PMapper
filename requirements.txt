@@ -1,2 +1,3 @@
 botocore
 pydot
+tqdm

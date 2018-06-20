@@ -5,50 +5,102 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import botocore.session
-import threading
-import time
 
 from .util import *
 from principalmap.awsedge import AWSEdge
+from tqdm import tqdm
 
-# A class to check if Lambda can be used by a principal to access another
-class LambdaChecker(threading.Thread):
+# A class to check if Lambda can be used by a principal to access another principal
+class LambdaChecker():
 	# regions with Lambda
 	regions = ['us-east-1', 'us-east-2', 'us-west-1', 'us-west-2', 'ap-northeast-1',
 	'ap-northeast-2', 'ap-south-1', 'ap-southeast-1', 'ap-southeast-2', 'ca-central-1',
 	'eu-central-1', 'eu-west-1', 'eu-west-2', 'eu-west-3', 'sa-east-1']
 
-	def __init__(self, targets, session, graph):
-		super(LambdaChecker, self).__init__()
+	def __init__(self):
 		self.functions = None # cache response to reduce API calls
-		self.targets   = targets
-		self.session   = session
-		self.graph     = graph
-	
-	def run(self):
-		print('[+] Starting Lambda checks.')
-		for x in self.targets:
-			edgelist = self.performChecks(self.session, x[0], x[1])
-			self.graph.addedges(edgelist)
-			time.sleep(0.25) # dealing with throttle
-		print('[+] Completed Lambda checks.') 
 
-	def performChecks(self, session, nodeX, nodeY):
+	def performChecks(self, session, nodes):
+		print('[+] Starting Lambda checks.')
 		iamclient = session.create_client('iam')
 		result = []
-		if not nodeY.get_type() == 'role':
-			return result
-		
-		if self.chk_createlambda(iamclient, nodeX, nodeY):
-			result.append(AWSEdge(nodeX, nodeY, 'LAMBDA_CREATEFUNCTION'))
 
-		if self.chk_changelambdaandrole(iamclient, session, nodeX, nodeY):
-			result.append(AWSEdge(nodeX, nodeY, 'LAMBDA_CHANGEFUNCTIONANDROLE'))
+		self.update_functions(session) # do the expensive task of pulling Lambda functions
+		functionarns = []
+		for f in self.functions:
+			functionarns.append(f['FunctionArn'])
 		
-		if self.chk_changeonlylambda(iamclient, session, nodeX, nodeY):
-			result.append(AWSEdge(nodeX, nodeY, 'LAMBDA_CHANGEFUNCTIONONLY'))
+		for nodeX in tqdm(nodes, ascii=True, desc='Principals Checked'):
+			# skip check for admins
+			if nodeX.get_admin():
+				continue
 
+			# build a list of passable roles to check
+			roles = []
+			for nodeY in nodes:
+				# skip self-checks
+				if nodeY == nodeX:
+					continue
+
+				# need to know if nodeY can be passed to Lambda
+				if 'lambdaworthy' not in nodeY.tmp:
+					nodeY.tmp['lambdaworthy'] = nodeY.get_type() == 'role' and nodeY.chk_trust_document(iamclient, 'lambda.amazonaws.com')
+				if nodeY.tmp['lambdaworthy']:
+					roles.append(nodeY)
+			
+			# can nodeX create or invoke an arbitrary lambda?
+			create_testresults = testMass(iamclient, nodeX, ['lambda:CreateFunction', 'lambda:InvokeFunction'], ['*'])
+
+			# can nodeX change or invoke existing lambdas?
+			change_testresults = testMass(iamclient, nodeX, ['lambda:UpdateFunctionCode', 'lambda:UpdateFunctionConfiguration', 'lambda:InvokeFunction'], functionarns)
+			
+			# Bail if nodeX can't invoke anything
+			invokeskip = True
+			createskip = True # for later
+			for action, label, allowed in change_testresults + create_testresults:
+				if allowed and action == 'lambda:InvokeFunction':
+					invokeskip = False
+				elif allowed and action == 'lambda:CreateFunction':
+					createskip = False
+			if invokeskip:
+				continue
+
+			# check if nodeX can update existing lambda code to access passed roles
+			for action, label, allowed in change_testresults:
+				if allowed and action == 'lambda:UpdateFunctionCode':
+					targetfunc = None
+					for func in self.functions:
+						if label == func['FunctionArn']:
+							targetfunc = func
+							break
+					if targetfunc != None and targetfunc['Role'] != '':
+						targetrole = None
+						for nodeY in roles:
+							if nodeY.label == targetfunc['Role']:
+								result.append(AWSEdge(nodeX, nodeY, 'LAMBDA_CHANGEFUNCTIONONLY'))
+
+			# Skip passrole checks if nodeX can't create lambdas or update their function configuration
+			updateskip = True
+			for action, label, allowed in change_testresults:
+				if allowed and action == 'lambda:UpdateFunctionConfiguration':
+					updateskip = False
+					break
+			if updateskip and createskip:
+				continue
+			
+			# What can nodeX pass?
+			passing_testresults = testMassPass(iamclient, nodeX, roles, 'lambda.amazonaws.com')
+			for nodeY in passing_testresults:
+				if ('lambda:CreateFunction', '*', True) in create_testresults:
+					result.append(AWSEdge(nodeX, nodeY, 'LAMBDA_CREATEFUNCTION'))
+				for action, label, allowed in change_testresults:
+					if allowed and action == 'lambda:UpdateFunctionConfiguration':
+						if ('lambda:UpdateFunctionCode', label, True) in change_testresults:
+							result.append(AWSEdge(nodeX, nodeY, 'LAMBDA_CHANGEFUNCTIONANDROLE'))
+						
+		print('[+] Finished Lambda checks.')
 		return result
+
 	
 
 	def chk_createlambda(self, iamclient, nodeX, nodeY):
@@ -96,7 +148,7 @@ class LambdaChecker(threading.Thread):
 			self.functions = []
 			# Lambda's API didn't return a full list of functions all the time, 
 			# so we have to do this expensive pull from each region
-			for region in LambdaChecker.regions:
+			for region in tqdm(LambdaChecker.regions, ascii=True, desc='Regions Checked for Lambda Functions'):
 				lambdaclient = session.create_client('lambda', region_name=region)
 				response = lambdaclient.list_functions()
 				if 'Functions' in response and isinstance(response['Functions'], list):

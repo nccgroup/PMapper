@@ -3,10 +3,8 @@ A named node in a graph which represents a principal in an AWS account.
 
 The label value returns the full ARN, str() returns a shortened representation.
 
-We use a member called properties to cache information, with the goal of 
-reducing the amount of AWS API calls made. Since these nodes can be accessed 
-through threading, we use a per-object lock to make sure there's no 
-issues with accessing data.
+We use two fields called properties and tmp to cache information, with the goal of 
+reducing the amount of AWS API calls made.
 
 """
 from __future__ import absolute_import
@@ -15,7 +13,6 @@ from __future__ import unicode_literals
 
 import botocore.session
 import re
-import threading
 
 class AWSNode:
 	def __init__(self, label, properties=None):
@@ -25,6 +22,7 @@ class AWSNode:
 		else:
 			self.properties = properties
 		self.fullroleobj = None # we don't want this cached
+		self.tmp = {} # stash stuff here that will not be added to repr(), for caching
 
 	def __str__(self):
 		return self.get_type() + "/" + self.get_name()
