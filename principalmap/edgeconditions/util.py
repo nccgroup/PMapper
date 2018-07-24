@@ -35,6 +35,9 @@ def testMass(iamclient, node, actionlist, resourcelist):
 		_extractResourceResults(response, result)
 		while response['IsTruncated']:
 			response = iamclient.simulate_principal_policy(
+				PolicySourceArn=node.label,
+				ActionNames=actionlist,
+				ResourceArns=resourcelist,
 				Marker=response['Marker']
 			)
 			_extractResourceResults(response, result)
@@ -51,6 +54,9 @@ def testMass(iamclient, node, actionlist, resourcelist):
 		_extractResults(response, result)
 		while response['IsTruncated']:
 			response = iamclient.simulate_principal_policy(
+				PolicySourceArn=node.label,
+				ActionNames=actionlist,
+				ResourceArns=resourcelist,
 				Marker=response['Marker']
 			)
 			_extractResults(response, result)
@@ -97,12 +103,26 @@ def testMassPass(iamclient, passer, candidates, service):
 		ResourceArns=arnlist,
 		ContextEntries=context_entries
 	)
-	for candidate in candidates:
-		for resourceresult in response['EvaluationResults'][0]['ResourceSpecificResults']:
-			if candidate.label == resourceresult['EvalResourceName'] and resourceresult['EvalResourceDecision'] == 'allowed':
-				results.append(candidate)
+	results.extend(_extractPassResults(response, candidates))
+	while response['IsTruncated']:
+		response = iamclient.simulate_principal_policy(
+			PolicySourceArn=passer.label,
+			ActionNames=['iam:PassRole'],
+			ResourceArns=arnlist,
+			ContextEntries=context_entries,
+			Marker=response['Marker']
+		)
+		results.extend(_extractPassResults(response, candidates))
 
 	return results
+
+def _extractPassResults(response, candidates):
+	result = []
+	for candidate in candidates:
+		for rsr in response['EvaluationResults'][0]['ResourceSpecificResults']:
+			if candidate.label == rsr['EvalResourceName'] and rsr['EvalResourceDecision'] == 'allowed':
+				result.append(candidate)
+	return result
 
 # For testing actions that require iam:PassRole permission, handles 
 # the iam:PassedToService context entry
