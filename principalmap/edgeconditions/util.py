@@ -33,6 +33,9 @@ def testMass(iamclient, node, actionlist, resourcelist):
         _extractResourceResults(response, result)
         while response['IsTruncated']:
             response = iamclient.simulate_principal_policy(
+                PolicySourceArn=node.label,
+                ActionNames=actionlist,
+                ResourceArns=resourcelist,
                 Marker=response['Marker']
             )
             _extractResourceResults(response, result)
@@ -49,6 +52,9 @@ def testMass(iamclient, node, actionlist, resourcelist):
         _extractResults(response, result)
         while response['IsTruncated']:
             response = iamclient.simulate_principal_policy(
+                PolicySourceArn=node.label,
+                ActionNames=actionlist,
+                ResourceArns=resourcelist,
                 Marker=response['Marker']
             )
             _extractResults(response, result)

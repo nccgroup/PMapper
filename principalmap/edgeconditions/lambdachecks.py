@@ -42,8 +42,8 @@ class LambdaChecker():
 
                 # need to know if nodeY can be passed to Lambda
                 if 'lambdaworthy' not in nodeY.tmp:
-                    nodeY.tmp['lambdaworthy'] = nodeY.get_type() == 'role' and nodeY.chk_trust_document(iamclient,
-                                                                                                        'lambda.amazonaws.com')
+                    nodeY.tmp['lambdaworthy'] = nodeY.get_type() == 'role' and \
+                                                nodeY.chk_trust_document(iamclient, 'lambda.amazonaws.com')
                 if nodeY.tmp['lambdaworthy']:
                     roles.append(nodeY)
 
@@ -121,9 +121,8 @@ class LambdaChecker():
 
         for f in self.functions:
             if testAction(iamclient, nodeX.label, 'lambda:UpdateFunctionCode', f['FunctionArn']):
-                if testAction(iamclient, nodeX.label, 'lambda:UpdateFunctionConfiguration') and testAction(iamclient,
-                                                                                                           nodeX.label,
-                                                                                                           'lambda:InvokeFunction'):
+                if testAction(iamclient, nodeX.label, 'lambda:UpdateFunctionConfiguration') and \
+                        testAction(iamclient, nodeX.label, 'lambda:InvokeFunction'):
                     if testPassRole(iamclient, nodeX, nodeY, 'lambda.amazonaws.com'):
                         return True
 
