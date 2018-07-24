@@ -2,7 +2,7 @@
 
 from __future__ import absolute_import, print_function, unicode_literals
 
-from principalmap.edgeconditions.util import getResourcePolicy, testAction
+from principalmap.edgeconditions.util import testAction
 
 
 # Tests if a node can do a given action with a given resource
@@ -17,11 +17,12 @@ def test_for_node(session, graph, node, action, resource=None):
                 break
         else:
             # TODO: figure out how to get this to play nice when checking roles with resource policy
-            #policy = getResourcePolicy(session, resource)
-            if testAction(iamclient, node_edgelist_tuple[0].label, action, resource):#, policy):
+            # policy = getResourcePolicy(session, resource)
+            if testAction(iamclient, node_edgelist_tuple[0].label, action, resource):  # , policy):
                 result = node_edgelist_tuple
                 break
     return result
+
 
 def print_search_result(node_edgelist_tuple, action, resource=None):
     if len(node_edgelist_tuple[1]) == 0:
@@ -49,6 +50,7 @@ def grab_node_by_name(input_str, graph):
             return node
     return None
 
+
 # Given a graph and input_node, find all nodes X where there's a path from
 # input_node to X. Return a list of tuple (node, edgelist_to_node)
 def get_relevant_nodes(graph, input_node):
@@ -65,13 +67,15 @@ def get_relevant_nodes(graph, input_node):
             result.append(node_tuple)
             for edge in graph.edges:
                 if edge.nodeX == node_tuple[0]:
-                    if not node_in_lists(edge.nodeY, [seen_node_edgelist_tuples, next_node_edgelist_tuples, todo_node_edgelist_tuples]):
+                    if not node_in_lists(edge.nodeY, [seen_node_edgelist_tuples, next_node_edgelist_tuples,
+                                                      todo_node_edgelist_tuples]):
                         temp = list(node_tuple[1])
                         temp.append(edge)
                         todo_node_edgelist_tuples.append((edge.nodeY, temp))
 
         next_node_edgelist_tuples = todo_node_edgelist_tuples
     return result
+
 
 def node_in_lists(node, listoflists):
     for alist in listoflists:
