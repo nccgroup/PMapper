@@ -6,22 +6,22 @@
 
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
+from __future__ import absolute_import, print_function, unicode_literals
 
 import argparse
-import botocore.session
 import logging
 import os.path
-import principalmap.enumerator
-from principalmap.querying import perform_query
-from principalmap.visualizing import perform_visualization
 import sys
 
+import botocore.session
+
+import principalmap.enumerator
+from principalmap.awsedge import AWSEdge
 from principalmap.awsgraph import AWSGraph
 from principalmap.awsnode import AWSNode
-from principalmap.awsedge import AWSEdge
+from principalmap.querying import perform_query
+from principalmap.visualizing import perform_visualization
+
 
 def main():
 	mainparser = argparse.ArgumentParser()

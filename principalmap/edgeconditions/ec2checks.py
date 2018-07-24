@@ -1,14 +1,14 @@
 # ec2checks.py
 
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
+from __future__ import absolute_import, print_function, unicode_literals
 
 import botocore.session
+from tqdm import tqdm
+
+from principalmap.awsedge import AWSEdge
 
 from .util import *
-from principalmap.awsedge import AWSEdge
-from tqdm import tqdm
+
 
 # A class to check if EC2 can be used by a principal to access another principal
 class EC2Checker():
@@ -71,4 +71,3 @@ class EC2Checker():
 						
 		print('[+] Finished EC2 checks.')
 		return result
-

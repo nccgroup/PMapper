@@ -1,11 +1,11 @@
 # util.py
 
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
+from __future__ import absolute_import, print_function, unicode_literals
+
+import re
 
 import botocore.session
-import re
+
 
 # Takes a response from the simulate API, returns if a given action and 
 # optional resource is allowed or not
@@ -190,4 +190,3 @@ def getServiceFromArn(inputstr):
 		raise ValueError("Invalid ARN")
 
 	return tokens[2]
-

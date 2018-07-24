@@ -3,9 +3,8 @@ An named edge of a graph which represents a relationship between two nodes
 (principals) in an AWS account. nodeX|Y are AWSNode objects.
 
 """
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
+from __future__ import absolute_import, print_function, unicode_literals
+
 
 class AWSEdge:
 	lookup = {
@@ -43,7 +42,3 @@ class AWSEdge:
 
 	def __repr__(self):
 		return repr(self.nodeX) + " " + self.shortlabel + " (" + self.longlabel + ") " + repr(self.nodeY)
-
-
-
-

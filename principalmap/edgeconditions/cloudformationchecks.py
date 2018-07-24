@@ -1,15 +1,16 @@
 # cloudformationchecks.py
 
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
+from __future__ import absolute_import, print_function, unicode_literals
 
-import botocore.session
 import re
 
-from .util import *
-from principalmap.awsedge import AWSEdge
+import botocore.session
 from tqdm import tqdm
+
+from principalmap.awsedge import AWSEdge
+
+from .util import *
+
 
 # A class to check if CloudFormation can be used to access principals
 class CloudFormationChecker():

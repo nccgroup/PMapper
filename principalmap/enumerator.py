@@ -3,17 +3,15 @@ A class to make the needed requests to the AWS API for composing a graph, also
 holds class methods to query the simulator.
 
 """
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
-
-from .awsgraph import *
-from .awsnode import *
-from .awsedge import *
-
-from .edgeconditions.checkrunner import CheckRunner
+from __future__ import absolute_import, print_function, unicode_literals
 
 import botocore.session
+
+from .awsedge import *
+from .awsgraph import *
+from .awsnode import *
+from .edgeconditions.checkrunner import CheckRunner
+
 
 class Enumerator:
 	def __init__(self, session):
@@ -31,6 +29,3 @@ class Enumerator:
 		
 		checkrunner = CheckRunner(self.session, self.graph)
 		checkrunner.runChecks()
-
-
-

@@ -2,17 +2,17 @@
 A collection of functions to create a DOT file to be rendered.
 
 """
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
+from __future__ import absolute_import, print_function, unicode_literals
+
+import sys
 
 import botocore.session
 import pydot
-import sys
 
 from .awsgraph import AWSGraph
-from .queries.util import *
 from .queries.privesc import PrivEscQuery
+from .queries.util import *
+
 
 # called from main, writes a DOT file
 def perform_visualization(session, graph):
@@ -38,11 +38,3 @@ def perform_visualization(session, graph):
 	graphfile.write(dot_graph.to_string())
 	graphfile.close()
 	dot_graph.write_svg('output.svg')
-
-	
-
-
-
-
-
-

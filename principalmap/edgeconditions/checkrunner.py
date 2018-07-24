@@ -1,16 +1,17 @@
 # checkrunner.py
 
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
+from __future__ import absolute_import, print_function, unicode_literals
 
+from tqdm import tqdm
+
+import principalmap.queries
+from principalmap.awsedge import AWSEdge
+
+from .cloudformationchecks import CloudFormationChecker
 from .ec2checks import EC2Checker
 from .iamchecks import IAMChecker
 from .lambdachecks import LambdaChecker
-from .cloudformationchecks import CloudFormationChecker
-from principalmap.awsedge import AWSEdge
-from tqdm import tqdm
-import principalmap.queries
+
 
 # Object that launches and manages all the different groups of checks
 class CheckRunner:
@@ -50,4 +51,3 @@ class CheckRunner:
 		for checker in checkers:
 			edgelist = checker.performChecks(self.session, self.graph.nodes)
 			self.graph.edges.extend(edgelist)
-

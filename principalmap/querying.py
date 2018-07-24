@@ -1,16 +1,16 @@
 # querying.py
 
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
+from __future__ import absolute_import, print_function, unicode_literals
 
-import botocore.session
 import re
 import sys
 
+import botocore.session
+
 from .awsgraph import AWSGraph
-from .queries.util import *
 from .queries.privesc import PrivEscQuery
+from .queries.util import *
+
 
 # called from main, takes input string and performs a query based on it
 def perform_query(input_str, session, graph):
@@ -101,5 +101,3 @@ def query_syntax_and_exit():
 	print('   <Resource> is the full ARN of a resource to test (wildcard by default, do not use with actions that do not specify resources)')
 	print('   <preset_name> is a predefined query with a set of args <preset_args>')
 	sys.exit(-1)
-
-

@@ -7,12 +7,12 @@ We use two fields called properties and tmp to cache information, with the goal 
 reducing the amount of AWS API calls made.
 
 """
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
+from __future__ import absolute_import, print_function, unicode_literals
+
+import re
 
 import botocore.session
-import re
+
 
 class AWSNode:
 	def __init__(self, label, properties=None):
@@ -121,5 +121,3 @@ class AWSNode:
 			acctnum = match.group(1)
 			self.properties['rootstr'] = 'arn:aws:iam::' + acctnum + ':root'
 		return self.properties['rootstr']
-		
-

@@ -1,10 +1,9 @@
 # util.py
 
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
+from __future__ import absolute_import, print_function, unicode_literals
 
-from principalmap.edgeconditions.util import testAction, getResourcePolicy
+from principalmap.edgeconditions.util import getResourcePolicy, testAction
+
 
 # Tests if a node can do a given action with a given resource
 # Returns None if not
@@ -80,5 +79,3 @@ def node_in_lists(node, listoflists):
             if item[0] == node:
                 return True
     return False
-
-
