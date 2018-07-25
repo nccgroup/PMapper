@@ -29,7 +29,7 @@ class CloudFormationChecker():
             cfclient = session.create_client('cloudformation', region_name=region)
             stacklist = cfclient.list_stacks()
             for item in stacklist['StackSummaries']:  # for each stack...
-                fullstacks = cfclient.describe_stacks(StackName=item['StackId'])
+                fullstacks = cfclient.describe_stacks(StackName=item['StackId'])  # TODO this gets throttled when too many stacks
                 for stack in fullstacks['Stacks']:
                     potentialaccesskeys = []
                     potentialsecretkeys = []
