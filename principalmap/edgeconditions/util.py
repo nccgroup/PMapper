@@ -3,7 +3,7 @@
 from __future__ import absolute_import, print_function, unicode_literals
 
 import re
-
+import time
 
 # Takes a response from the simulate API, returns if a given action and 
 # optional resource is allowed or not
@@ -23,41 +23,59 @@ def findInEvalResults(response, action, resource):
 # TODO: could probably get more code-reuse done here
 def testMass(iamclient, node, actionlist, resourcelist):
     result = []
-    # Handle ResourceSpecificResults
-    if len(resourcelist) > 1:
-        response = iamclient.simulate_principal_policy(
-            PolicySourceArn=node.label,
-            ActionNames=actionlist,
-            ResourceArns=resourcelist
-        )
-        _extractResourceResults(response, result)
-        while response['IsTruncated']:
+    try:
+        # Handle ResourceSpecificResults
+        if len(resourcelist) > 1:
             response = iamclient.simulate_principal_policy(
                 PolicySourceArn=node.label,
                 ActionNames=actionlist,
                 ResourceArns=resourcelist,
-                Marker=response['Marker']
+                MaxItems=20
             )
             _extractResourceResults(response, result)
-
-    # Handle one or no resources
-    else:
-        if len(resourcelist) == 0:
-            resourcelist = ['*']
-        response = iamclient.simulate_principal_policy(
-            PolicySourceArn=node.label,
-            ActionNames=actionlist,
-            ResourceArns=resourcelist
-        )
-        _extractResults(response, result)
-        while response['IsTruncated']:
+            while response['IsTruncated']:
+                #  TODO ensure this doesn't cause an infinite loop
+                try:
+                    response = iamclient.simulate_principal_policy(
+                        PolicySourceArn=node.label,
+                        ActionNames=actionlist,
+                        ResourceArns=resourcelist,
+                        Marker=response['Marker'],
+                        MaxItems=20
+                    )
+                    _extractResourceResults(response, result)
+                except Exception as e:
+                    print('[-] error: %s' % e)
+                    time.sleep(15)  # wait for 15 seconds before continuing
+                    continue
+        # Handle one or no resources
+        else:
+            if len(resourcelist) == 0:
+                resourcelist = ['*']
             response = iamclient.simulate_principal_policy(
                 PolicySourceArn=node.label,
                 ActionNames=actionlist,
                 ResourceArns=resourcelist,
-                Marker=response['Marker']
+                MaxItems=20
             )
             _extractResults(response, result)
+            while response['IsTruncated']:
+                try:
+                    response = iamclient.simulate_principal_policy(
+                        PolicySourceArn=node.label,
+                        ActionNames=actionlist,
+                        ResourceArns=resourcelist,
+                        Marker=response['Marker'],
+                        MaxItems=20
+                    )
+                    _extractResults(response, result)
+                except Exception as e:
+                    print('[-] error: %s' % e)
+                    time.sleep(15)  # wait for 15 seconds before continuing
+                    continue
+    except Exception as e:
+        print('[-] error: %s' % e)
+
 
     return result
 
