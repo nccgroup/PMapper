@@ -1,3 +1,7 @@
+# Ignore virtualenv
+env/
+venv/
+
 # Ignore Python artifacts
 *.swp
 *.pyc
