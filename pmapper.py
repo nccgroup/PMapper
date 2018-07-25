@@ -17,6 +17,7 @@ import botocore.session
 import principalmap.enumerator
 from principalmap.awsedge import AWSEdge
 from principalmap.awsgraph import AWSGraph
+from principalmap.awsnode import AWSNode
 from principalmap.querying import perform_query
 from principalmap.visualizing import perform_visualization
 
