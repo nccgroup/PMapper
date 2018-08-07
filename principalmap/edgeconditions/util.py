@@ -242,16 +242,18 @@ def testPassRole(iamclient, passer, passed, targetservice):
 def testAction(client, PolicySourceArn, ActionName, ResourceArn=None, ResourcePolicy=None):
 	context_response = client.get_context_keys_for_principal_policy(PolicySourceArn=PolicySourceArn)
 	context_entries = []
+	username_key_used = False
 	for key in context_response['ContextKeyNames']:
 		# TODO: oh god there could be so many context things to deal with (wish it could be done server-side)
 		#   might need to consider playing with caching here in the future
-		if key == 'aws:username':
+		if key == 'aws:username' and not username_key_used:
 			tokens = PolicySourceArn.split('/')
 			context_entries.append({
 				'ContextKeyName': key,
 				'ContextKeyValues': [tokens[len(tokens) - 1]],
 				'ContextKeyType': 'string'
 			})
+			username_key_used = True # TODO: Better patch for duplicate context keys
 	if ResourceArn != None:                                                     
 		response = client.simulate_principal_policy(
 			PolicySourceArn=PolicySourceArn,
