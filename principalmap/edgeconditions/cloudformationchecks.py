@@ -31,7 +31,16 @@ class CloudFormationChecker():
 			cfclient = session.create_client('cloudformation', region_name=region)
 			stacklist = cfclient.list_stacks()
 			for item in stacklist['StackSummaries']: # for each stack...
-				fullstacks = cfclient.describe_stacks(StackName=item['StackId'])
+				fullstacks = None
+				stack_retrieved = False
+				while not stack_retrieved:
+					try:
+						fullstacks = cfclient.describe_stacks(StackName=item['StackId'])
+						stack_retrieved = True
+					except ThrottlingException as ex:
+						print('ThrottlingException hit, pausing execution for one second.')
+						time.sleep(1) # TODO: implement escalate and backoff behavior
+
 				for stack in fullstacks['Stacks']:
 					potentialaccesskeys = []
 					potentialsecretkeys = []
