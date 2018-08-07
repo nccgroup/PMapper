@@ -1,11 +1,13 @@
 # util.py
+# TODO: Convert comments to PEP257 docstrings (Sphinx), refactor method naming to lowercase_underscores
 
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import unicode_literals
+import re
+import time
 
 import botocore.session
-import re
 
 # Takes a response from the simulate API, returns if a given action and 
 # optional resource is allowed or not
@@ -17,6 +19,98 @@ def findInEvalResults(response, action, resource):
 			return result['EvalDecision'] == 'allowed'
 	return False
 	
+def test_node_access(iamclient, node, actionList, resourceList=None):
+	""" Go through each action and resource to determine if the passed AWSNode 
+	has permission for the combination. Performs at least one Simulate API call 
+	for each action. Breaks down large resourceLists to chunks of twenty and 
+	calls separate Simulate API calls per chunk.
+
+	:param botocore.client.IAM iamclient: A Botocore client that can call the AWS IAM API
+	:param principalmap.awsnode.AWSNode: An AWSNode representing some principal
+	:param list actionList: A list of strings for actions in AWS (service:ActionName convention)
+	:param resourceList: A list of strings for ARNs to check access to (optional)
+	:type resourceList: list or None
+	:return A list of tuples (str, str, bool) for each action/resource/allowed combination.
+	:rtype list
+	:raises ValueError: if the action list is empty or larger than twenty strings
+	"""
+	result = []
+	if actionList == None or len(actionList) > 20 or len(actionList) == 0:
+		raise ValueError('Parameter "actionList" needs to include at least one action, but no more than twenty.')
+	if resourceList == None or len(resourceList) < 1:
+		resourceList = ['*']
+	
+	for action in actionList:
+		if len(resourceList) > 20:
+			resourceListList = []
+			x = 0
+			y = 20
+			while x != len(resourceList): # chunk list into lists of twenty, Python 2/3-agnostic solution
+				if y > len(resourceList):
+					y = len(resourceList)
+				resourceListList.append(resourceList[x:y])
+				x += 20
+				y += 20
+				if x > len(resourceList):
+					x = len(resourceList)
+			for rlist in resourceListList:
+				result.extend(_test_less(iamclient, node, action, rlist))
+		else:
+			result.extend(_test_less(iamclient, node, action, resourceList))
+
+	return result
+
+def _test_less(iamclient, node, action, resourceList):
+	""" (Internal) Test if a passed node can perform a given action on a list of resources."""
+	result = []
+	response = None
+	done = False
+
+	while not done:
+		try:
+			response = iamclient.simulate_principal_policy(
+				PolicySourceArn=node.label,
+				ActionNames=[action],
+				ResourceArns=resourceList
+			)
+			done = True
+		except ThrottlingException as ex:
+			print('ThrottlingException hit, pausing execution for one second.')
+			time.sleep(1) # TODO: implement escalate and backoff behavior
+		except Exception as ex:
+			raise(ex) # Unhandled, raise for debugging
+
+	if len(resourceList) > 1:
+		result.extend(_extract_resource_specific_results(response))
+	else:
+		result.extend(_extract_results(response))
+
+	return result
+
+def _extract_results(response):
+	""" (Internal) Create and return a tuple in a list (str, str, bool) for action, resource, and allowed.
+	Used for when only one resource (or wildcard) is passed in a Simulate API call.
+	"""
+	result = []
+	for evalresult in response['EvaluationResults']:
+		result.append(
+			(evalresult['EvalActionName'], evalresult['EvalResourceName'], evalresult['EvalDecision'] == 'allowed')
+		)
+	return result
+
+def _extract_resource_specific_results(response):
+	""" (Internal) Create and return tuples in a list (str, str, bool) for action, resource, and allowed.
+	Used for when more than one resource (ARN) is specified for a Simulate API call.
+	"""
+	result = []
+	for evalresult in response['EvaluationResults']:
+		action = evalresult['EvalActionName']
+		for resourcespecificresult in evalresult['ResourceSpecificResults']:
+			result.append(
+				(action, resourcespecificresult['EvalResourceName'], resourcespecificresult['EvalResourceDecision'] == 'allowed')
+			)
+	return result
+
 
 # For mass-testing of actions and resources
 # Takes an IAM client, an AWSNode, a list of string, and a list of string

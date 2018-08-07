@@ -49,10 +49,10 @@ class LambdaChecker():
 					roles.append(nodeY)
 			
 			# can nodeX create or invoke an arbitrary lambda?
-			create_testresults = testMass(iamclient, nodeX, ['lambda:CreateFunction', 'lambda:InvokeFunction'], ['*'])
+			create_testresults = test_node_access(iamclient, nodeX, ['lambda:CreateFunction', 'lambda:InvokeFunction'], ['*'])
 
 			# can nodeX change or invoke existing lambdas?
-			change_testresults = testMass(iamclient, nodeX, ['lambda:UpdateFunctionCode', 'lambda:UpdateFunctionConfiguration', 'lambda:InvokeFunction'], functionarns)
+			change_testresults = test_node_access(iamclient, nodeX, ['lambda:UpdateFunctionCode', 'lambda:UpdateFunctionConfiguration', 'lambda:InvokeFunction'], functionarns)
 			
 			# Bail if nodeX can't invoke anything
 			invokeskip = True
