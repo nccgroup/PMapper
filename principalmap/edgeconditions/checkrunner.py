@@ -19,8 +19,7 @@ class CheckRunner:
 		self.graph = graph
 
 	# This is *THE* method when we pull a graph, which launches our different 
-	# threads to find our edges. We're using threading  because we're making a 
-	# bunch of API calls over the Internet.
+	# threads to find our edges.
 	def runChecks(self):
 
 		# Huge optimization: figure out the admin users and set "admin" edges

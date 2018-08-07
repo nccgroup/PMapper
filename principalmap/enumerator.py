@@ -21,9 +21,9 @@ class Enumerator:
 		self.session = session
 
 	def fillOutGraph(self):
-		client = self.session.create_client('iam')
-		roles = client.list_roles()['Roles']
-		users = client.list_users()['Users']
+		iamclient = self.session.create_client('iam')
+		roles = self._get_roles(iamclient)
+		users = self._get_users(iamclient)
 		for user in users:
 			self.graph.nodes.append(AWSNode(user['Arn']))
 		for role in roles:
@@ -32,5 +32,23 @@ class Enumerator:
 		checkrunner = CheckRunner(self.session, self.graph)
 		checkrunner.runChecks()
 
+	def _get_roles(self, iamclient):
+		"""(Internal) Get roles, handle pagination."""
+		result = []
+		response = iamclient.list_roles()
+		result.extend(response['Roles'])
+		while response['IsTruncated']:
+			response = iamclient.list_roles(Marker=response['Marker'])
+			result.extend(response['Roles'])
+		return result
 
+	def _get_users(self, iamclient):
+		"""(Internal) Get users, handle pagination."""
+		result = []
+		response = iamclient.list_users()
+		result.extend(response['Users'])
+		while response['IsTruncated']:
+			response = iamclient.list_users(Marker=response['Marker'])
+			result.extend(response['Users'])
+		return result
 

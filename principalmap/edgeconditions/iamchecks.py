@@ -41,7 +41,7 @@ class IAMChecker():
 
 			# Simulate actions for users
 			if len(users) > 0:
-				resultlist = testMass(iamclient, nodeX, ['iam:CreateAccessKey', 'iam:UpdateLoginProfile', 'iam:CreateLoginProfile'], users)
+				resultlist = test_node_access(iamclient, nodeX, ['iam:CreateAccessKey', 'iam:UpdateLoginProfile', 'iam:CreateLoginProfile'], users)
 				for action, label, allowed in resultlist:
 					if allowed:
 						nodeY = _findNode(label, nodes)
@@ -52,7 +52,7 @@ class IAMChecker():
 						elif action == 'iam:CreateLoginProfile':
 							result.append(AWSEdge(nodeX, nodeY, 'IAM_CREATEPASSWORD')) # TODO: check if target has password to change
 			if len(roles) > 0:
-				resultlist = testMass(iamclient, nodeX, ['sts:AssumeRole'], roles)
+				resultlist = test_node_access(iamclient, nodeX, ['sts:AssumeRole'], roles)
 				for action, label, allowed in resultlist:
 					if allowed:
 						nodeY = _findNode(label, nodes)

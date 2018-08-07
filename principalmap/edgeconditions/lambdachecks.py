@@ -49,10 +49,10 @@ class LambdaChecker():
 					roles.append(nodeY)
 			
 			# can nodeX create or invoke an arbitrary lambda?
-			create_testresults = testMass(iamclient, nodeX, ['lambda:CreateFunction', 'lambda:InvokeFunction'], ['*'])
+			create_testresults = test_node_access(iamclient, nodeX, ['lambda:CreateFunction', 'lambda:InvokeFunction'], ['*'])
 
 			# can nodeX change or invoke existing lambdas?
-			change_testresults = testMass(iamclient, nodeX, ['lambda:UpdateFunctionCode', 'lambda:UpdateFunctionConfiguration', 'lambda:InvokeFunction'], functionarns)
+			change_testresults = test_node_access(iamclient, nodeX, ['lambda:UpdateFunctionCode', 'lambda:UpdateFunctionConfiguration', 'lambda:InvokeFunction'], functionarns)
 			
 			# Bail if nodeX can't invoke anything
 			invokeskip = True
@@ -151,16 +151,20 @@ class LambdaChecker():
 			for region in tqdm(LambdaChecker.regions, ascii=True, desc='Regions Checked for Lambda Functions'):
 				lambdaclient = session.create_client('lambda', region_name=region)
 				response = lambdaclient.list_functions()
-				if 'Functions' in response and isinstance(response['Functions'], list):
-					for x in response['Functions']:
-						addthis = True
-						for y in self.functions:
-							if x['FunctionArn'] == y['FunctionArn']:
-								addthis = False
-								break
-						if addthis:
-							self.functions.extend([x])
-				else:
-					print('TODO')
-
-
+				if 'Functions' in response and response['Functions'] != None:
+					tmp = self._get_functions(response['Functions'])
+					for x in tmp:
+						if x not in self.functions:
+							self.functions.append(x)
+					while 'NextMarker' in response:
+						response = lambdaclient.list_functions(Marker=response['NextMarker'])
+						tmp = self._get_functions(response['Functions'])
+						for x in tmp:
+							if x not in self.functions:
+								self.functions.append(x)
+	
+	def _get_functions(self, functionlist):
+		results = []
+		for x in functionlist:
+			results.append(x)
+		return results

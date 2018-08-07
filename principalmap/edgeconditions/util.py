@@ -1,11 +1,13 @@
 # util.py
+# TODO: Convert comments to PEP257 docstrings (Sphinx), refactor method naming to lowercase_underscores
 
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import unicode_literals
+import re
+import time
 
 import botocore.session
-import re
 
 # Takes a response from the simulate API, returns if a given action and 
 # optional resource is allowed or not
@@ -17,63 +19,97 @@ def findInEvalResults(response, action, resource):
 			return result['EvalDecision'] == 'allowed'
 	return False
 	
+def test_node_access(iamclient, node, actionList, resourceList=None):
+	""" Go through each action and resource to determine if the passed AWSNode 
+	has permission for the combination. Performs at least one Simulate API call 
+	for each action. Breaks down large resourceLists to chunks of twenty and 
+	calls separate Simulate API calls per chunk.
 
-# For mass-testing of actions and resources
-# Takes an IAM client, an AWSNode, a list of string, and a list of string
-# Returns a list of tuple, (string, string, bool), for action, resource, and allow/deny for each
-# ... action and resource tested.
-# TODO: could probably get more code-reuse done here
-def testMass(iamclient, node, actionlist, resourcelist):
+	:param botocore.client.IAM iamclient: A Botocore client that can call the AWS IAM API
+	:param principalmap.awsnode.AWSNode: An AWSNode representing some principal
+	:param list actionList: A list of strings for actions in AWS (service:ActionName convention)
+	:param resourceList: A list of strings for ARNs to check access to (optional)
+	:type resourceList: list or None
+	:return A list of tuples (str, str, bool) for each action/resource/allowed combination.
+	:rtype list
+	:raises ValueError: if the action list is empty or larger than twenty strings
+	"""
 	result = []
-	# Handle ResourceSpecificResults
-	if len(resourcelist) > 1:
-		response = iamclient.simulate_principal_policy(
-			PolicySourceArn=node.label,
-			ActionNames=actionlist,
-			ResourceArns=resourcelist
-		)
-		_extractResourceResults(response, result)
-		while response['IsTruncated']:
-			response = iamclient.simulate_principal_policy(
-				Marker=response['Marker']
-			)
-			_extractResourceResults(response, result)
+	if actionList == None or len(actionList) > 20 or len(actionList) == 0:
+		raise ValueError('Parameter "actionList" needs to include at least one action, but no more than twenty.')
+	if resourceList == None or len(resourceList) < 1:
+		resourceList = ['*']
 	
-	# Handle one or no resources
-	else:
-		if len(resourcelist) == 0:
-			resourcelist = ['*']
-		response = iamclient.simulate_principal_policy(
-			PolicySourceArn=node.label,
-			ActionNames=actionlist,
-			ResourceArns=resourcelist
-		)
-		_extractResults(response, result)
-		while response['IsTruncated']:
-			response = iamclient.simulate_principal_policy(
-				Marker=response['Marker']
-			)
-			_extractResults(response, result)
+	for action in actionList:
+		if len(resourceList) > 20:
+			resourceListList = []
+			x = 0
+			y = 20
+			while x != len(resourceList): # chunk list into lists of twenty, Python 2/3-agnostic solution
+				if y > len(resourceList):
+					y = len(resourceList)
+				resourceListList.append(resourceList[x:y])
+				x += 20
+				y += 20
+				if x > len(resourceList):
+					x = len(resourceList)
+			for rlist in resourceListList:
+				result.extend(_test_less(iamclient, node, action, rlist))
+		else:
+			result.extend(_test_less(iamclient, node, action, resourceList))
 
 	return result
 
-# internal method: modifies result in-place with new action/resource/bool tuples
-# using this for multi-resource calls to testMass
-def _extractResourceResults(response, result):
+def _test_less(iamclient, node, action, resourceList):
+	""" (Internal) Test if a passed node can perform a given action on a list of resources."""
+	result = []
+	response = None
+	done = False
+
+	while not done:
+		try:
+			response = iamclient.simulate_principal_policy(
+				PolicySourceArn=node.label,
+				ActionNames=[action],
+				ResourceArns=resourceList
+			)
+			done = True
+		except ThrottlingException as ex:
+			print('ThrottlingException hit, pausing execution for one second.')
+			time.sleep(1) # TODO: implement escalate and backoff behavior
+		except Exception as ex:
+			raise(ex) # Unhandled, raise for debugging
+
+	if len(resourceList) > 1:
+		result.extend(_extract_resource_specific_results(response))
+	else:
+		result.extend(_extract_results(response))
+
+	return result
+
+def _extract_results(response):
+	""" (Internal) Create and return a tuple in a list (str, str, bool) for action, resource, and allowed.
+	Used for when only one resource (or wildcard) is passed in a Simulate API call.
+	"""
+	result = []
+	for evalresult in response['EvaluationResults']:
+		result.append(
+			(evalresult['EvalActionName'], evalresult['EvalResourceName'], evalresult['EvalDecision'] == 'allowed')
+		)
+	return result
+
+def _extract_resource_specific_results(response):
+	""" (Internal) Create and return tuples in a list (str, str, bool) for action, resource, and allowed.
+	Used for when more than one resource (ARN) is specified for a Simulate API call.
+	"""
+	result = []
 	for evalresult in response['EvaluationResults']:
 		action = evalresult['EvalActionName']
 		for resourcespecificresult in evalresult['ResourceSpecificResults']:
-			x = (action, resourcespecificresult['EvalResourceName'], resourcespecificresult['EvalResourceDecision'] == 'allowed')
-			if x not in result:
-				result.append(x)
-
-# internal method: modifies result in-place with new action/resource/bool tuples
-# using this for single-resource calls to testMass (no need for searching resourcespecificresults)
-def _extractResults(response, result):
-	for evalresult in response['EvaluationResults']:
-		x = (evalresult['EvalActionName'], evalresult['EvalResourceName'], evalresult['EvalDecision'] == 'allowed')
-		if x not in result:
-			result.append(x)
+			result.append(
+				(action, resourcespecificresult['EvalResourceName'], resourcespecificresult['EvalResourceDecision'] == 'allowed')
+			)
+	return result
 
 # For mass-testing of iam:PassRole permissions
 # Takes an IAM client, an AWSNode, a list of AWSNode, and a string
@@ -97,12 +133,26 @@ def testMassPass(iamclient, passer, candidates, service):
 		ResourceArns=arnlist,
 		ContextEntries=context_entries
 	)
-	for candidate in candidates:
-		for resourceresult in response['EvaluationResults'][0]['ResourceSpecificResults']:
-			if candidate.label == resourceresult['EvalResourceName'] and resourceresult['EvalResourceDecision'] == 'allowed':
-				results.append(candidate)
+	results.extend(_extractPassResults(response, candidates))
+	while response['IsTruncated']:
+		response = iamclient.simulate_principal_policy(
+			PolicySourceArn=passer.label,
+			ActionNames=['iam:PassRole'],
+			ResourceArns=arnlist,
+			ContextEntries=context_entries,
+			Marker=response['Marker']
+		)
+		results.extend(_extractPassResults(response, candidates))
 
 	return results
+
+def _extractPassResults(response, candidates):
+	result = []
+	for candidate in candidates:
+		for rsr in response['EvaluationResults'][0]['ResourceSpecificResults']:
+			if candidate.label == rsr['EvalResourceName'] and rsr['EvalResourceDecision'] == 'allowed':
+				result.append(candidate)
+	return result
 
 # For testing actions that require iam:PassRole permission, handles 
 # the iam:PassedToService context entry
@@ -128,16 +178,18 @@ def testPassRole(iamclient, passer, passed, targetservice):
 def testAction(client, PolicySourceArn, ActionName, ResourceArn=None, ResourcePolicy=None):
 	context_response = client.get_context_keys_for_principal_policy(PolicySourceArn=PolicySourceArn)
 	context_entries = []
+	username_key_used = False
 	for key in context_response['ContextKeyNames']:
 		# TODO: oh god there could be so many context things to deal with (wish it could be done server-side)
 		#   might need to consider playing with caching here in the future
-		if key == 'aws:username':
+		if key == 'aws:username' and not username_key_used:
 			tokens = PolicySourceArn.split('/')
 			context_entries.append({
 				'ContextKeyName': key,
 				'ContextKeyValues': [tokens[len(tokens) - 1]],
 				'ContextKeyType': 'string'
 			})
+			username_key_used = True # TODO: Better patch for duplicate context keys
 	if ResourceArn != None:                                                     
 		response = client.simulate_principal_policy(
 			PolicySourceArn=PolicySourceArn,
