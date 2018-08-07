@@ -83,89 +83,27 @@ ability to access admins are colored red (potential priv-esc risk).
 
 ```
 esteringer@ubuntu:~/Documents/projects/Skywalker$ python pmapper.py graph
-Using profile: skywalker
+Using profile: default
 Pulling data for account [REDACTED]
 Using principal with ARN arn:aws:iam::[REDACTED]:user/TestingSkywalker
-[+] Starting EC2 checks.
-[+] Starting IAM checks.
+[+] Pulling info on IAM users and roles, finding admins.
+Principals Checked: 100%|##############################################################| 43/43 [00:24<00:00,  1.72it/s]
+[+] Finished finding admins.
+[+] Started EC2 checks.
+Principals Checked: 100%|##############################################################| 43/43 [00:24<00:00,  1.78it/s]
+[+] Finished EC2 checks.
+[+] Started IAM checks.
+Principals Checked: 100%|##############################################################| 43/43 [05:34<00:00,  7.77s/it]
+[+] Finished IAM checks.
 [+] Starting Lambda checks.
+Regions Checked for Lambda Functions: 100%|############################################| 15/15 [00:15<00:00,  1.02s/it]
+Principals Checked: 100%|##############################################################| 43/43 [01:44<00:00,  2.44s/it]
+[+] Finished Lambda checks.
 [+] Starting CloudFormation checks.
-[+] Completed CloudFormation checks.
-[+] Completed EC2 checks.
-[+] Completed Lambda checks.
-[+] Completed IAM checks.
-Created an AWS Graph with 16 nodes and 53 edges
-[NODES]
-AWSNode("arn:aws:iam::[REDACTED]:user/AdminUser", properties={u'is_admin': True, u'type': u'user'})
-AWSNode("arn:aws:iam::[REDACTED]:user/EC2Manager", properties={u'is_admin': False, u'type': u'user'})
-AWSNode("arn:aws:iam::[REDACTED]:user/LambdaDeveloper", properties={u'is_admin': False, u'type': u'user'})
-AWSNode("arn:aws:iam::[REDACTED]:user/LambdaFullAccess", properties={u'is_admin': False, u'type': u'user'})
-AWSNode("arn:aws:iam::[REDACTED]:user/PowerUser", properties={u'is_admin': False, u'rootstr': u'arn:aws:iam::[REDACTED]:root', u'type': u'user'})
-AWSNode("arn:aws:iam::[REDACTED]:user/S3ManagementUser", properties={u'is_admin': False, u'type': u'user'})
-AWSNode("arn:aws:iam::[REDACTED]:user/S3ReadOnly", properties={u'is_admin': False, u'type': u'user'})
-AWSNode("arn:aws:iam::[REDACTED]:user/TestingSkywalker", properties={u'is_admin': False, u'type': u'user'})
-AWSNode("arn:aws:iam::[REDACTED]:role/AssumableRole", properties={u'is_admin': False, u'type': u'role', u'name': u'AssumableRole'})
-AWSNode("arn:aws:iam::[REDACTED]:role/EC2-Fleet-Manager", properties={u'is_admin': False, u'type': u'role', u'name': u'EC2-Fleet-Manager'})
-AWSNode("arn:aws:iam::[REDACTED]:role/EC2Role-Admin", properties={u'is_admin': True, u'type': u'role', u'name': u'EC2Role-Admin'})
-AWSNode("arn:aws:iam::[REDACTED]:role/EC2WithS3ReadOnly", properties={u'is_admin': False, u'type': u'role', u'name': u'EC2WithS3ReadOnly'})
-AWSNode("arn:aws:iam::[REDACTED]:role/EMR-Service-Role", properties={u'is_admin': False, u'type': u'role', u'name': u'EMR-Service-Role'})
-AWSNode("arn:aws:iam::[REDACTED]:role/LambdaRole-S3ReadOnly", properties={u'is_admin': False, u'type': u'role', u'name': u'LambdaRole-S3ReadOnly'})
-AWSNode("arn:aws:iam::[REDACTED]:role/ReadOnlyWithLambda", properties={u'is_admin': False, u'type': u'role', u'name': u'ReadOnlyWithLambda'})
-AWSNode("arn:aws:iam::[REDACTED]:role/UpdateCredentials", properties={u'is_admin': False, u'type': u'role', u'name': u'UpdateCredentials'})
-[EDGES]
-(0,1,'ADMIN','can use existing administrative privileges to access')
-(0,2,'ADMIN','can use existing administrative privileges to access')
-(0,3,'ADMIN','can use existing administrative privileges to access')
-(0,4,'ADMIN','can use existing administrative privileges to access')
-(0,5,'ADMIN','can use existing administrative privileges to access')
-(0,6,'ADMIN','can use existing administrative privileges to access')
-(0,7,'ADMIN','can use existing administrative privileges to access')
-(0,8,'ADMIN','can use existing administrative privileges to access')
-(0,9,'ADMIN','can use existing administrative privileges to access')
-(0,10,'ADMIN','can use existing administrative privileges to access')
-(0,11,'ADMIN','can use existing administrative privileges to access')
-(0,12,'ADMIN','can use existing administrative privileges to access')
-(0,13,'ADMIN','can use existing administrative privileges to access')
-(0,14,'ADMIN','can use existing administrative privileges to access')
-(0,15,'ADMIN','can use existing administrative privileges to access')
-(10,0,'ADMIN','can use existing administrative privileges to access')
-(10,1,'ADMIN','can use existing administrative privileges to access')
-(10,2,'ADMIN','can use existing administrative privileges to access')
-(10,3,'ADMIN','can use existing administrative privileges to access')
-(10,4,'ADMIN','can use existing administrative privileges to access')
-(10,5,'ADMIN','can use existing administrative privileges to access')
-(10,6,'ADMIN','can use existing administrative privileges to access')
-(10,7,'ADMIN','can use existing administrative privileges to access')
-(10,8,'ADMIN','can use existing administrative privileges to access')
-(10,9,'ADMIN','can use existing administrative privileges to access')
-(10,11,'ADMIN','can use existing administrative privileges to access')
-(10,12,'ADMIN','can use existing administrative privileges to access')
-(10,13,'ADMIN','can use existing administrative privileges to access')
-(10,14,'ADMIN','can use existing administrative privileges to access')
-(10,15,'ADMIN','can use existing administrative privileges to access')
-(1,9,'EC2_USEPROFILE','can create an EC2 instance and use an existing instance profile to access')
-(1,10,'EC2_USEPROFILE','can create an EC2 instance and use an existing instance profile to access')
-(1,11,'EC2_USEPROFILE','can create an EC2 instance and use an existing instance profile to access')
-(4,9,'EC2_USEPROFILE','can create an EC2 instance and use an existing instance profile to access')
-(4,10,'EC2_USEPROFILE','can create an EC2 instance and use an existing instance profile to access')
-(4,11,'EC2_USEPROFILE','can create an EC2 instance and use an existing instance profile to access')
-(3,13,'LAMBDA_CREATEFUNCTION','can create a Lambda function and pass an execution role to access')
-(3,14,'LAMBDA_CREATEFUNCTION','can create a Lambda function and pass an execution role to access')
-(3,15,'LAMBDA_CREATEFUNCTION','can create a Lambda function and pass an execution role to access')
-(9,10,'EC2_USEPROFILE','can create an EC2 instance and use an existing instance profile to access')
-(4,13,'LAMBDA_CREATEFUNCTION','can create a Lambda function and pass an execution role to access')
-(9,11,'EC2_USEPROFILE','can create an EC2 instance and use an existing instance profile to access')
-(4,8,'STS_ASSUMEROLE','can use STS to assume the role')
-(4,14,'LAMBDA_CREATEFUNCTION','can create a Lambda function and pass an execution role to access')
-(4,15,'LAMBDA_CREATEFUNCTION','can create a Lambda function and pass an execution role to access')
-(15,0,'IAM_CREATEKEY','can create access keys with IAM to access')
-(15,1,'IAM_CREATEKEY','can create access keys with IAM to access')
-(15,2,'IAM_CREATEKEY','can create access keys with IAM to access')
-(15,3,'IAM_CREATEKEY','can create access keys with IAM to access')
-(15,4,'IAM_CREATEKEY','can create access keys with IAM to access')
-(15,5,'IAM_CREATEKEY','can create access keys with IAM to access')
-(15,6,'IAM_CREATEKEY','can create access keys with IAM to access')
-(15,7,'IAM_CREATEKEY','can create access keys with IAM to access')
+CloudFormation Regions Checked: 100%|##################################################| 15/15 [00:16<00:00,  1.07s/it]
+Principals Checked: 100%|##############################################################| 43/43 [00:20<00:00,  2.13it/s]
+[+] Finished CloudFormation checks.
+Created an AWS Graph with 43 nodes and 258 edges
 
 ```
 
@@ -176,22 +114,22 @@ esteringer@ubuntu:~/Documents/projects/Skywalker$ ./pmapper.py --profile skywalk
 user/AdminUser can do s3:GetObject with *
 user/EC2Manager can do s3:GetObject with * through role/EC2Role-Admin
    user/EC2Manager can create an EC2 instance and use an existing instance profile to access role/EC2Role-Admin
-role/EC2Role-Admin can do s3:GetObject with *
+   role/EC2Role-Admin can do s3:GetObject with *
 user/LambdaFullAccess can do s3:GetObject with *
 user/PowerUser can do s3:GetObject with *
 user/S3ManagementUser can do s3:GetObject with *
 user/S3ReadOnly can do s3:GetObject with *
 user/TestingSkywalker can do s3:GetObject with *
 role/EC2-Fleet-Manager can do s3:GetObject with * through role/EC2Role-Admin
-	role/EC2-Fleet-Manager can create an EC2 instance and use an existing instance profile to access role/EC2Role-Admin
-role/EC2Role-Admin can do s3:GetObject with *
+   role/EC2-Fleet-Manager can create an EC2 instance and use an existing instance profile to access role/EC2Role-Admin
+   role/EC2Role-Admin can do s3:GetObject with *
 role/EC2Role-Admin can do s3:GetObject with *
 role/EC2WithS3ReadOnly can do s3:GetObject with *
 role/EMR-Service-Role can do s3:GetObject with *
 role/LambdaRole-S3ReadOnly can do s3:GetObject with *
 role/UpdateCredentials can do s3:GetObject with * through user/AdminUser
-	role/UpdateCredentials can create access keys with IAM to access user/AdminUser
-user/AdminUser can do s3:GetObject with *
+   role/UpdateCredentials can create access keys with IAM to access user/AdminUser
+   user/AdminUser can do s3:GetObject with *
 ```
 
 ### Identifying Potential Privilege Escalation
@@ -228,4 +166,3 @@ privileges.
 * A preset to check if one principal is connected to another.
 * Handling policies for buckets or keys with services like S3 or KMS when 
 querying.
-

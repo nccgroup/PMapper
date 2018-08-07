@@ -157,7 +157,6 @@ class LambdaChecker():
 						if x not in self.functions:
 							self.functions.append(x)
 					while 'NextMarker' in response:
-						print("Paginated results")
 						response = lambdaclient.list_functions(Marker=response['NextMarker'])
 						tmp = self._get_functions(response['Functions'])
 						for x in tmp:
