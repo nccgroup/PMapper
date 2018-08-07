@@ -12,19 +12,21 @@ from .awsgraph import AWSGraph
 from .queries.util import *
 from .queries.privesc import PrivEscQuery
 
-# called from main, takes input string and performs a query based on it
+
 def perform_query(input_str, session, graph):
+    """Given an input query, this function parses and performs the query."""
+
     iamclient = session.create_client('iam')
     tokens = re.split(r'\s+', input_str, flags=re.UNICODE)
     if tokens[0] == 'can' and tokens[2] == 'do':
         node = grab_node_by_name(tokens[1], graph)
-        if node == None:
+        if node is None:
             print('Could not find a principal with the name: ' + tokens[1])
             sys.exit(-1)
         action = tokens[3]
         if len(tokens) == 4:
             result = test_for_node(session, graph, node, action)
-            if result != None:
+            if result is None:
                 print_search_result(result, action)
             else:
                 print('Did not find a way for ' + str(node) + ' to do ' + action)
@@ -33,7 +35,7 @@ def perform_query(input_str, session, graph):
                 query_syntax_and_exit()
             resource = tokens[5]
             result = test_for_node(session, graph, node, action, resource)
-            if result != None:
+            if result is not None:
                 print_search_result(result, action, resource)
             else:
                 print('Did not find a way for ' + str(node) + ' to do ' + action + ' with ' + resource)
@@ -44,13 +46,13 @@ def perform_query(input_str, session, graph):
         if len(tokens) == 4:
             for node in graph.nodes:
                 result = test_for_node(session, graph, node, action)
-                if result != None:
+                if result is not None:
                     print_search_result(result, action)
         elif len(tokens) == 6:
             resource = tokens[5]
             for node in graph.nodes:
                 result = test_for_node(session, graph, node, action, resource)
-                if result != None:
+                if result is not None:
                     print_search_result(result, action, resource)
         else:
             query_syntax_and_exit()
@@ -59,7 +61,7 @@ def perform_query(input_str, session, graph):
             if len(tokens) == 3:
                 if tokens[2] != '*':
                     node = grab_node_by_name(tokens[2], graph)
-                    if node == None:
+                    if node is None:
                         print('Could not find a principal with the name: ' + tokens[2])
                         sys.exit(-1)
                     node_edgelist_tuples = get_relevant_nodes(graph, node)
@@ -87,6 +89,7 @@ def perform_query(input_str, session, graph):
     else:
         query_syntax_and_exit()
 
+
 def query_syntax_and_exit():
     print('QUERY SYNTAX')
     print('Form 1:')
@@ -101,5 +104,3 @@ def query_syntax_and_exit():
     print('   <Resource> is the full ARN of a resource to test (wildcard by default, do not use with actions that do not specify resources)')
     print('   <preset_name> is a predefined query with a set of args <preset_args>')
     sys.exit(-1)
-
-

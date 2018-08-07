@@ -1,5 +1,4 @@
 # util.py
-# TODO: Convert comments to PEP257 docstrings (Sphinx), refactor method naming to lowercase_underscores
 
 from __future__ import absolute_import
 from __future__ import print_function
@@ -9,20 +8,22 @@ import time
 
 import botocore.session
 
-# Takes a response from the simulate API, returns if a given action and 
-# optional resource is allowed or not
-# Note: this is only working when the simulation only uses the * resource, due 
-# ... to how multiple resources get tossed into ResourceSpecificResults
+
 def findInEvalResults(response, action, resource):
+    """Given an SimulatePrincipalPolicy API response, return if a given action
+    and resource are allowed. Currently only handles * resources.
+    """
+
     for result in response['EvaluationResults']:
         if action == result['EvalActionName'] and resource == result['EvalResourceName']:
             return result['EvalDecision'] == 'allowed'
     return False
-    
+
+
 def test_node_access(iamclient, node, actionList, resourceList=None):
-    """ Go through each action and resource to determine if the passed AWSNode 
-    has permission for the combination. Performs at least one Simulate API call 
-    for each action. Breaks down large resourceLists to chunks of twenty and 
+    """ Go through each action and resource to determine if the passed AWSNode
+    has permission for the combination. Performs at least one Simulate API call
+    for each action. Breaks down large resourceLists to chunks of twenty and
     calls separate Simulate API calls per chunk.
 
     :param botocore.client.IAM iamclient: A Botocore client that can call the AWS IAM API
@@ -35,17 +36,18 @@ def test_node_access(iamclient, node, actionList, resourceList=None):
     :raises ValueError: if the action list is empty or larger than twenty strings
     """
     result = []
-    if actionList == None or len(actionList) > 20 or len(actionList) == 0:
+    if actionList is None or len(actionList) > 20 or len(actionList) == 0:
         raise ValueError('Parameter "actionList" needs to include at least one action, but no more than twenty.')
-    if resourceList == None or len(resourceList) < 1:
+    if resourceList is None or len(resourceList) < 1:
         resourceList = ['*']
-    
+
     for action in actionList:
         if len(resourceList) > 20:
+            # Chunk resourceList into groups of twenty
             resourceListList = []
             x = 0
             y = 20
-            while x != len(resourceList): # chunk list into lists of twenty, Python 2/3-agnostic solution
+            while x != len(resourceList):
                 if y > len(resourceList):
                     y = len(resourceList)
                 resourceListList.append(resourceList[x:y])
@@ -59,6 +61,7 @@ def test_node_access(iamclient, node, actionList, resourceList=None):
             result.extend(_test_less(iamclient, node, action, resourceList))
 
     return result
+
 
 def _test_less(iamclient, node, action, resourceList):
     """ (Internal) Test if a passed node can perform a given action on a list of resources."""
@@ -76,9 +79,10 @@ def _test_less(iamclient, node, action, resourceList):
             done = True
         except ThrottlingException as ex:
             print('ThrottlingException hit, pausing execution for one second.')
-            time.sleep(1) # TODO: implement escalate and backoff behavior
+            time.sleep(1)
+            # TODO: implement escalate and backoff behavior
         except Exception as ex:
-            raise(ex) # Unhandled, raise for debugging
+            raise(ex)
 
     if len(resourceList) > 1:
         result.extend(_extract_resource_specific_results(response))
@@ -86,6 +90,7 @@ def _test_less(iamclient, node, action, resourceList):
         result.extend(_extract_results(response))
 
     return result
+
 
 def _extract_results(response):
     """ (Internal) Create and return a tuple in a list (str, str, bool) for action, resource, and allowed.
@@ -97,6 +102,7 @@ def _extract_results(response):
             (evalresult['EvalActionName'], evalresult['EvalResourceName'], evalresult['EvalDecision'] == 'allowed')
         )
     return result
+
 
 def _extract_resource_specific_results(response):
     """ (Internal) Create and return tuples in a list (str, str, bool) for action, resource, and allowed.
@@ -111,11 +117,14 @@ def _extract_resource_specific_results(response):
             )
     return result
 
-# For mass-testing of iam:PassRole permissions
-# Takes an IAM client, an AWSNode, a list of AWSNode, and a string
-# Returns a list of AWSNode (passer can pass each one to the service)
-# TODO: Handle truncated results
+
 def testMassPass(iamclient, passer, candidates, service):
+    """Performs mass-testing of iam:PassRole (multiple target roles, etc.) and
+    returns a list of AWSNode that can be passed.
+
+    TODO: Handle truncated results
+    """
+
     if len(candidates) == 0:
         return []
     arnlist = []
@@ -146,6 +155,7 @@ def testMassPass(iamclient, passer, candidates, service):
 
     return results
 
+
 def _extractPassResults(response, candidates):
     result = []
     for candidate in candidates:
@@ -154,7 +164,8 @@ def _extractPassResults(response, candidates):
                 result.append(candidate)
     return result
 
-# For testing actions that require iam:PassRole permission, handles 
+
+# For testing actions that require iam:PassRole permission, handles
 # the iam:PassedToService context entry
 def testPassRole(iamclient, passer, passed, targetservice):
     context_response = iamclient.get_context_keys_for_principal_policy(PolicySourceArn=passer.label)
@@ -166,13 +177,14 @@ def testPassRole(iamclient, passer, passed, targetservice):
             'ContextKeyType': 'string'
         })
     response = iamclient.simulate_principal_policy(
-        PolicySourceArn=passer.label, 
-        ActionNames=['iam:PassRole'], 
+        PolicySourceArn=passer.label,
+        ActionNames=['iam:PassRole'],
         ResourceArns=[passed.label],
         ContextEntries=context_entries
     )
     if 'EvaluationResults' in response and 'EvalDecision' in response['EvaluationResults'][0]:
         return response['EvaluationResults'][0]['EvalDecision'] == 'allowed'
+
 
 # Generic test action, also accepts ResourceArns
 def testAction(client, PolicySourceArn, ActionName, ResourceArn=None, ResourcePolicy=None):
@@ -180,8 +192,7 @@ def testAction(client, PolicySourceArn, ActionName, ResourceArn=None, ResourcePo
     context_entries = []
     username_key_used = False
     for key in context_response['ContextKeyNames']:
-        # TODO: oh god there could be so many context things to deal with (wish it could be done server-side)
-        #   might need to consider playing with caching here in the future
+        # TODO: deal with more context keys
         if key == 'aws:username' and not username_key_used:
             tokens = PolicySourceArn.split('/')
             context_entries.append({
@@ -189,29 +200,31 @@ def testAction(client, PolicySourceArn, ActionName, ResourceArn=None, ResourcePo
                 'ContextKeyValues': [tokens[len(tokens) - 1]],
                 'ContextKeyType': 'string'
             })
-            username_key_used = True # TODO: Better patch for duplicate context keys
-    if ResourceArn != None:                                                     
+            username_key_used = True
+            # TODO: Better patch for duplicate context keys
+    if ResourceArn is not None:
         response = client.simulate_principal_policy(
             PolicySourceArn=PolicySourceArn,
-            #CallerArn=PolicySourceArn, 
-            ActionNames=[ActionName], 
-            ResourceArns=[ResourceArn], 
-            ContextEntries=context_entries, 
-            #ResourcePolicy=ResourcePolicy
+            # CallerArn=PolicySourceArn,
+            ActionNames=[ActionName],
+            ResourceArns=[ResourceArn],
+            ContextEntries=context_entries,
+            # ResourcePolicy=ResourcePolicy
         )
-    else:                                                                       
+    else:
         response = client.simulate_principal_policy(
-            PolicySourceArn=PolicySourceArn, 
-            #CallerArn=PolicySourceArn,
-            ActionNames=[ActionName], 
-            ContextEntries=context_entries, 
-            #ResourcePolicy=ResourcePolicy
+            PolicySourceArn=PolicySourceArn,
+            # CallerArn=PolicySourceArn,
+            ActionNames=[ActionName],
+            ContextEntries=context_entries,
+            # ResourcePolicy=ResourcePolicy
         )
 
-    if 'EvaluationResults' in response:                                         
-        if 'EvalDecision' in response['EvaluationResults'][0]:                  
+    if 'EvaluationResults' in response:
+        if 'EvalDecision' in response['EvaluationResults'][0]:
             return response['EvaluationResults'][0]['EvalDecision'] == 'allowed'
     raise Exception('Failed to get a response when simulating a policy')
+
 
 # Tests actions while trying to pull resource policies when applicable
 # Returns result from testAction if the service doesn't use resource policies
@@ -220,19 +233,22 @@ def getResourcePolicy(session, ResourceArn):
     iamclient = session.create_client('iam')
     # bucket policies
     if service == 's3':
-        s3client = session.create_client('s3') # TODO: Update example policy for s3:GetBucketPolicy
+        s3client = session.create_client('s3')
+        # TODO: Update example policy for s3:GetBucketPolicy
         result = re.match(r'arn:[^:]+:s3:::([^/]+)', ResourceArn)
-        if result == None:
+        if result is None:
             raise ValueError("Invalid S3 bucket or object ARN")
         bucket = result.group(1)
         return s3client.get_bucket_policy(Bucket=bucket)['Policy']
     # key policies
     elif service == 'kms':
-        kmsclient = session.create_client('kms') # TODO: Update example policy for kms:GetKeyPolicy
+        kmsclient = session.create_client('kms')
+        # TODO: Update example policy for kms:GetKeyPolicy
         return kmsclient.get_key_policy(KeyId=ResourceArn, PolicyName='default')['Policy']
-    #TODO: extend
+    # TODO: extend
     else:
         return None
+
 
 # Grab the service the resource belongs to
 # pattern is arn:partition:service:region:account_id:resource
@@ -242,4 +258,3 @@ def getServiceFromArn(inputstr):
         raise ValueError("Invalid ARN")
 
     return tokens[2]
-

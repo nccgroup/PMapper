@@ -1,21 +1,20 @@
-"""
-A class to make the needed requests to the AWS API for composing a graph, also
-holds class methods to query the simulator.
+# enumerator.py
 
-"""
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import botocore.session
+
 from .awsgraph import *
 from .awsnode import *
 from .awsedge import *
-
 from .edgeconditions.checkrunner import CheckRunner
 
-import botocore.session
 
 class Enumerator:
+    """A class to make the needed requests to the AWS API for composing a graph."""
+
     def __init__(self, session):
         self.graph = AWSGraph()
         self.session = session
@@ -28,7 +27,7 @@ class Enumerator:
             self.graph.nodes.append(AWSNode(user['Arn']))
         for role in roles:
             self.graph.nodes.append(AWSNode(role['Arn']))
-        
+
         checkrunner = CheckRunner(self.session, self.graph)
         checkrunner.runChecks()
 
@@ -51,4 +50,3 @@ class Enumerator:
             response = iamclient.list_users(Marker=response['Marker'])
             result.extend(response['Users'])
         return result
-

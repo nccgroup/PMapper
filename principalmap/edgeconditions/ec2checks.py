@@ -10,8 +10,9 @@ from .util import *
 from principalmap.awsedge import AWSEdge
 from tqdm import tqdm
 
-# A class to check if EC2 can be used by a principal to access another principal
+
 class EC2Checker():
+
     def __init__(self):
         pass
 
@@ -37,18 +38,18 @@ class EC2Checker():
                 if 'ec2worthy' not in nodeY.tmp:
                     nodeY.tmp['ec2worthy'] = nodeY.get_type() == 'role' and nodeY.chk_trust_document(iamclient, 'ec2.amazonaws.com')
                 if nodeY.tmp['ec2worthy']:
-                    if 'instance_profile' not in nodeY.tmp: 
+                    if 'instance_profile' not in nodeY.tmp:
                         response = iamclient.list_instance_profiles_for_role(RoleName=nodeY.get_name())
                         nodeY.tmp['instance_profile'] = len(response['InstanceProfiles']) > 0
                     if nodeY.tmp['instance_profile']:
                         withprofiles.append(nodeY)
                     else:
                         withoutprofiles.append(nodeY)
-            
+
             # bail if we don't have candidates, save the API calls
             if len(withprofiles) + len(withoutprofiles) == 0:
                 continue
-            
+
             # with a list of passable roles, check if nodeX can do the necessary actions
             response = iamclient.simulate_principal_policy(
                 PolicySourceArn=nodeX.label,
@@ -68,7 +69,6 @@ class EC2Checker():
                     passable = testMassPass(iamclient, nodeX, withprofiles, 'ec2.amazonaws.com')
                     for nodeY in passable:
                         result.append(AWSEdge(nodeX, nodeY, 'EC2_USEPROFILE'))
-                        
+
         print('[+] Finished EC2 checks.')
         return result
-

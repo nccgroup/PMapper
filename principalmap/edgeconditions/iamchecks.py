@@ -11,7 +11,7 @@ from .util import *
 from principalmap.awsedge import AWSEdge
 from tqdm import tqdm
 
-# A class to check if IAM can be used by a principal to access another principal
+
 class IAMChecker():
     def __init__(self):
         pass
@@ -26,7 +26,7 @@ class IAMChecker():
             # skip checks for admins
             if nodeX.get_admin():
                 continue
-            
+
             # build a list of role ARNs and a list of user ARNs
             users = []
             roles = []
@@ -50,7 +50,7 @@ class IAMChecker():
                         elif action == 'iam:UpdateLoginProfile':
                             result.append(AWSEdge(nodeX, nodeY, 'IAM_CHANGEPASSWORD'))
                         elif action == 'iam:CreateLoginProfile':
-                            result.append(AWSEdge(nodeX, nodeY, 'IAM_CREATEPASSWORD')) # TODO: check if target has password to change
+                            result.append(AWSEdge(nodeX, nodeY, 'IAM_CREATEPASSWORD'))  # TODO: check if target has password to change
             if len(roles) > 0:
                 resultlist = test_node_access(iamclient, nodeX, ['sts:AssumeRole'], roles)
                 for action, label, allowed in resultlist:
@@ -58,10 +58,10 @@ class IAMChecker():
                         nodeY = _findNode(label, nodes)
                         result.append(AWSEdge(nodeX, nodeY, 'STS_ASSUMEROLE'))
 
-        
         print('[+] Finished IAM checks.')
         return result
-        
+
+
 # find an AWSNode by its label
 def _findNode(label, nodes):
     for node in nodes:

@@ -1,11 +1,5 @@
 #!/usr/bin/env python
 
-"""
-    A tool that determines how principals are able to access each other in 
-    an AWS account.
-
-"""
-
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import unicode_literals
@@ -14,14 +8,15 @@ import argparse
 import botocore.session
 import logging
 import os.path
+import sys
+
 import principalmap.enumerator
 from principalmap.querying import perform_query
 from principalmap.visualizing import perform_visualization
-import sys
-
 from principalmap.awsgraph import AWSGraph
 from principalmap.awsnode import AWSNode
 from principalmap.awsedge import AWSEdge
+
 
 def main():
     mainparser = argparse.ArgumentParser()
@@ -32,28 +27,32 @@ def main():
         dest='picked_cmd',
         help='Select one to execute.'
     )
-    graphparser = subparsers.add_parser('graph',
+    graphparser = subparsers.add_parser(
+        'graph',
         help='For pulling information from an AWS account.',
         description='Uses the botocore library to query the AWS API and compose a graph of principal relationships. By default, running this command will create a graph.'
     )
     graphparser.add_argument('--display', action='store_true', help='Displays stored graph rather than composing one.')
-    queryparser = subparsers.add_parser('query', 
+    queryparser = subparsers.add_parser(
+        'query',
         help='For querying the graph pulled from an AWS account.',
         description='Uses a created graph to provide a query interface, executes the passed query. It also will make calls to the AWS API.'
     )
     queryparser.add_argument('query_string', help='The query to run against the endpoint.')
-    visualparser = subparsers.add_parser('visualize', 
+    visualparser = subparsers.add_parser(
+        'visualize',
         help='For visualizing the pulled graph.',
         description='Creates a visualization of the passed graph.'
     )
     parsed = mainparser.parse_args(sys.argv[1:])
-    
+
     if parsed.picked_cmd == 'graph':
         handle_graph(parsed)
     elif parsed.picked_cmd == 'query':
         handle_query(parsed)
     elif parsed.picked_cmd == 'visualize':
         handle_visualize(parsed)
+
 
 def handle_graph(parsed):
     if not parsed.display:
@@ -71,6 +70,7 @@ def handle_graph(parsed):
         graph = graph_from_file(filepath)
         print(str(graph))
 
+
 def handle_query(parsed):
     filepath = ''
     graph = None
@@ -81,17 +81,18 @@ def handle_query(parsed):
         print('Unable to use the file "' + filepath + '" to perform a query.')
         print(str(ex))
         sys.exit(-1)
-    
+
     botocore_session = botocore.session.Session(profile=parsed.profile)
-    
+
     try:
         stsclient = botocore_session.create_client('sts')
     except Exception as ex:
         print('Unable to access STS using the profile "' + parsed.profile + '"')
         print('Exiting.')
         sys.exit(-1)
-    
+
     perform_query(parsed.query_string, botocore_session, graph)
+
 
 def handle_visualize(parsed):
     filepath = ''
@@ -115,6 +116,7 @@ def handle_visualize(parsed):
 
     perform_visualization(botocore_session, graph)
 
+
 def pull_graph(profilearg):
     botocore_session = botocore.session.Session(profile=profilearg)
 
@@ -135,6 +137,7 @@ def pull_graph(profilearg):
 
     return enumerator.graph
 
+
 def graph_from_file(filepath):
     try:
         graphfile = open(filepath, 'r')
@@ -151,7 +154,7 @@ def graph_from_file(filepath):
             if line[0] != '#':
                 mode = 'nodes'
             else:
-                pass # ignoring headers
+                pass  # ignoring headers
         if mode == 'nodes':
             if "[NODES]" in line:
                 pass
@@ -167,6 +170,7 @@ def graph_from_file(filepath):
                 pair = eval(line)
                 result.edges.append(AWSEdge(result.nodes[pair[0]], result.nodes[pair[1]], pair[2], pair[3]))
     return result
+
 
 if __name__ == '__main__':
     main()
