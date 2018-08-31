@@ -26,7 +26,7 @@ def perform_query(input_str, session, graph):
         action = tokens[3]
         if len(tokens) == 4:
             result = test_for_node(session, graph, node, action)
-            if result is None:
+            if result is not None:
                 print_search_result(result, action)
             else:
                 print('Did not find a way for ' + str(node) + ' to do ' + action)
