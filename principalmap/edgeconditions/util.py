@@ -7,7 +7,7 @@ import re
 import time
 
 import botocore.session
-
+from botocore.exceptions import ClientError
 
 def findInEvalResults(response, action, resource):
     """Given an SimulatePrincipalPolicy API response, return if a given action
@@ -77,12 +77,13 @@ def _test_less(iamclient, node, action, resourceList):
                 ResourceArns=resourceList
             )
             done = True
-        except ThrottlingException as ex:
-            print('ThrottlingException hit, pausing execution for one second.')
-            time.sleep(1)
+        except ClientError as err:
+            if 'Thrott' in err.response['Error']['Code']:  # should catch Throttl(e|ing) error
+                print('ThrottlingException hit, pausing execution for one second.')
+                time.sleep(1)
             # TODO: implement escalate and backoff behavior
-        except Exception as ex:
-            raise(ex)
+            else:
+                raise(err)
 
     if len(resourceList) > 1:
         result.extend(_extract_resource_specific_results(response))
@@ -121,40 +122,69 @@ def _extract_resource_specific_results(response):
 def testMassPass(iamclient, passer, candidates, service):
     """Performs mass-testing of iam:PassRole (multiple target roles, etc.) and
     returns a list of AWSNode that can be passed.
-
-    TODO: Handle truncated results
     """
 
     if len(candidates) == 0:
         return []
-    arnlist = []
     results = []
-    for candidate in candidates:
-        arnlist.append(candidate.label)
+
+    if len(candidates) > 20:
+        roleListList = []
+        x = 0
+        y = 20
+        while x != len(candidates):
+            if y > len(candidates):
+                y = len(candidates)
+            roleListList.append(candidates[x:y])
+            x += 20
+            y += 20
+            if x > len(candidates):
+                x = len(candidates)
+        for rolelist in roleListList:
+            results.extend(_test_less_pass(iamclient, passer, candidates, service))
+    else:
+        results.extend(_test_less_pass(iamclient, passer, candidates, service))
+
+    return results
+
+def _test_less_pass(iamclient, passer, candidates, service):
+    """(Internal) Return a list of AWSNode for roles that can be passed to a service 
+    by a given principal. Assumes the candidate list is of length 20 or less.
+    """
+
+    result = []
+    arnlist = []
+    response = None
+    done = False
+
     context_entries = [{
         'ContextKeyName': 'iam:PassedToService',
         'ContextKeyValues': [service],
         'ContextKeyType': 'string'
     }]
-    response = iamclient.simulate_principal_policy(
-        PolicySourceArn=passer.label,
-        ActionNames=['iam:PassRole'],
-        ResourceArns=arnlist,
-        ContextEntries=context_entries
-    )
-    results.extend(_extractPassResults(response, candidates))
-    while response['IsTruncated']:
-        response = iamclient.simulate_principal_policy(
-            PolicySourceArn=passer.label,
-            ActionNames=['iam:PassRole'],
-            ResourceArns=arnlist,
-            ContextEntries=context_entries,
-            Marker=response['Marker']
-        )
-        results.extend(_extractPassResults(response, candidates))
 
-    return results
+    for candidate in candidates:
+        arnlist.append(candidate.label)
 
+    while not done:
+        try:
+            response = iamclient.simulate_principal_policy(
+                PolicySourceArn=passer.label,
+                ActionNames=['iam:PassRole'],
+                ResourceArns=arnlist,
+                ContextEntries=context_entries
+            )
+            done = True
+        except ClientError as err:
+            if 'Thrott' in err.response['Error']['Code']:  # should catch Throttl(e|ing) error
+                print('ThrottlingException hit, pausing execution for one second.')
+                time.sleep(1)
+            # TODO: implement escalate and backoff behavior
+            else:
+                raise(err)
+
+    result.extend(_extractPassResults(response, candidates))
+    return result
 
 def _extractPassResults(response, candidates):
     result = []
