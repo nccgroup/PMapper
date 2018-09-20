@@ -141,7 +141,7 @@ def testMassPass(iamclient, passer, candidates, service):
             if x > len(candidates):
                 x = len(candidates)
         for rolelist in roleListList:
-            results.extend(_test_less_pass(iamclient, passer, candidates, service))
+            results.extend(_test_less_pass(iamclient, passer, rolelist, service))
     else:
         results.extend(_test_less_pass(iamclient, passer, candidates, service))
 
@@ -151,7 +151,6 @@ def _test_less_pass(iamclient, passer, candidates, service):
     """(Internal) Return a list of AWSNode for roles that can be passed to a service 
     by a given principal. Assumes the candidate list is of length 20 or less.
     """
-
     result = []
     arnlist = []
     response = None
