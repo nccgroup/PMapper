@@ -13,7 +13,7 @@ from .queries.util import *
 from .queries.privesc import PrivEscQuery
 
 
-def perform_query(input_str, session, graph):
+def perform_query(input_str, session, graph, skip_admin):
     """Given an input query, this function parses and performs the query."""
 
     iamclient = session.create_client('iam')
@@ -42,20 +42,21 @@ def perform_query(input_str, session, graph):
         else:
             query_syntax_and_exit()
     elif tokens[0] == 'who' and tokens[1] == 'can' and tokens[2] == 'do':
-        action = tokens[3]
-        if len(tokens) == 4:
-            for node in graph.nodes:
-                result = test_for_node(session, graph, node, action)
-                if result is not None:
-                    print_search_result(result, action)
-        elif len(tokens) == 6:
-            resource = tokens[5]
-            for node in graph.nodes:
-                result = test_for_node(session, graph, node, action, resource)
-                if result is not None:
-                    print_search_result(result, action, resource)
-        else:
+        if len(tokens) != 4 and len(tokens) != 6:
             query_syntax_and_exit()
+        action = tokens[3]
+        for node in graph.nodes:
+            if skip_admin and 'is_admin' in node.properties and node.properties['is_admin']:
+                continue
+            result = None
+            resource = None
+            if len(tokens) == 4:
+                result = test_for_node(session, graph, node, action)
+            elif len(tokens) == 6:
+                resource = tokens[5]
+                result = test_for_node(session, graph, node, action, resource)
+            if result is not None:
+                print_search_result(result, action, resource)
     elif tokens[0] == 'preset':
         if tokens[1] == 'priv_esc' or tokens[1] == 'change_perms':
             if len(tokens) == 3:
@@ -74,6 +75,8 @@ def perform_query(input_str, session, graph):
                 else:
                     print('====================')
                     for node in graph.nodes:
+                        if skip_admin and 'is_admin' in node.properties and node.properties['is_admin']:
+                            continue
                         node_edgelist_tuples = get_relevant_nodes(graph, node)
                         tuple_result = PrivEscQuery.run_query(iamclient, graph, node, node_edgelist_tuples)
                         if tuple_result[0] != 0:

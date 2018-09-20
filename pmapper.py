@@ -39,6 +39,7 @@ def main():
         description='Uses a created graph to provide a query interface, executes the passed query. It also will make calls to the AWS API.'
     )
     queryparser.add_argument('query_string', help='The query to run against the endpoint.')
+    queryparser.add_argument('-s', '--skip-admin', action='store_true', help='Skip admin principals when running a query.')
     visualparser = subparsers.add_parser(
         'visualize',
         help='For visualizing the pulled graph.',
@@ -91,7 +92,7 @@ def handle_query(parsed):
         print('Exiting.')
         sys.exit(-1)
 
-    perform_query(parsed.query_string, botocore_session, graph)
+    perform_query(parsed.query_string, botocore_session, graph, parsed.skip_admin)
 
 
 def handle_visualize(parsed):
