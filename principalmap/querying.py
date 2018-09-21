@@ -181,4 +181,5 @@ def query_syntax_and_exit():
     print('   <preset_name> is a predefined query with a set of args <preset_args>')
     print('PRESET QUERY LIST:')
     print('   * priv_esc (a.k.a. privesc or change_perms)')
+    print('   * connected')
     sys.exit(-1)
