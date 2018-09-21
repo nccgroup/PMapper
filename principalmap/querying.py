@@ -44,6 +44,7 @@ def handle_single_query(tokens, session, graph):
             resource_str = " with " + resource
         print('Did not find a way for ' + str(node) + ' to do ' + action + resource_str)
 
+
 def handle_multi_query(tokens, session, graph, skip_admin):
     """This function handles queries in the form of:
        "who can do <Action> [with <Resource>]
@@ -66,6 +67,7 @@ def handle_multi_query(tokens, session, graph, skip_admin):
 
         if result is not None:
             print_search_result(result, action, resource)
+
 
 def handle_preset_priv_esc(tokens, session, graph, skip_admin):
     """This function handles the "priv_esc / change_perms / privesc" preset queries."""
@@ -99,10 +101,50 @@ def handle_preset_priv_esc(tokens, session, graph, skip_admin):
                 print(tuple_result[1])
                 print("")
 
+
 def handle_preset_connected(tokens, session, graph):
     """This function handles the "connected" preset queries."""
 
-    pass
+    if len(tokens) != 4:
+        print('Query format for "connected" preset:')
+        print('   "preset connected <Principal> (<Principal> | *)"')
+        print('WHERE:')
+        print('   <Principal> is the full ARN of a user/role')
+        return
+
+    node = grab_node_by_name(tokens[2], graph)
+    if node is None:
+        print('Could not find a principal matching: ' + tokens[2])
+        return
+
+    if tokens[3] != '*':
+        target_node = grab_node_by_name(tokens[3], graph)
+        node_edgelist_tuples = get_relevant_nodes(graph, node)
+        found = False
+
+        for ne_tuple in node_edgelist_tuples:
+            if ne_tuple[0] == target_node:
+                found = True
+                _describe_connection(node, ne_tuple)
+                break
+
+        if not found:
+            print(str(node) + ' cannot access ' + str(target_node))
+    else:
+        node_edgelist_tuples = get_relevant_nodes(graph, node)
+
+        for ne_tuple in node_edgelist_tuples:
+            if ne_tuple[0] == node:
+                continue  # skip self-connections
+            _describe_connection(node, ne_tuple)
+
+
+def _describe_connection(nodeO, ne_tuple):
+    result = str(nodeO) + ' can access ' + str(ne_tuple[0]) + " because: \n"
+    for edge in ne_tuple[1]:
+        result += '      ' + str(edge.nodeX) + ' ' + edge.longlabel + ' ' + str(edge.nodeY) + "\n"
+    print(result)
+
 
 def perform_query(input_str, session, graph, skip_admin):
     """Given an input query, this function parses and performs the query."""
@@ -116,6 +158,8 @@ def perform_query(input_str, session, graph, skip_admin):
     elif tokens[0] == 'preset':
         if tokens[1] == 'priv_esc' or tokens[1] == 'change_perms' or tokens[1] == 'privesc':
             handle_preset_priv_esc(tokens, session, graph, skip_admin)
+        elif tokens[1] == 'connected':
+            handle_preset_connected(tokens, session, graph)
         else:
             query_syntax_and_exit()
     else:
