@@ -70,7 +70,34 @@ def handle_multi_query(tokens, session, graph, skip_admin):
 def handle_preset_priv_esc(tokens, session, graph, skip_admin):
     """This function handles the "priv_esc / change_perms / privesc" preset queries."""
 
-    pass
+    if len(tokens) != 3:
+        PrivEscQuery.print_help()
+        return
+
+    iamclient = session.create_client('iam')
+
+    if tokens[2] != '*':
+        node = grab_node_by_name(tokens[2], graph)
+        if node is None:
+            print('Could not find a principal matching: ' + tokens[1])
+            return
+
+        node_edgelist_tuples = get_relevant_nodes(graph, node)
+        tuple_result = PrivEscQuery.run_query(iamclient, graph, node, node_edgelist_tuples)
+        if tuple_result[0] != 0:
+            print('Discovered a path to escalate privileges:')
+            print(tuple_result[1])
+        else:
+            print('Did not find a path to escalate privileges')
+    else:
+        for node in graph.nodes:
+            if skip_admin and 'is_admin' in node.properties and node.properties['is_admin']:
+                continue
+            node_edgelist_tuples = get_relevant_nodes(graph, node)
+            tuple_result = PrivEscQuery.run_query(iamclient, graph, node, node_edgelist_tuples)
+            if tuple_result[0] != 0:
+                print(tuple_result[1])
+                print("")
 
 def handle_preset_connected(tokens, session, graph):
     """This function handles the "connected" preset queries."""
@@ -87,36 +114,9 @@ def perform_query(input_str, session, graph, skip_admin):
     elif tokens[0] == 'who' and tokens[1] == 'can' and tokens[2] == 'do':
         handle_multi_query(tokens, session, graph, skip_admin)
     elif tokens[0] == 'preset':
-        if tokens[1] == 'priv_esc' or tokens[1] == 'change_perms':
-            if len(tokens) == 3:
-                if tokens[2] != '*':
-                    node = grab_node_by_name(tokens[2], graph)
-                    if node is None:
-                        print('Could not find a principal with the name: ' + tokens[2])
-                        sys.exit(-1)
-                    node_edgelist_tuples = get_relevant_nodes(graph, node)
-                    tuple_result = PrivEscQuery.run_query(iamclient, graph, node, node_edgelist_tuples)
-                    if tuple_result[0] != 0:
-                        print('Discovered a potential path to change privileges:')
-                        print(tuple_result[1])
-                    else:
-                        print('Did not find a path to change privileges.')
-                else:
-                    print('====================')
-                    for node in graph.nodes:
-                        if skip_admin and 'is_admin' in node.properties and node.properties['is_admin']:
-                            continue
-                        node_edgelist_tuples = get_relevant_nodes(graph, node)
-                        tuple_result = PrivEscQuery.run_query(iamclient, graph, node, node_edgelist_tuples)
-                        if tuple_result[0] != 0:
-                            print(tuple_result[1])
-                            print('====================')
-            else:
-                PrivEscQuery.print_help()
-                sys.exit(-1)
+        if tokens[1] == 'priv_esc' or tokens[1] == 'change_perms' or tokens[1] == 'privesc':
+            handle_preset_priv_esc(tokens, session, graph, skip_admin)
         else:
-            print('PRESET QUERY LIST:')
-            print('   * priv_esc (a.k.a. change_perms)')
             query_syntax_and_exit()
     else:
         query_syntax_and_exit()
@@ -135,4 +135,6 @@ def query_syntax_and_exit():
     print('   <Action> is an action specified by the AWS API')
     print('   <Resource> is the full ARN of a resource to test (wildcard by default, do not use with actions that do not specify resources)')
     print('   <preset_name> is a predefined query with a set of args <preset_args>')
+    print('PRESET QUERY LIST:')
+    print('   * priv_esc (a.k.a. privesc or change_perms)')
     sys.exit(-1)
