@@ -13,50 +13,79 @@ from .queries.util import *
 from .queries.privesc import PrivEscQuery
 
 
+def handle_single_query(tokens, session, graph):
+    """This function handles queries in the form of:
+       "can <Principal> do <Action> [with <Resource>]
+
+    It also prints the result.
+    """
+
+    if len(tokens) != 4 and len(tokens) != 6:
+        query_syntax_and_exit()
+
+    node = grab_node_by_name(tokens[1], graph)
+    if node is None:
+        print('Could not find a principal matching: ' + tokens[1])
+        return
+
+    action = tokens[3]
+    resource = None
+    if len(tokens) == 6:
+        if tokens[4] != 'with':
+            query_syntax_and_exit()
+        resource = tokens[5]
+
+    result = test_for_node(session, graph, node, action, resource)
+    if result is not None:
+        print_search_result(result, action, resource)
+    else:
+        resource_str = ""
+        if len(tokens) == 6:
+            resource_str = " with " + resource
+        print('Did not find a way for ' + str(node) + ' to do ' + action + resource_str)
+
+def handle_multi_query(tokens, session, graph, skip_admin):
+    """This function handles queries in the form of:
+       "who can do <Action> [with <Resource>]
+
+    It also prints the result.
+    """
+
+    if len(tokens) != 4 and len(tokens) != 6:
+        query_syntax_and_exit()
+
+    action = tokens[3]
+    for node in graph.nodes:
+        if skip_admin and 'is_admin' in node.properties and node.properties['is_admin']:
+            continue
+
+        resource = None
+        if len(tokens) == 6:
+            resource = tokens[5]
+        result = test_for_node(session, graph, node, action, resource)
+
+        if result is not None:
+            print_search_result(result, action, resource)
+
+def handle_preset_priv_esc(tokens, session, graph, skip_admin):
+    """This function handles the "priv_esc / change_perms / privesc" preset queries."""
+
+    pass
+
+def handle_preset_connected(tokens, session, graph):
+    """This function handles the "connected" preset queries."""
+
+    pass
+
 def perform_query(input_str, session, graph, skip_admin):
     """Given an input query, this function parses and performs the query."""
 
     iamclient = session.create_client('iam')
     tokens = re.split(r'\s+', input_str, flags=re.UNICODE)
     if tokens[0] == 'can' and tokens[2] == 'do':
-        node = grab_node_by_name(tokens[1], graph)
-        if node is None:
-            print('Could not find a principal with the name: ' + tokens[1])
-            sys.exit(-1)
-        action = tokens[3]
-        if len(tokens) == 4:
-            result = test_for_node(session, graph, node, action)
-            if result is not None:
-                print_search_result(result, action)
-            else:
-                print('Did not find a way for ' + str(node) + ' to do ' + action)
-        elif len(tokens) == 6:
-            if tokens[4] != 'with':
-                query_syntax_and_exit()
-            resource = tokens[5]
-            result = test_for_node(session, graph, node, action, resource)
-            if result is not None:
-                print_search_result(result, action, resource)
-            else:
-                print('Did not find a way for ' + str(node) + ' to do ' + action + ' with ' + resource)
-        else:
-            query_syntax_and_exit()
+        handle_single_query(tokens, session, graph)
     elif tokens[0] == 'who' and tokens[1] == 'can' and tokens[2] == 'do':
-        if len(tokens) != 4 and len(tokens) != 6:
-            query_syntax_and_exit()
-        action = tokens[3]
-        for node in graph.nodes:
-            if skip_admin and 'is_admin' in node.properties and node.properties['is_admin']:
-                continue
-            result = None
-            resource = None
-            if len(tokens) == 4:
-                result = test_for_node(session, graph, node, action)
-            elif len(tokens) == 6:
-                resource = tokens[5]
-                result = test_for_node(session, graph, node, action, resource)
-            if result is not None:
-                print_search_result(result, action, resource)
+        handle_multi_query(tokens, session, graph, skip_admin)
     elif tokens[0] == 'preset':
         if tokens[1] == 'priv_esc' or tokens[1] == 'change_perms':
             if len(tokens) == 3:
