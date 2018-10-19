@@ -59,10 +59,14 @@ last part of that ARN (user/... or role/...).
 
 ### Presets
 
-The existing preset is `priv_esc` or `change_perms`, which have the same 
-function. They describe which principals have the ability to change their own 
-permissions. If a principal is able to change their own perms, then it 
-effectively has unlimited perms.
+There are two presets. The first is `priv_esc`, which is also available as 
+`privesc` or `change_perms`. It identifies all principals that can change 
+their own permissions (dubbed as admins) directly. Then it identifies any 
+principals that can access the administrative principals (potential privilege 
+escalation risks).
+
+The other preset is `connected`. It identifies if one principal can access 
+another, or list all principals that can be accessed.
 
 ## Visualizing
 
@@ -75,7 +79,7 @@ To create the DOT and SVG files, run the command:
 Currently the output is a directed graph, which collates all the edges with 
 the same source and destination nodes. It does not draw edges where the source 
 is an admin. Nodes for admins are colored blue. Nodes for users with the 
-ability to access admins are colored red (potential priv-esc risk).
+ability to access admins are colored red (potential priv-esc risks).
 
 ## Sample Output
 
@@ -152,7 +156,6 @@ user/PowerUser can change privileges because:
 
 * Complete and verify Python 3 support.
 * Smarter control over rate of API requests (Queue, managing throttles).
-* Better progress reporting.
 * Validate and add more checks for obtaining credentials. Several services use
 service roles that grant the service permission to do an action within a user's 
 account. This could potentially allow a user to obtain access to additional 
@@ -163,6 +166,5 @@ privileges.
 * Adding more caching. 
 * Local policy evaluation?
 * Cross-account subcommand(s).
-* A preset to check if one principal is connected to another.
 * Handling policies for buckets or keys with services like S3 or KMS when 
 querying.
