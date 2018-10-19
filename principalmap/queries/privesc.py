@@ -51,12 +51,12 @@ class PrivEscQuery:
 
     @staticmethod
     def explain_path(nodeO, tupleX):
-        result = str(nodeO) + " can change privileges because:\n"
+        result = str(nodeO) + " can escalate privileges because:\n"
 
         result += '   ' + str(nodeO) + ' can access ' + str(tupleX[0]) + " because: \n"
         for edge in tupleX[1]:
             result += '      ' + str(edge.nodeX) + ' ' + edge.longlabel + ' ' + str(edge.nodeY) + "\n"
-        result += '   and ' + str(tupleX[0]) + ' can change its own privileges.'
+        result += '   and ' + str(tupleX[0]) + ' can escalate its own privileges.'
 
         return result
 
@@ -76,7 +76,7 @@ class PrivEscQuery:
     @staticmethod
     def print_help():
         print('PRIV ESC QUERY HELP:')
-        print('USAGE: ./principalmap query "(priv_esc|change_perms) <Principal ARN>"')
+        print('USAGE: ./principalmap query "(priv_esc|privesc|change_perms) <Principal ARN>"')
         print('WHERE:')
         print('   Principal ARN is the principal to check for "priv-esc" capabilities.')
         print('      (also accepts (user|role)/<principal_name>)')
