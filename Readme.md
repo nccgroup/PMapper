@@ -32,7 +32,7 @@ to begin pulling data about your account down to your computer.
 
 Principal Mapper will use credentials from profiles established for AWS CLI. 
 Those credentials are stored, by default, in the well known location 
-`~/.aws/config`. Profiles can be specified using the `--profile` parameter. By 
+`~/.aws/credentials`. Profiles can be specified using the `--profile` parameter. By 
 default, if environment variables aren't used, Principal Mapper uses the `default` 
 profile.
 
