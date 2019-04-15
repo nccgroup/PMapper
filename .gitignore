@@ -10,3 +10,6 @@
 # Ignore temp files created by gedit
 
 *~
+
+# Ignore .idea files
+*.idea*
