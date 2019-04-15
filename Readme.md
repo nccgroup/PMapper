@@ -28,6 +28,22 @@ access keys created for this user.
 5. Run the command `python pmapper.py --profile <profile_name> graph`
 to begin pulling data about your account down to your computer. 
 
+## Credentials
+
+Principal Mapper will use credentials from profiles established for AWS CLI. 
+Those credentials are stored, by default, in the well known location 
+`~/.aws/credentials`. Profiles can be specified using the `--profile` parameter. By 
+default, if environment variables aren't used, Principal Mapper uses the `default` 
+profile.
+
+Principal Mapper can use credentials from environment variables in the shell, 
+including `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_SESSION_TOKEN`. 
+That has to be specified using the `--env-vars` parameter.
+
+For backwards compatability reasons, Principal Mapper won't automatically combine 
+graphs created through `--profile` and `--env-vars` (can be done manually). You 
+cannot specify both `--profile` and `--env-vars` when calling Principal Mapper.
+
 ## Graphing
 
 Principal Mapper has a `graph` subcommand, which does the heavy work of going 

@@ -81,7 +81,7 @@ def handle_preset_priv_esc(tokens, session, graph, skip_admin):
     if tokens[2] != '*':
         node = grab_node_by_name(tokens[2], graph)
         if node is None:
-            print('Could not find a principal matching: ' + tokens[1])
+            print('Could not find a principal matching: ' + tokens[2])
             return
 
         node_edgelist_tuples = get_relevant_nodes(graph, node)

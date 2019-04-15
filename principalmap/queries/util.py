@@ -4,7 +4,7 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import unicode_literals
 
-from principalmap.edgeconditions.util import testAction, getResourcePolicy
+from principalmap.edgeconditions.util import testAction, test_node_access, getResourcePolicy
 
 
 def test_for_node(session, graph, node, action, resource=None):
@@ -13,11 +13,13 @@ def test_for_node(session, graph, node, action, resource=None):
     iamclient = session.create_client('iam')
     for node_edgelist_tuple in get_relevant_nodes(graph, node):
         if resource is None:
-            if testAction(iamclient, node_edgelist_tuple[0].label, action):
+            results = test_node_access(iamclient, node_edgelist_tuple[0], [action])
+            if (action, '*', True) in results:
                 result = node_edgelist_tuple
                 break
         else:
-            if testAction(iamclient, node_edgelist_tuple[0].label, action, resource):
+            results = test_node_access(iamclient, node_edgelist_tuple[0], [action], [resource])
+            if (action, resource, True) in results:
                 result = node_edgelist_tuple
                 break
     return result

@@ -13,7 +13,7 @@ from .queries.util import *
 from .queries.privesc import PrivEscQuery
 
 
-def perform_visualization(session, graph):
+def perform_visualization(parsed, account, session, graph):
     """Creates output.(dot|svg) files in the current directory for a given graph."""
 
     iamclient = session.create_client('iam')
@@ -34,7 +34,14 @@ def perform_visualization(session, graph):
     for edge in graph.edges:
         if edge.nodeX not in admins:
             dot_graph.add_edge(pydot.Edge(pydot_node_dict[edge.nodeX], pydot_node_dict[edge.nodeY]))
-    graphfile = open('output.dot', 'w')
+
+    filepath = ''
+    if parsed.profile is not None:
+        filepath = 'pmapper-viz-' + parsed.profile
+    else:
+        filepath = 'pmapper-viz-acct-' + account
+    graphfile = open(filepath + '.dot', 'w')
     graphfile.write(dot_graph.to_string())
     graphfile.close()
-    dot_graph.write_svg('output.svg')
+    dot_graph.write_svg(filepath + '.svg')
+    print('Wrote SVG file ' + filepath + '.svg')
