@@ -13,3 +13,6 @@
 
 # Ignore .idea files
 *.idea*
+
+# Ignore venv
+/venv/*
