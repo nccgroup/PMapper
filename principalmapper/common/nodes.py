@@ -1,15 +1,19 @@
 """Python code for implementing the nodes of a graph"""
 
 
+from principalmapper.util import arns
+
+
 class Node(object):
     """The basic Node object"""
 
-    def __init__(self, arn: str = None, attached_policies: list = None, group_memberships: list = None,
-                 active_password: bool = False, access_keys: list = None, is_admin: bool = False):
+    def __init__(self, arn: str, attached_policies: list, group_memberships: list, access_keys: list,
+                 active_password: bool, is_admin: bool):
         """Constructor"""
 
-        if arn is None:
-            raise ValueError('Need to have an ARN for this principal.')
+        resource_value = arns.get_resource(arn)
+        if arn is None or not (resource_value.startswith('user/') or resource_value.startswith('role/')):
+            raise ValueError('The parameter arn must be a valid ARN for an IAM user or role.')
         self.arn = arn
 
         if attached_policies is None:
@@ -31,7 +35,7 @@ class Node(object):
 
         self.is_admin = is_admin
 
-    def _to_dictionary(self):
+    def to_dictionary(self):
         """Creates a dictionary representation of this Node for storage"""
         return {
             "arn": self.arn,

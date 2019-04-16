@@ -5,6 +5,8 @@ Provides a command-line interface to use the principalmapper library
 import argparse
 import logging
 
+import principalmapper.graphing
+
 
 def main():
     """Point of entry for command-line"""
@@ -169,7 +171,10 @@ def setup_logger(parsed_args):
 
 def handle_graph(parsed_args):
     """Processes the arguments for the graph subcommand and executes related tasks"""
-    pass
+    if parsed_args.create:
+        pass
+    elif parsed_args.display:
+        principalmapper.graphing.get_existing_graph(parsed_args)
 
 
 def handle_query(parsed_args):

@@ -6,7 +6,7 @@ from .nodes import Node
 class Edge(object):
     """The basic Edge object"""
 
-    def __init__(self, source: Node = None, destination: Node = None):
+    def __init__(self, source: Node, destination: Node):
         """Constructor"""
         if source is None:
             raise ValueError('Edges must have a source Node object')
@@ -15,3 +15,10 @@ class Edge(object):
 
         self.source = source
         self.destination = destination
+
+    def to_dictionary(self):
+        """Returns a dictionary representation of this object for storage"""
+        return {
+            'source': self.source.arn,
+            'destination': self.destination.arn
+        }
