@@ -8,6 +8,10 @@ import json
 import os
 import os.path
 
+import packaging
+import packaging.version
+
+import principalmapper
 from principalmapper.common.edges import Edge
 from principalmapper.common.groups import Group
 from principalmapper.common.nodes import Node
@@ -30,6 +34,8 @@ class Graph(object):
         self.groups = groups
         if 'account_id' not in metadata:
             raise ValueError('Incomplete metadata input, expected key: "account_id"')
+        if 'pmapper_version' not in metadata:
+            raise ValueError('Incomplete metadata input, expected key: "pmapper_version"')
         self.metadata = metadata
 
     def store_graph_as_json(self):
@@ -95,6 +101,15 @@ class Graph(object):
         with open(metadatafilepath) as f:
             metadata = json.load(f)
 
+        current_pmapper_version = packaging.version.parse(principalmapper.__version__)
+        loaded_graph_version = packaging.version.parse(metadata['pmapper_version'])
+        if current_pmapper_version.release[0] != loaded_graph_version.release[0] or \
+                current_pmapper_version.release[1] != loaded_graph_version.release[1]:
+            raise ValueError('Loaded Graph data was from a different version of Principal Mapper ({}), but the current '
+                             'version of Principal Mapper ({}) may not support it. Either update the stored Graph data '
+                             'and its metadata, or regraph the account.'.format(loaded_graph_version,
+                                                                                current_pmapper_version))
+
         with open(policiesfilepath) as f:
             policies = json.load(f)
 
@@ -125,8 +140,8 @@ class Graph(object):
                     group_memberships.append(group)
                     break
             nodes.append(Node(arn=node['arn'], attached_policies=node_policies, group_memberships=group_memberships,
-                              access_keys=node['access_keys'], active_password=node['active_password'],
-                              is_admin=node['is_admin']))
+                              trust_policy=node['trust_policy'], num_access_keys=node['access_keys'],
+                              active_password=node['active_password'], is_admin=node['is_admin']))
 
         with open(edgesfilepath) as f:
             unresolved_edges = json.load(f)
@@ -136,12 +151,12 @@ class Graph(object):
             source = None
             destination = None
             for node in nodes:
-                if node.arn == edge['source']:
+                if source is None and node.arn == edge['source']:
                     source = node
-                if node.arn == edge['destination']:
+                if destination is None and node.arn == edge['destination']:
                     destination = node
                 if source is not None and destination is not None:
                     break
-            edges.append(Edge(source=source, destination=destination))
+            edges.append(Edge(source=source, destination=destination, reason=edge['reason']))
 
         return Graph(nodes=nodes, edges=edges, policies=policies, groups=groups, metadata=metadata)

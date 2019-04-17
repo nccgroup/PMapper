@@ -1,5 +1,6 @@
 """Python code for handling AWS IAM groups"""
 
+from typing import Optional
 
 from principalmapper.util import arns
 
@@ -7,7 +8,7 @@ from principalmapper.util import arns
 class Group(object):
     """A class representing a single IAM group"""
 
-    def __init__(self, arn: str, attached_policies: list):
+    def __init__(self, arn: str, attached_policies: Optional[list]):
         """Constructor"""
         if arn is None or not arns.get_resource(arn).startswith('group/'):
             raise ValueError('Group objects must be constructed with a valid ARN for a group')

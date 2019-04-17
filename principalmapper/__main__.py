@@ -3,9 +3,10 @@ Provides a command-line interface to use the principalmapper library
 """
 
 import argparse
-import logging
 
-import principalmapper.graphing
+import principalmapper.graphing.graph_actions
+from principalmapper.util import botocore_tools
+from principalmapper.util.debug_print import dprint
 
 
 def main():
@@ -14,7 +15,7 @@ def main():
     argument_parser.add_argument(
         '--profile',
         help='AWS CLI (botocore) profile to use to call the AWS API'
-    )
+    )  # Note: do NOT set the default, we want to know if the profile arg was specified or not
     argument_parser.add_argument(
         '--debug',
         action='store_true',
@@ -118,6 +119,12 @@ def main():
         description='Runs a read-evaluate-print-loop of queries, avoiding the need to read from disk for each query',
         help='Runs a REPL for querying'
     )
+    replparser.add_argument(
+        '--mode',
+        choices=['query', 'argquery'],
+        default='query',
+        help='Select which mode of querying to use'
+    )
 
     # Visualization subcommand
     visualizationparser = subparser.add_parser(
@@ -138,9 +145,9 @@ def main():
 
     parsed_args = argument_parser.parse_args()
 
-    logger = setup_logger(parsed_args)
+    dprint(parsed_args.debug, 'Debugging mode enabled.')
+    dprint(parsed_args.debug, 'Parsed Args: ' + str(parsed_args))
 
-    logger.debug('Parsed Arguments: ' + str(parsed_args))
     if parsed_args.picked_cmd == 'graph':
         handle_graph(parsed_args)
     elif parsed_args.picked_cmd == 'query':
@@ -154,44 +161,48 @@ def main():
     return 0
 
 
-def setup_logger(parsed_args):
-    """Configures the logger module."""
-    logger = logging.getLogger(__name__)
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter('%(asctime)s %(levelname)-8s %(name)s: %(message)s')
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    if parsed_args.debug:
-        logger.setLevel(logging.DEBUG)
-    else:
-        logger.setLevel(logging.INFO)
-    logger.debug('Debug status: ' + str(parsed_args.debug))
-    return logger
-
-
 def handle_graph(parsed_args):
     """Processes the arguments for the graph subcommand and executes related tasks"""
-    if parsed_args.create:
-        pass
-    elif parsed_args.display:
-        principalmapper.graphing.get_existing_graph(parsed_args)
+    if parsed_args.account is None:
+        session = botocore_tools.get_session(parsed_args.profile)
+    else:
+        session = None
+
+    if parsed_args.create:  # --create
+        graph = principalmapper.graphing.graph_actions.create_new_graph(session, parsed_args.debug)
+        principalmapper.graphing.graph_actions.print_graph_data(graph)
+        graph.store_graph_as_json()
+
+    elif parsed_args.display:  # --display
+        graph = principalmapper.graphing.graph_actions.get_existing_graph(
+            session,
+            parsed_args.account,
+            parsed_args.debug
+        )
+        principalmapper.graphing.graph_actions.print_graph_data(graph)
+
+    elif parsed_args.update_nodes:  # --update-nodes
+        pass  # TODO: update_nodes functionality
+
+    elif parsed_args.update_edges:  # --update-edges
+        pass  # TODO: update_edges functionality
 
 
 def handle_query(parsed_args):
     """Processes the arguments for the query subcommand and executes related tasks"""
-    pass
+    pass  # TODO: query functionality
 
 
 def handle_argquery(parsed_args):
     """Processes the arguments for the argquery subcommand and executes related tasks"""
-    pass
+    pass  # TODO: argquery functionality
 
 
 def handle_repl(parsed_args):
     """Processes the arguments for the query REPL and initiates"""
-    pass
+    pass  # TODO: repl functionality
 
 
 def handle_visualization(parsed_args):
     """Processes the arguments for the visualization subcommand and executes related tasks"""
-    pass
+    pass  # TODO: visualization functionality
