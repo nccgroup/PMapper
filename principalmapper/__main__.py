@@ -3,10 +3,13 @@ Provides a command-line interface to use the principalmapper library
 """
 
 import argparse
+import os
+import os.path
 
 import principalmapper.graphing.graph_actions
 from principalmapper.util import botocore_tools
 from principalmapper.util.debug_print import dprint
+from principalmapper.util.storage import get_storage_root
 
 
 def main():
@@ -171,7 +174,7 @@ def handle_graph(parsed_args):
     if parsed_args.create:  # --create
         graph = principalmapper.graphing.graph_actions.create_new_graph(session, parsed_args.debug)
         principalmapper.graphing.graph_actions.print_graph_data(graph)
-        graph.store_graph_as_json()
+        graph.store_graph_as_json(os.path.join(get_storage_root(), graph.metadata['account_id']))
 
     elif parsed_args.display:  # --display
         graph = principalmapper.graphing.graph_actions.get_existing_graph(
@@ -190,19 +193,19 @@ def handle_graph(parsed_args):
 
 def handle_query(parsed_args):
     """Processes the arguments for the query subcommand and executes related tasks"""
-    pass  # TODO: query functionality
+    raise NotImplementedError('query subcommand is not ready for use')  # TODO: query functionality
 
 
 def handle_argquery(parsed_args):
     """Processes the arguments for the argquery subcommand and executes related tasks"""
-    pass  # TODO: argquery functionality
+    raise NotImplementedError('query subcommand is not ready for use')  # TODO: argquery functionality
 
 
 def handle_repl(parsed_args):
     """Processes the arguments for the query REPL and initiates"""
-    pass  # TODO: repl functionality
+    raise NotImplementedError('query subcommand is not ready for use')  # TODO: repl functionality
 
 
 def handle_visualization(parsed_args):
     """Processes the arguments for the visualization subcommand and executes related tasks"""
-    pass  # TODO: visualization functionality
+    raise NotImplementedError('query subcommand is not ready for use')  # TODO: visualization functionality

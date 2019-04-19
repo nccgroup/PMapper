@@ -15,6 +15,7 @@ import principalmapper
 from principalmapper.common.edges import Edge
 from principalmapper.common.groups import Group
 from principalmapper.common.nodes import Node
+from principalmapper.common.policies import Policy
 from principalmapper.util.storage import get_storage_root
 
 
@@ -38,25 +39,23 @@ class Graph(object):
             raise ValueError('Incomplete metadata input, expected key: "pmapper_version"')
         self.metadata = metadata
 
-    def store_graph_as_json(self):
+    def store_graph_as_json(self, root_directory: str):
         """Stores the current Graph as a set of JSON documents on-disk at a standard location.
 
         If the directory does not exist yet, it is created.
 
         Structure:
-        <root>/
-        |--- <account id>
-        |------- metadata.json
-        |------- graph/
-        |----------- nodes.json
-        |----------- edges.json
-        |----------- policies.json
-        |----------- groups.json
-        |------- visualizations/
-        |----------- output.svg
+        | <root_directory parameter>
+        |---- metadata.json
+        |---- graph/
+        |-------- nodes.json
+        |-------- edges.json
+        |-------- policies.json
+        |-------- groups.json
+        |---- visualizations/
+        |-------- output.svg
         """
-        rootpath = get_storage_root()
-        rootpath = os.path.join(rootpath, self.metadata['account_id'])
+        rootpath = root_directory
         if not os.path.exists(rootpath):
             os.makedirs(rootpath, 0o700)
         graphdir = os.path.join(rootpath, 'graph')
@@ -82,15 +81,14 @@ class Graph(object):
         os.umask(old_umask)
 
     @classmethod
-    def create_graph_from_local_disk(cls, account_id):
-        """Generates a Graph object by pulling data from an account ID on disk
+    def create_graph_from_local_disk(cls, root_directory: str):
+        """Generates a Graph object by pulling data from disk at root_directory
 
         Loads metadata, then policies, then groups, then nodes, then edges (to handle dependencies)
         """
-        rootpath = get_storage_root()
-        rootpath = os.path.join(rootpath, account_id)
+        rootpath = root_directory
         if not os.path.exists(rootpath):
-            raise ValueError('This host does not have a Graph for account ID {}.'.format(account_id))
+            raise ValueError('Did not find file at: {}'.format(rootpath))
         graphdir = os.path.join(rootpath, 'graph')
         metadatafilepath = os.path.join(rootpath, 'metadata.json')
         nodesfilepath = os.path.join(graphdir, 'nodes.json')
@@ -110,8 +108,12 @@ class Graph(object):
                              'and its metadata, or regraph the account.'.format(loaded_graph_version,
                                                                                 current_pmapper_version))
 
+        policies = []
         with open(policiesfilepath) as f:
-            policies = json.load(f)
+            policies_file_contents = json.load(f)
+
+        for policy in policies_file_contents:
+            policies.append(Policy(arn=policy['arn'], name=policy['name'], policy_doc=policy['policy_doc']))
 
         with open(groupsfilepath) as f:
             unresolved_groups = json.load(f)
@@ -119,9 +121,11 @@ class Graph(object):
         for group in unresolved_groups:
             # dig through string list of attached policies to match up with policy objects with matching ARNs
             group_policies = []
-            for policy in policies:
-                if policy.arn in group['attached_policies']:
-                    group_policies.append(policy)
+            for policy_ref in group['attached_policies']:
+                for policy in policies:
+                    if policy_ref['arn'] == policy.arn and policy_ref['name'] == policy.name:
+                        group_policies.append(policy)
+                        break
             groups.append(Group(arn=group['arn'], attached_policies=group_policies))
 
         with open(nodesfilepath) as f:
@@ -131,10 +135,11 @@ class Graph(object):
             # dig through string list of groups and policies to match up with group and policy objects
             node_policies = []
             group_memberships = []
-            for policy in policies:
-                if policy.arn in node['attached_policies']:
-                    node_policies.append(policy)
-                    break
+            for policy_ref in node['attached_policies']:
+                for policy in policies:
+                    if policy_ref['arn'] == policy.arn and policy_ref['name'] == policy.name:
+                        node_policies.append(policy)
+                        break
             for group in groups:
                 if group.arn in node['group_memberships']:
                     group_memberships.append(group)

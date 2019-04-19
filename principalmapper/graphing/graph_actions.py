@@ -1,5 +1,7 @@
 """Code for creating graphs for Principal Mapper"""
 
+import os
+import os.path
 import sys
 
 import botocore.session
@@ -7,6 +9,7 @@ import principalmapper
 from principalmapper.common.graphs import Graph
 from principalmapper.graphing import gathering
 from principalmapper.util.debug_print import dprint
+from principalmapper.util.storage import get_storage_root
 from typing import Optional
 
 
@@ -30,7 +33,8 @@ def create_new_graph(session: botocore.session.Session, debug=False) -> Graph:
 
 def get_graph_from_disk(account: str) -> Graph:
     """Returns a Graph object constructed from data stored on-disk"""
-    return Graph.create_graph_from_local_disk(account_id=account)
+
+    return Graph.create_graph_from_local_disk(os.path.join(get_storage_root(), account))
 
 
 def get_existing_graph(session: Optional[botocore.session.Session], account: Optional[str], debug=False) -> Graph:

@@ -46,7 +46,7 @@ class Node(object):
         """Creates a dictionary representation of this Node for storage"""
         return {
             "arn": self.arn,
-            "attached_policies": [policy.arn for policy in self.attached_policies],
+            "attached_policies": [{'arn': policy.arn, 'name': policy.name} for policy in self.attached_policies],
             "group_memberships": [group.arn for group in self.group_memberships],
             "trust_policy": self.trust_policy,
             "active_password": self.active_password,
