@@ -8,14 +8,16 @@ from principalmapper.common.groups import Group
 from principalmapper.common.graphs import Graph
 from principalmapper.common.nodes import Node
 from principalmapper.common.policies import Policy
+from principalmapper.graphing import edge_identification
+from principalmapper.querying import query_interface
 from principalmapper.util import arns
 from principalmapper.util.debug_print import dprint
 from typing import List
 from typing import Optional
 
 
-def create_graph(session: botocore.session.Session, metadata: dict, output: io.StringIO = os.devnull,
-                 debug=False) -> Graph:
+def create_graph(session: botocore.session.Session, metadata: dict, service_list: list,
+                 output: io.StringIO = os.devnull, debug=False) -> Graph:
     """Creates a list of Node objects to use for building a Graph.
 
     Parameter `metadata` must be a valid dictionary with 'account_id' and 'pmapper_version' correctly filled in
@@ -33,10 +35,10 @@ def create_graph(session: botocore.session.Session, metadata: dict, output: io.S
     policies_result = get_policies_and_fill_out(iamclient, nodes_result, groups_result, output, debug)
 
     # Determine which nodes are admins and update node objects
-    # TODO: search for admins
+    update_admin_status(iamclient, nodes_result, output, debug)
 
     # Generate edges, generate Edge objects
-    edges_result = []  # TODO: get edges
+    edges_result = edge_identification.obtain_edges(session, service_list, nodes_result, output, debug)
 
     return Graph(nodes_result, edges_result, policies_result, groups_result, metadata)
 
@@ -232,6 +234,30 @@ def get_policies_and_fill_out(iamclient, nodes: List[Node], groups: List[Group],
             group.attached_policies.append(policy_object)
 
     return result
+
+
+def update_admin_status(iamclient, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> None:
+    """Given a list of nodes, goes through and updates each node's is_admin data"""
+    for node in nodes:
+        output.write("checking if {} is an admin\n".format(node.searchable_name()))
+        node_type = arns.get_resource(node.arn).split('/')[0]
+
+        # check if node can modify its own inline policies
+        if node_type == 'user':
+            action = 'iam:PutUserPolicy'
+        else:  # node_type == 'role'
+            action = 'iam:PutRolePolicy'
+        if query_interface.is_authorized_for(iamclient, node, action, node.arn, {}, True, debug):
+            node.is_admin = True
+            continue
+
+        # TODO: check if node can attach the AdministratorAccess policy to itself
+
+        # TODO: check if node can create a role and attach the AdministratorAccess policy or an inline policy
+
+        # TODO: check if node can update an attached customer-managed policy (assumes SetAsDefault is set to True)
+
+        # TODO: check if node is a user, and if it can attach or modify any of its groups's policies
 
 
 def _get_policy_by_arn(arn: str, policies: List[Policy]) -> Optional[Policy]:

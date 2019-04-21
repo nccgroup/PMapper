@@ -5,6 +5,7 @@ import re
 
 from principalmapper.common.nodes import Node
 from principalmapper.util.debug_print import dprint
+from principalmapper.util import arns
 
 
 def is_authorized_for(iamclient, principal: Node, action_to_check: str, resource_to_check: str,
@@ -55,14 +56,14 @@ def has_matching_statement(principal: Node, effect_value: str, action_to_check: 
     Does not replace full evaluation with iam:SimulatePrincipalPolicy, but can save time/API calls since there must be
     at least one matching Allow statement when you make an API call.
     """
-    dprint(debug, 'local test for matching statement, principal: {}, effect: {}, action: {}, resource: {}, '.format(
-        effect_value,
-        principal.arn,
-        action_to_check,
-        resource_to_check,
-    ) + 'conditions: {}'.format(
-        condition_keys_to_check
-    ))
+    dprint(debug, 'local test for matching statement, principal: {}, effect: {}, action: {}, resource: {}, '
+           'conditions: {}'.format(
+            principal.arn,
+            effect_value,
+            action_to_check,
+            resource_to_check,
+            condition_keys_to_check
+            ))
 
     # For each policy...
     for policy in principal.attached_policies:
@@ -109,6 +110,84 @@ def has_matching_statement(principal: Node, effect_value: str, action_to_check: 
     return False
 
 
+def resource_policy_has_matching_statement(principal: Node, resource_policy: dict, effect_value: str,
+                                           action_to_check: str, resource_to_check: str, condition_keys_to_check: dict,
+                                           debug: bool = False):
+    """Locally determine if a node is permitted by a resource policy for a given action/resource/condition"""
+    dprint(debug, 'local resource policy check - principal: {}, effect: {}, action: {}, resource: {}, conditions: {}, '
+                  'resource_policy: {}'.format(principal.arn, effect_value, action_to_check, resource_to_check,
+                                               condition_keys_to_check, resource_policy))
+
+    for statement in _listify_dictionary(resource_policy['Statement']):
+        if statement['Effect'] != effect_value:
+            continue
+        matches_principal, matches_action, matches_resource, matches_condition = False, False, False, False
+        if 'Principal' in statement:  # should be a dictionary
+            if 'AWS' in statement['Principal']:
+                if _principal_matches_in_statement(principal, _listify_string(statement['Principal']['AWS'])):
+                    matches_principal = True
+        else:  # 'NotPrincipal' in statement:
+            matches_principal = True
+            if 'AWS' in statement['NotPrincipal']:
+                if _principal_matches_in_statement(principal, _listify_string(statement['NotPrincipal']['AWS'])):
+                    matches_principal = False
+
+        if not matches_principal:
+            continue
+
+        # if principal is good, proceed to check the Action
+        if 'Action' in statement:
+            for action in _listify_string(statement['Action']):
+                matches_action = _matches_after_expansion(action_to_check, action, debug=debug)
+                break
+        else:  # 'NotAction' in statement
+            matches_action = True
+            for notaction in _listify_string(statement['NotAction']):
+                if _matches_after_expansion(action_to_check, notaction, debug=debug):
+                    matches_action = False
+                    break  # finish looping
+        if not matches_action:
+            continue
+
+        # if action is good, proceed to check resource
+        if 'Resource' in statement:
+            for resource in _listify_string(statement['Resource']):
+                if _matches_after_expansion(resource_to_check, resource, debug=debug):
+                    matches_resource = True
+                    break
+        elif 'NotResource' in statement:
+            matches_resource = True
+            for notresource in _listify_string(statement['NotResource']):
+                if _matches_after_expansion(resource_to_check, notresource, debug=debug):
+                    matches_resource = False
+                    break
+        else:  # no resource element (seen in IAM role trust policies), treat as a match
+            matches_resource = True
+
+        # if resource is good, check condition
+        matches_condition = True  # TODO: implement local condition check in policy/statement loop
+
+        if matches_principal and matches_action and matches_resource and matches_condition:
+            return True
+
+    return False
+
+
+def _principal_matches_in_statement(principal: Node, aws_principal_field: list):
+    """Helper function for locally determining a principal matches a resource policy's statement"""
+    for value in aws_principal_field:
+        if principal.arn == value:
+            return True
+        elif arns.get_account_id(principal.arn) == value:
+            return True
+        else:
+            principal_root_str = 'arn:{}:iam::{}:root'.format(arns.get_partition(principal.arn),
+                                                              arns.get_account_id(principal.arn))
+            if principal_root_str == value:
+                return True
+    return False
+
+
 def _policies_include_matching_allow_action(principal: Node, action_to_check: str, debug: bool = False) -> bool:
     """Helper function for online-testing. Does a 'light' scan of a principal's policies to determine if any of
     their statements have an Allow statement with a matching action. Helps reduce unecessary API calls to
@@ -118,7 +197,7 @@ def _policies_include_matching_allow_action(principal: Node, action_to_check: st
         principal.arn, action_to_check
     ))
     for policy in principal.attached_policies:
-        for statement in _listify_dictionary(policy['Statement']):
+        for statement in _listify_dictionary(policy.policy_doc['Statement']):
             if statement['Effect'] != 'Allow':
                 continue
             if 'Action' in statement:

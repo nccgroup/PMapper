@@ -7,6 +7,7 @@ create a graph object, you need all the policies, then all the groups, then you 
 import json
 import os
 import os.path
+from typing import Optional
 
 import packaging
 import packaging.version
@@ -16,7 +17,6 @@ from principalmapper.common.edges import Edge
 from principalmapper.common.groups import Group
 from principalmapper.common.nodes import Node
 from principalmapper.common.policies import Policy
-from principalmapper.util.storage import get_storage_root
 
 
 class Graph(object):
@@ -39,6 +39,13 @@ class Graph(object):
             raise ValueError('Incomplete metadata input, expected key: "pmapper_version"')
         self.metadata = metadata
 
+    def get_node_by_searchable_name(self, name: str) -> Optional[Node]:
+        """Locates a node by a given searchable name, returns the Node or None"""
+        for node in self.nodes:
+            if node.searchable_name() == name:
+                return node
+        return None
+
     def store_graph_as_json(self, root_directory: str):
         """Stores the current Graph as a set of JSON documents on-disk at a standard location.
 
@@ -54,6 +61,8 @@ class Graph(object):
         |-------- groups.json
         |---- visualizations/
         |-------- output.svg
+
+        Client app (such as __main__.py) will specify where to retrieve the data.
         """
         rootpath = root_directory
         if not os.path.exists(rootpath):
@@ -145,8 +154,9 @@ class Graph(object):
                     group_memberships.append(group)
                     break
             nodes.append(Node(arn=node['arn'], attached_policies=node_policies, group_memberships=group_memberships,
-                              trust_policy=node['trust_policy'], num_access_keys=node['access_keys'],
-                              active_password=node['active_password'], is_admin=node['is_admin']))
+                              trust_policy=node['trust_policy'], instance_profile=node['instance_profile'],
+                              num_access_keys=node['access_keys'], active_password=node['active_password'],
+                              is_admin=node['is_admin']))
 
         with open(edgesfilepath) as f:
             unresolved_edges = json.load(f)

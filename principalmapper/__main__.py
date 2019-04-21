@@ -7,6 +7,7 @@ import os
 import os.path
 
 import principalmapper.graphing.graph_actions
+from principalmapper.graphing.edge_identification import checker_map
 from principalmapper.util import botocore_tools
 from principalmapper.util.debug_print import dprint
 from principalmapper.util.storage import get_storage_root
@@ -172,7 +173,7 @@ def handle_graph(parsed_args):
         session = None
 
     if parsed_args.create:  # --create
-        graph = principalmapper.graphing.graph_actions.create_new_graph(session, parsed_args.debug)
+        graph = principalmapper.graphing.graph_actions.create_new_graph(session, checker_map.keys(), parsed_args.debug)
         principalmapper.graphing.graph_actions.print_graph_data(graph)
         graph.store_graph_as_json(os.path.join(get_storage_root(), graph.metadata['account_id']))
 
