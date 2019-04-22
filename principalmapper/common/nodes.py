@@ -9,8 +9,8 @@ class Node(object):
     """The basic Node object"""
 
     def __init__(self, arn: str, attached_policies: Optional[list], group_memberships: Optional[list],
-                 trust_policy: Optional[dict], instance_profile: str, num_access_keys: int, active_password: bool,
-                 is_admin: bool):
+                 trust_policy: Optional[dict], instance_profile: Optional[str], num_access_keys: int,
+                 active_password: bool, is_admin: bool):
         """Constructor"""
 
         resource_value = arns.get_resource(arn)

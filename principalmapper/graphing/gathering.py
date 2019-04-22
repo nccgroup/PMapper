@@ -62,6 +62,7 @@ def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False)
                 attached_policies=[],
                 group_memberships=[],
                 trust_policy=None,
+                instance_profile=None,
                 num_access_keys=0,
                 active_password='PasswordLastUsed' in user,
                 is_admin=False
@@ -79,6 +80,7 @@ def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False)
                 attached_policies=[],
                 group_memberships=[],
                 trust_policy=role['AssumeRolePolicyDocument'],
+                instance_profile=None,  # TODO: fix instance profile grabbing
                 num_access_keys=0,
                 active_password=False,
                 is_admin=False

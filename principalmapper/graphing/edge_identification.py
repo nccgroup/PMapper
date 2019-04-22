@@ -2,28 +2,34 @@
 
 import io
 import os
-from typing import List
+from typing import List, Optional
 
 import botocore.session
 
 from principalmapper.common.edges import Edge
 from principalmapper.common.nodes import Node
+from principalmapper.graphing.cloudformation_edges import CloudFormationEdgeChecker
+from principalmapper.graphing.ec2_edges import EC2EdgeChecker
 from principalmapper.graphing.iam_edges import IAMEdgeChecker
+from principalmapper.graphing.ssm_edges import SSMEdgeChecker
 from principalmapper.graphing.sts_edges import STSEdgeChecker
 from principalmapper.util.debug_print import dprint
 
 
 # Externally referable dictionary with all the supported edge-checking types
 checker_map = {
+    'cloudformation': CloudFormationEdgeChecker,
+    'ec2': EC2EdgeChecker,
     'iam': IAMEdgeChecker,
+    'ssm': SSMEdgeChecker,
     'sts': STSEdgeChecker
 }
 
 
-def obtain_edges(session: botocore.session.Session, checker_list: List[str], nodes: List[Node],
+def obtain_edges(session: Optional[botocore.session.Session], checker_list: List[str], nodes: List[Node],
                  output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
     """Given a list of nodes and a botocore Session, return a list of edges between those nodes. Only checks
-    against services passed in the checker_list param."""
+    against services passed in the checker_list param. """
     result = []
     output.write('Initiating edge checks.\n')
     dprint(debug, 'Checker map:  {}'.format(checker_map))

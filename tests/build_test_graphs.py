@@ -1,11 +1,14 @@
 """Code for building Graph objects for testing purposes"""
 
+import sys
+
 import principalmapper
 from principalmapper.common.edges import Edge
 from principalmapper.common.graphs import Graph
 from principalmapper.common.groups import Group
 from principalmapper.common.nodes import Node
 from principalmapper.common.policies import Policy
+from principalmapper.graphing.edge_identification import obtain_edges, checker_map
 
 
 def build_empty_graph() -> Graph:
@@ -17,7 +20,7 @@ def build_graph_with_one_admin() -> Graph:
     """Constructs and returns a Graph object with one node that is an admin"""
     admin_user_arn = 'arn:aws:iam::000000000000:user/admin'
     policy = Policy(admin_user_arn, 'InlineAdminPolicy', _get_admin_policy())
-    node = Node(admin_user_arn, [policy], [], None, 1, True, True)
+    node = Node(admin_user_arn, [policy], [], None, None, 1, True, True)
     return Graph([node], [], [policy], [], _get_default_metadata())
 
 
@@ -31,7 +34,8 @@ def build_playground_graph() -> Graph:
                                 _get_ec2_for_ssm_policy())
     s3_full_access_policy = Policy('arn:aws:iam::aws:policy/AmazonS3FullAccess', 'AmazonS3FullAccess',
                                    _get_s3_full_access_policy())
-    policies = [admin_policy, ec2_for_ssm_policy, s3_full_access_policy]
+    jump_policy = Policy('arn:aws:iam::000000000000:policy/JumpPolicy', 'JumpPolicy', _get_jump_policy())
+    policies = [admin_policy, ec2_for_ssm_policy, s3_full_access_policy, jump_policy]
 
     # IAM role trust docs to be used
     ec2_trusted_policy_doc = _make_trust_document({'Service': 'ec2.amazonaws.com'})
@@ -42,20 +46,33 @@ def build_playground_graph() -> Graph:
     # nodes to add
     nodes = []
     # Regular admin user
-    nodes.append(Node(common_iam_prefix + 'user/admin', [admin_policy], [], None, 1, True, True))
+    nodes.append(Node(common_iam_prefix + 'user/admin', [admin_policy], [], None, None, 1, True, True))
 
     # Regular ec2 role
     nodes.append(Node(common_iam_prefix + 'role/ec2_ssm_role', [ec2_for_ssm_policy], [], ec2_trusted_policy_doc,
-                      0, False, False))
+                      common_iam_prefix + 'instance-profile:/ec2_ssm_role', 0, False, False))
 
     # ec2 role with admin
+    nodes.append(Node(common_iam_prefix + 'role/ec2_admin_role', [ec2_for_ssm_policy], [], ec2_trusted_policy_doc,
+                      common_iam_prefix + 'instance-profile/ec2_admin_role', 0, False, True))
 
     # assumable role with s3 access
+    nodes.append(Node(common_iam_prefix + 'role/s3_access_role', [s3_full_access_policy], [], root_trusted_policy_doc,
+                      None, 0, False, False))
+
+    # second assumable role with s3 access with alternative trust policy
+    nodes.append(Node(common_iam_prefix + 'role/s3_access_role_alt', [s3_full_access_policy], [],
+                 alt_root_trusted_policy_doc, None, 0, False, False))
 
     # externally assumable role with s3 access
+    nodes.append(Node(common_iam_prefix + 'role/external_s3_access_role', [s3_full_access_policy], [],
+                      other_acct_trusted_policy_doc, None, 0, False, False))
+
+    # jump user with access to sts:AssumeRole
+    nodes.append(Node(common_iam_prefix + 'user/jumpuser', [jump_policy], [], None, None, 1, True, False))
 
     # edges to add
-    edges = []
+    edges = obtain_edges(None, checker_map.keys(), nodes, sys.stdout, True)
 
     return Graph(nodes, edges, policies, [], _get_default_metadata())
 
@@ -71,6 +88,18 @@ def _get_admin_policy() -> dict:
                 'Resource': '*'
             }
         ]
+    }
+
+
+def _get_jump_policy() -> dict:
+    """Constructs and returns a dictionary representing a policy allowing sts:AssumeRole for any role"""
+    return {
+        'Version': '2012-10-17',
+        'Statement': [{
+            'Effect': 'Allow',
+            'Action': 'sts:AssumeRole',
+            'Resource': '*'
+        }]
     }
 
 

@@ -1,4 +1,4 @@
-"""Code to identify if a principal in an AWS account can use access to IAM to access other principals."""
+"""Code to identify if a principal in an AWS account can use access to EC2 to access other principals."""
 
 import io
 import os
@@ -10,7 +10,7 @@ from principalmapper.graphing.edge_checker import EdgeChecker
 from principalmapper.querying import query_interface
 
 
-class IAMEdgeChecker(EdgeChecker):
+class EC2EdgeChecker(EdgeChecker):
     """Goes through the IAM service to locate potential edges between nodes."""
 
     def return_edges(self, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
@@ -26,12 +26,8 @@ class IAMEdgeChecker(EdgeChecker):
                 if node_source.is_admin:
                     continue
 
-                # TODO: check if source can change destination's creds (access keys/password) if destination is a user
+                # TODO: check if source can access a role via ec2 instance profile
                 if ':role/' in node_destination.arn:
-                    pass
-
-                # TODO: check if source can change destination's trust policy if destination is a role
-                if ':user/' in node_destination.arn:
                     pass
 
         return result

@@ -1,4 +1,4 @@
-"""Code for creating graphs for Principal Mapper"""
+"""Code for executing commands given by the Principal Mapper command-line"""
 
 import os
 import os.path

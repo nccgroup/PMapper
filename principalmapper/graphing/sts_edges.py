@@ -11,12 +11,15 @@ from principalmapper.querying import query_interface
 
 
 class STSEdgeChecker(EdgeChecker):
-    """Goes through the IAM service to locate potential edges between nodes."""
+    """Goes through the STS service to locate potential edges between nodes."""
 
     def return_edges(self, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
-        """Fulfills expected method return_edges"""
+        """Fulfills expected method return_edges. If the session object is None, performs checks in offline-mode"""
         result = []
-        iamclient = self.session.create_client('iam')
+        if self.session is not None:
+            iamclient = self.session.create_client('iam')
+        else:
+            iamclient = None
         for node_source in nodes:
             for node_destination in nodes:
                 # skip self-access checks
@@ -30,21 +33,21 @@ class STSEdgeChecker(EdgeChecker):
                 # check if source can call sts:AssumeRole to access the destination if destination is a role
                 if ':role/' in node_destination.arn:
                     if query_interface.is_authorized_for(iamclient, node_source, 'sts:AssumeRole', node_destination.arn,
-                                                         {}, True, debug):
-                        policy_allows = query_interface.resource_policy_has_matching_statement(node_source,
-                                                                                               node_destination.trust_policy,
+                                                         {}, iamclient is not None, debug):
+                        policy_allows = query_interface.resource_policy_has_matching_statement_for_principal(node_source,
+                                                                                                             node_destination.trust_policy,
                                                                                                'Allow',
                                                                                                'sts:AssumeRole',
-                                                                                               node_destination.arn,
-                                                                                               {},
-                                                                                               debug)
-                        policy_denies = query_interface.resource_policy_has_matching_statement(node_source,
-                                                                                               node_destination.trust_policy,
+                                                                                                             node_destination.arn,
+                                                                                                             {},
+                                                                                                             debug)
+                        policy_denies = query_interface.resource_policy_has_matching_statement_for_principal(node_source,
+                                                                                                             node_destination.trust_policy,
                                                                                                'Deny',
                                                                                                'sts:AssumeRole',
-                                                                                               node_destination.arn,
-                                                                                               {},
-                                                                                               debug)
+                                                                                                             node_destination.arn,
+                                                                                                             {},
+                                                                                                             debug)
                         if policy_allows and not policy_denies:
                             new_edge = Edge(
                                 node_source,

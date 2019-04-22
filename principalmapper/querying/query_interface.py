@@ -110,9 +110,9 @@ def has_matching_statement(principal: Node, effect_value: str, action_to_check: 
     return False
 
 
-def resource_policy_has_matching_statement(principal: Node, resource_policy: dict, effect_value: str,
-                                           action_to_check: str, resource_to_check: str, condition_keys_to_check: dict,
-                                           debug: bool = False):
+def resource_policy_has_matching_statement_for_principal(principal: Node, resource_policy: dict, effect_value: str,
+                                                         action_to_check: str, resource_to_check: str,
+                                                         condition_keys_to_check: dict, debug: bool = False):
     """Locally determine if a node is permitted by a resource policy for a given action/resource/condition"""
     dprint(debug, 'local resource policy check - principal: {}, effect: {}, action: {}, resource: {}, conditions: {}, '
                   'resource_policy: {}'.format(principal.arn, effect_value, action_to_check, resource_to_check,
@@ -130,6 +130,70 @@ def resource_policy_has_matching_statement(principal: Node, resource_policy: dic
             matches_principal = True
             if 'AWS' in statement['NotPrincipal']:
                 if _principal_matches_in_statement(principal, _listify_string(statement['NotPrincipal']['AWS'])):
+                    matches_principal = False
+
+        if not matches_principal:
+            continue
+
+        # if principal is good, proceed to check the Action
+        if 'Action' in statement:
+            for action in _listify_string(statement['Action']):
+                matches_action = _matches_after_expansion(action_to_check, action, debug=debug)
+                break
+        else:  # 'NotAction' in statement
+            matches_action = True
+            for notaction in _listify_string(statement['NotAction']):
+                if _matches_after_expansion(action_to_check, notaction, debug=debug):
+                    matches_action = False
+                    break  # finish looping
+        if not matches_action:
+            continue
+
+        # if action is good, proceed to check resource
+        if 'Resource' in statement:
+            for resource in _listify_string(statement['Resource']):
+                if _matches_after_expansion(resource_to_check, resource, debug=debug):
+                    matches_resource = True
+                    break
+        elif 'NotResource' in statement:
+            matches_resource = True
+            for notresource in _listify_string(statement['NotResource']):
+                if _matches_after_expansion(resource_to_check, notresource, debug=debug):
+                    matches_resource = False
+                    break
+        else:  # no resource element (seen in IAM role trust policies), treat as a match
+            matches_resource = True
+
+        # if resource is good, check condition
+        matches_condition = True  # TODO: implement local condition check in policy/statement loop
+
+        if matches_principal and matches_action and matches_resource and matches_condition:
+            return True
+
+    return False
+
+
+def resource_policy_has_matching_statement_for_service(service: str, resource_policy: dict, effect_value: str,
+                                                       action_to_check: str, resource_to_check: str,
+                                                       condition_keys_to_check: dict, debug: bool = False) -> bool:
+    """Returns if a resource policy has a matching statement for a given service (ec2.amazonaws.com for example)."""
+
+    dprint(debug, 'local resource policy check - service: {}, effect: {}, action: {}, resource: {}, conditions: {}, '
+                  'resource_policy: {}'.format(service, effect_value, action_to_check, resource_to_check,
+                                               condition_keys_to_check, resource_policy))
+
+    for statement in _listify_dictionary(resource_policy['Statement']):
+        if statement['Effect'] != effect_value:
+            continue
+        matches_principal, matches_action, matches_resource, matches_condition = False, False, False, False
+        if 'Principal' in statement:  # should be a dictionary
+            if 'Service' in statement['Principal']:
+                if service in _listify_string(statement['Principal']['Service']):
+                    matches_principal = True
+        else:  # 'NotPrincipal' in statement:
+            matches_principal = True
+            if 'Service' in statement['NotPrincipal']:
+                if service in _listify_string(statement['NotPrincipal']['Service']):
                     matches_principal = False
 
         if not matches_principal:
