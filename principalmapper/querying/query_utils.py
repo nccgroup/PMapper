@@ -44,9 +44,11 @@ def get_edges_with_node_source(graph: Graph, node: Node, ignored_nodes: List[Nod
 
 def is_connected(graph: Graph, source: Node, destination: Node) -> bool:
     """helper function to express if source and node are connected"""
-    search_result = False
-    for node_list in get_search_list(graph, source):
-        if node_list[-1] == destination:
-            search_result = True
+    if source.is_admin:
+        return True
 
-    return search_result
+    for node_list in get_search_list(graph, source):
+        if node_list[-1].destination == destination:
+            return True
+
+    return False

@@ -2,11 +2,13 @@
 
 from typing import List
 
+from principalmapper.common.edges import Edge
 from principalmapper.common.nodes import Node
 
 
 class QueryResult(object):
-    """Query result objcet to """
-    def __init__(self, allowed: bool, node_list: List[Node]):
+    """Query result object returned by querying methods."""
+    def __init__(self, allowed: bool, edge_list: List[Edge], node: Node):
         self.allowed = allowed
-        self.node_list = node_list
+        self.edge_list = edge_list
+        self.node = node

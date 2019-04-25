@@ -19,3 +19,11 @@ class TestEdgeIdentification(unittest.TestCase):
         self.assertTrue(is_connected(graph, jump_user_node, assumable_s3_role_node))
         self.assertTrue(is_connected(graph, jump_user_node, assumable_s3_role_node_alt))
         self.assertFalse(is_connected(graph, jump_user_node, nonassumable_role_node))
+
+    def test_admin_access(self):
+        graph = build_playground_graph()
+        admin_user_node = graph.get_node_by_searchable_name('user/admin')
+        jump_user = graph.get_node_by_searchable_name('user/jumpuser')
+        nonassumable_role_node = graph.get_node_by_searchable_name('role/external_s3_access_role')
+        self.assertTrue(is_connected(graph, admin_user_node, jump_user))
+        self.assertTrue(is_connected(graph, admin_user_node, nonassumable_role_node))

@@ -5,9 +5,11 @@ Provides a command-line interface to use the principalmapper library
 import argparse
 import os
 import os.path
+import sys
 
 import principalmapper.graphing.graph_actions
 from principalmapper.graphing.edge_identification import checker_map
+from principalmapper.querying import query_actions
 from principalmapper.util import botocore_tools
 from principalmapper.util.debug_print import dprint
 from principalmapper.util.storage import get_storage_root
@@ -27,7 +29,11 @@ def main():
     )
     argument_parser.add_argument(
         '--account',
-        help='When running offline operations, this '
+        help='When running offline operations, this parameter determines which account to act against.'
+    )
+    argument_parser.add_argument(
+        '--offline',
+        help='Executes actions in offline mode where possible.'
     )
 
     # Create subparser for various subcommands
@@ -199,14 +205,21 @@ def handle_query(parsed_args):
 
 def handle_argquery(parsed_args):
     """Processes the arguments for the argquery subcommand and executes related tasks"""
-    raise NotImplementedError('query subcommand is not ready for use')  # TODO: argquery functionality
+    if parsed_args.account is None:
+        session = botocore_tools.get_session(parsed_args.profile)
+    else:
+        session = None
+    graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account, parsed_args.debug)
+
+    query_actions.argquery_response(session, graph, parsed_args.principal, parsed_args.action, parsed_args.resource,
+                                    None, parsed_args.skip_admin, sys.stdout, parsed_args.debug)
 
 
 def handle_repl(parsed_args):
     """Processes the arguments for the query REPL and initiates"""
-    raise NotImplementedError('query subcommand is not ready for use')  # TODO: repl functionality
+    raise NotImplementedError('query REPL subcommand is not ready for use')  # TODO: repl functionality
 
 
 def handle_visualization(parsed_args):
     """Processes the arguments for the visualization subcommand and executes related tasks"""
-    raise NotImplementedError('query subcommand is not ready for use')  # TODO: visualization functionality
+    raise NotImplementedError('visualization subcommand is not ready for use')  # TODO: visualization functionality

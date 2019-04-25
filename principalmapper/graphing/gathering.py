@@ -80,11 +80,25 @@ def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False)
                 attached_policies=[],
                 group_memberships=[],
                 trust_policy=role['AssumeRolePolicyDocument'],
-                instance_profile=None,  # TODO: fix instance profile grabbing
+                instance_profile=None,
                 num_access_keys=0,
                 active_password=False,
                 is_admin=False
             ))
+
+    # Get instance profiles, paginating results, and attach to roles as appropriate
+    output.write("Obtaining EC2 instance profiles in account\n")
+    ip_paginator = iamclient.get_paginator('list_instance_profiles')
+    for page in ip_paginator.paginate(PaginationConfig={'PageSize': 25}):
+        dprint(debug, 'list_instance_profiles page: {}'.format(page))
+        for iprofile in page['InstanceProfiles']:
+            iprofile_arn = iprofile['Arn']
+            role_arns = []
+            for role in iprofile['Roles']:
+                role_arns.append(role['Arn'])
+            for node in result:
+                if ':role/' in node.arn and node.arn in role_arns:
+                    node.instance_profile = iprofile_arn
 
     # Handle access keys
     output.write("Obtaining Access Keys data for IAM users\n")

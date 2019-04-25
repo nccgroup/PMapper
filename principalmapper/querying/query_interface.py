@@ -3,9 +3,32 @@
 from typing import List, Dict, Optional, Union
 import re
 
+from principalmapper.common.graphs import Graph
 from principalmapper.common.nodes import Node
+from principalmapper.querying.query_result import QueryResult
+from principalmapper.querying import query_utils
 from principalmapper.util.debug_print import dprint
 from principalmapper.util import arns
+
+
+def search_authorization_for(iamclient, graph: Graph, principal: Node, action_to_check: str, resource_to_check: str,
+                             condition_keys_to_check: dict, validate_with_api: bool = True,
+                             debug: bool = False) -> QueryResult:
+    """Determines if the passed principal, or any principals it can access, can perform a given action for a
+    given resource/condition."""
+    if principal.is_admin:
+        return QueryResult(True, [], principal)
+
+    if is_authorized_for(iamclient, principal, action_to_check, resource_to_check, condition_keys_to_check,
+                         validate_with_api, debug):
+        return QueryResult(True, [], principal)
+
+    for edge_list in query_utils.get_search_list(graph, principal):
+        if is_authorized_for(iamclient, edge_list[-1].destination, action_to_check, resource_to_check,
+                             condition_keys_to_check, validate_with_api, debug):
+            return QueryResult(True, edge_list, principal)
+
+    return QueryResult(False, [], principal)
 
 
 def is_authorized_for(iamclient, principal: Node, action_to_check: str, resource_to_check: str,
