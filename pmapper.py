@@ -122,7 +122,7 @@ def handle_graph(parsed, session):
 
     if not parsed.display:
         if parsed.profile is not None:
-            print('Using profile: ' + profilearg)
+            print('Using profile: ' + parsed.profile)
         print('Pulling data for account ' + identity_response['Account'])
         print('Using principal with ARN ' + identity_response['Arn'])
         graph = pull_graph(parsed, session)
