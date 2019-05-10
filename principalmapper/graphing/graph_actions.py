@@ -52,6 +52,6 @@ def get_existing_graph(session: Optional[botocore.session.Session], account: Opt
         response = stsclient.get_caller_identity()
         graph = get_graph_from_disk(os.path.join(get_storage_root(), response['Account']))
     else:
-        raise ValueError('One of parameters account or session must not be None')
+        raise ValueError('One of the parameters `account` or `session` must not be None')
     return graph
 

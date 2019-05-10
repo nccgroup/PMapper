@@ -3,6 +3,9 @@
 Documentation: https://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html
 
 All functions within assume a valid ARN is passed.
+
+ARN Format:
+arn:<partition>:<service>:<region>:<account id>:<resource/identifier>
 """
 
 
@@ -28,4 +31,4 @@ def get_account_id(arn: str):
 
 def get_resource(arn: str):
     """Returns the resource (trailing part) from a string ARN."""
-    return arn.split(':')[5]
+    return ''.join(arn.split(':')[5:])

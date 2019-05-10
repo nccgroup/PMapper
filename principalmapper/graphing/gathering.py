@@ -12,8 +12,7 @@ from principalmapper.graphing import edge_identification
 from principalmapper.querying import query_interface
 from principalmapper.util import arns
 from principalmapper.util.debug_print import dprint
-from typing import List
-from typing import Optional
+from typing import List, Optional
 
 
 def create_graph(session: botocore.session.Session, metadata: dict, service_list: list,
@@ -35,7 +34,7 @@ def create_graph(session: botocore.session.Session, metadata: dict, service_list
     policies_result = get_policies_and_fill_out(iamclient, nodes_result, groups_result, output, debug)
 
     # Determine which nodes are admins and update node objects
-    update_admin_status(iamclient, nodes_result, output, debug)
+    update_admin_status(iamclient, nodes_result, True, output, debug)
 
     # Generate edges, generate Edge objects
     edges_result = edge_identification.obtain_edges(session, service_list, nodes_result, output, debug)
@@ -252,8 +251,9 @@ def get_policies_and_fill_out(iamclient, nodes: List[Node], groups: List[Group],
     return result
 
 
-def update_admin_status(iamclient, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> None:
-    """Given a list of nodes, goes through and updates each node's is_admin data"""
+def update_admin_status(iamclient, nodes: List[Node], use_api: bool = True, output: io.StringIO = os.devnull,
+                        debug: bool = False) -> None:
+    """Given a list of nodes, goes through and updates each node's is_admin data. Uses API by default."""
     for node in nodes:
         output.write("checking if {} is an admin\n".format(node.searchable_name()))
         node_type = arns.get_resource(node.arn).split('/')[0]
@@ -263,17 +263,60 @@ def update_admin_status(iamclient, nodes: List[Node], output: io.StringIO = os.d
             action = 'iam:PutUserPolicy'
         else:  # node_type == 'role'
             action = 'iam:PutRolePolicy'
-        if query_interface.is_authorized_for(iamclient, node, action, node.arn, {}, True, debug):
+        if query_interface.is_authorized_for(iamclient, node, action, node.arn, {}, use_api, debug):
             node.is_admin = True
             continue
 
-        # TODO: check if node can attach the AdministratorAccess policy to itself
+        # check if node can attach the AdministratorAccess policy to itself
+        if node_type == 'user':
+            action = 'iam:AttachUserPolicy'
+        else:
+            action = 'iam:AttachRolePolicy'
+        condition_keys = {'iam:PolicyARN': 'arn:aws:iam::aws:policy/AdministratorAccess'}
+        if query_interface.is_authorized_for(iamclient, node, action, node.arn, condition_keys, use_api, debug):
+            node.is_admin = True
+            continue
 
-        # TODO: check if node can create a role and attach the AdministratorAccess policy or an inline policy
+        # check if node can create a role and attach the AdministratorAccess policy or an inline policy
+        if query_interface.is_authorized_for(iamclient, node, 'iam:CreateRole', '*', {}, use_api, debug):
+            if query_interface.is_authorized_for(iamclient, node, 'iam:AttachRolePolicy', '*', condition_keys,
+                                                 use_api, debug):
+                node.is_admin = True
+                continue
+            if query_interface.is_authorized_for(iamclient, node, 'iam:PutRolePolicy', '*', condition_keys, 
+                                                 use_api, debug):
+                node.is_admin = True
+                continue
 
-        # TODO: check if node can update an attached customer-managed policy (assumes SetAsDefault is set to True)
+        # check if node can update an attached customer-managed policy (assumes SetAsDefault is set to True)
+        for attached_policy in node.attached_policies:
+            if attached_policy.arn != node.arn:
+                if query_interface.is_authorized_for(iamclient, node, 'iam:CreatePolicyVersion', attached_policy.arn,
+                                                     {}, use_api, debug):
+                    node.is_admin = True
+                    continue
 
-        # TODO: check if node is a user, and if it can attach or modify any of its groups's policies
+        # check if node is a user, and if it can attach or modify any of its groups's policies
+        if node_type == 'user':
+            for group in node.group_memberships:
+                if query_interface.is_authorized_for(iamclient, node, 'iam:PutGroupPolicy', group.arn, {}, use_api,
+                                                     debug):
+                    node.is_admin = True
+                    break  # break the loop through groups
+                if query_interface.is_authorized_for(iamclient, node, 'iam:AttachGroupPolicy', group.arn,
+                                                     condition_keys, use_api, debug):
+                    node.is_admin = True
+                    break  # as above
+                for attached_policy in group.attached_policies:
+                    if attached_policy.arn != group.arn:
+                        if query_interface.is_authorized_for(iamclient, node, 'iam:CreatePolicyVersion',
+                                                             attached_policy.arn, {}, use_api, debug):
+                            node.is_admin = True
+                            break  # break the loop through policies
+                if node.is_admin:
+                    break  # break the loop through groups
+            if node.is_admin:
+                continue  # if we add more checks later, this optimizes them out when appropriate
 
 
 def _get_policy_by_arn(arn: str, policies: List[Policy]) -> Optional[Policy]:

@@ -59,3 +59,4 @@ pmapper query "who can do s3:GetObject with arn:aws:s3:::bucket/path/to/object"
 ## Credentials
 
 Principal Mapper works with botocore (AWS CLI) profiles when the `--profile` parameter is specified. Additionally, it will use environment variables (`AWS_ACCESS_KEY_ID`) when they are specified.
+

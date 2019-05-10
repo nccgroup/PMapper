@@ -11,6 +11,7 @@ from principalmapper.common.nodes import Node
 from principalmapper.graphing.cloudformation_edges import CloudFormationEdgeChecker
 from principalmapper.graphing.ec2_edges import EC2EdgeChecker
 from principalmapper.graphing.iam_edges import IAMEdgeChecker
+from principalmapper.graphing.lambda_edges import LambdaEdgeChecker
 from principalmapper.graphing.ssm_edges import SSMEdgeChecker
 from principalmapper.graphing.sts_edges import STSEdgeChecker
 from principalmapper.util.debug_print import dprint
@@ -21,6 +22,7 @@ checker_map = {
     'cloudformation': CloudFormationEdgeChecker,
     'ec2': EC2EdgeChecker,
     'iam': IAMEdgeChecker,
+    'lambda': LambdaEdgeChecker,
     'ssm': SSMEdgeChecker,
     'sts': STSEdgeChecker
 }

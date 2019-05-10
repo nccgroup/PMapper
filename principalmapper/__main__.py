@@ -5,6 +5,7 @@ Provides a command-line interface to use the principalmapper library
 import argparse
 import os
 import os.path
+from pathlib import Path
 import sys
 
 import principalmapper.graphing.graph_actions
@@ -60,6 +61,11 @@ def main():
         '--display',
         action='store_true',
         help='Displays information about a currently-stored graph based on the AWS credentials used.'
+    )
+    command_group.add_argument(
+        '--list',
+        action='store_true',
+        help='List the Account IDs of graphs stored on this computer.'
     )
     command_group.add_argument(
         '--update-nodes',
@@ -190,6 +196,13 @@ def handle_graph(parsed_args):
             parsed_args.debug
         )
         principalmapper.graphing.graph_actions.print_graph_data(graph)
+
+    elif parsed_args.list:
+        print("Account IDs:")
+        print("---")
+        storage_root = Path(get_storage_root())
+        for direct in storage_root.iterdir():
+            print(direct.name)
 
     elif parsed_args.update_nodes:  # --update-nodes
         pass  # TODO: update_nodes functionality

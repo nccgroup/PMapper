@@ -34,20 +34,24 @@ class STSEdgeChecker(EdgeChecker):
                 if ':role/' in node_destination.arn:
                     if query_interface.is_authorized_for(iamclient, node_source, 'sts:AssumeRole', node_destination.arn,
                                                          {}, iamclient is not None, debug):
-                        policy_allows = query_interface.resource_policy_has_matching_statement_for_principal(node_source,
-                                                                                                             node_destination.trust_policy,
-                                                                                               'Allow',
-                                                                                               'sts:AssumeRole',
-                                                                                                             node_destination.arn,
-                                                                                                             {},
-                                                                                                             debug)
-                        policy_denies = query_interface.resource_policy_has_matching_statement_for_principal(node_source,
-                                                                                                             node_destination.trust_policy,
-                                                                                               'Deny',
-                                                                                               'sts:AssumeRole',
-                                                                                                             node_destination.arn,
-                                                                                                             {},
-                                                                                                             debug)
+                        policy_allows = query_interface.resource_policy_has_matching_statement_for_principal(
+                            node_source,
+                            node_destination.trust_policy,
+                            'Allow',
+                            'sts:AssumeRole',
+                            node_destination.arn,
+                            {},
+                            debug
+                        )
+                        policy_denies = query_interface.resource_policy_has_matching_statement_for_principal(
+                            node_source,
+                            node_destination.trust_policy,
+                            'Deny',
+                            'sts:AssumeRole',
+                            node_destination.arn,
+                            {},
+                            debug
+                        )
                         if policy_allows and not policy_denies:
                             new_edge = Edge(
                                 node_source,

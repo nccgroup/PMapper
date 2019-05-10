@@ -1,14 +1,16 @@
 """Python code for implementing the nodes of a graph"""
 
-from typing import Optional
+from typing import List, Optional
 
+from principalmapper.common.groups import Group
+from principalmapper.common.policies import Policy
 from principalmapper.util import arns
 
 
 class Node(object):
     """The basic Node object"""
 
-    def __init__(self, arn: str, attached_policies: Optional[list], group_memberships: Optional[list],
+    def __init__(self, arn: str, attached_policies: Optional[List[Policy]], group_memberships: Optional[List[Group]],
                  trust_policy: Optional[dict], instance_profile: Optional[str], num_access_keys: int,
                  active_password: bool, is_admin: bool):
         """Constructor"""
