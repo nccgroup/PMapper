@@ -19,10 +19,12 @@ class ConstructorTest(unittest.TestCase):
 
     def test_nodes(self):
         with self.assertRaises(ValueError):
-            Node(arn='arn:aws:iam::000000000000:group/notauser', attached_policies=[], group_memberships=[],
-                 trust_policy=None, instance_profile=None, num_access_keys=0, active_password=False, is_admin=False)
+            Node(arn='arn:aws:iam::000000000000:group/notauser', id_value='AIDA00000000000000000', attached_policies=[],
+                 group_memberships=[], trust_policy=None, instance_profile=None, num_access_keys=0,
+                 active_password=False, is_admin=False)
         try:
-            Node(arn='arn:aws:iam::000000000000:user/auser', attached_policies=[], group_memberships=[],
-                 trust_policy=None, instance_profile=None, num_access_keys=0, active_password=False, is_admin=False)
+            Node(arn='arn:aws:iam::000000000000:user/auser', id_value='AIDA00000000000000001', attached_policies=[],
+                 group_memberships=[], trust_policy=None, instance_profile=None, num_access_keys=0,
+                 active_password=False, is_admin=False)
         except Exception as ex:
             self.fail('Unexpected error: ' + str(ex))

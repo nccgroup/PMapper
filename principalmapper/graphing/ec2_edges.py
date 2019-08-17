@@ -8,6 +8,8 @@ from principalmapper.common.edges import Edge
 from principalmapper.common.nodes import Node
 from principalmapper.graphing.edge_checker import EdgeChecker
 from principalmapper.querying import query_interface
+from principalmapper.querying.local_policy_simulation import resource_policy_authorization, ResourcePolicyEvalResult
+from principalmapper.util import arns
 
 
 class EC2EdgeChecker(EdgeChecker):
@@ -35,26 +37,19 @@ class EC2EdgeChecker(EdgeChecker):
                 if ':user/' in node_destination.arn:
                     continue
 
-                # check that EC2 can assume the role
-                allow_check = query_interface.resource_policy_has_matching_statement_for_service(
-                    'ec2.amazonaws.com',
+                # check that the destination role can be assumed by Lambda
+                sim_result = resource_policy_authorization(
+                    'lambda.amazonaws.com',
+                    arns.get_account_id(node_source.arn),
                     node_destination.trust_policy,
-                    'Allow', 'sts:AssumeRole',
-                    node_destination.arn,
-                    {},
-                    debug
-                )
-                deny_check = query_interface.resource_policy_has_matching_statement_for_service(
-                    'ec2.amazonaws.com',
-                    node_destination.trust_policy,
-                    'Deny',
                     'sts:AssumeRole',
                     node_destination.arn,
                     {},
                     debug
                 )
-                if deny_check or not allow_check:
-                    continue  # EC2 can't assume the role, so we can't use it as an instance profile's role
+
+                if sim_result != ResourcePolicyEvalResult.SERVICE_MATCH:
+                    continue  # EC2 wasn't auth'd to assume the role
 
                 # check if source can pass the destination role
                 condition_keys = {'iam:PassedToService': 'ec2.amazonaws.com'}

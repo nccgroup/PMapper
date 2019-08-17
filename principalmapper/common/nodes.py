@@ -10,7 +10,7 @@ from principalmapper.util import arns
 class Node(object):
     """The basic Node object"""
 
-    def __init__(self, arn: str, attached_policies: Optional[List[Policy]], group_memberships: Optional[List[Group]],
+    def __init__(self, arn: str, id_value: str, attached_policies: Optional[List[Policy]], group_memberships: Optional[List[Group]],
                  trust_policy: Optional[dict], instance_profile: Optional[str], num_access_keys: int,
                  active_password: bool, is_admin: bool):
         """Constructor"""
@@ -19,6 +19,10 @@ class Node(object):
         if arn is None or not (resource_value.startswith('user/') or resource_value.startswith('role/')):
             raise ValueError('The parameter arn must be a valid ARN for an IAM user or role.')
         self.arn = arn
+
+        if id_value is None or len(id_value) == 0:
+            raise ValueError('The parameter id_value must be a non-empty string.')
+        self.id_value = id_value
 
         if attached_policies is None:
             self.attached_policies = []
@@ -65,6 +69,7 @@ class Node(object):
         """Creates a dictionary representation of this Node for storage"""
         return {
             "arn": self.arn,
+            "id_value": self.id_value,
             "attached_policies": [{'arn': policy.arn, 'name': policy.name} for policy in self.attached_policies],
             "group_memberships": [group.arn for group in self.group_memberships],
             "trust_policy": self.trust_policy,

@@ -20,10 +20,11 @@ def build_graph_with_one_admin() -> Graph:
     """Constructs and returns a Graph object with one node that is an admin"""
     admin_user_arn = 'arn:aws:iam::000000000000:user/admin'
     policy = Policy(admin_user_arn, 'InlineAdminPolicy', _get_admin_policy())
-    node = Node(admin_user_arn, [policy], [], None, None, 1, True, True)
+    node = Node(admin_user_arn, 'AIDA00000000000000000', [policy], [], None, None, 1, True, True)
     return Graph([node], [], [policy], [], _get_default_metadata())
 
 
+# noinspection PyListCreation
 def build_playground_graph() -> Graph:
     """Constructs and returns a Graph objects with many nodes, edges, groups, and policies"""
     common_iam_prefix = 'arn:aws:iam::000000000000:'
@@ -46,30 +47,30 @@ def build_playground_graph() -> Graph:
     # nodes to add
     nodes = []
     # Regular admin user
-    nodes.append(Node(common_iam_prefix + 'user/admin', [admin_policy], [], None, None, 1, True, True))
+    nodes.append(Node(common_iam_prefix + 'user/admin', 'AIDA00000000000000000', [admin_policy], [], None, None, 1, True, True))
 
     # Regular ec2 role
-    nodes.append(Node(common_iam_prefix + 'role/ec2_ssm_role', [ec2_for_ssm_policy], [], ec2_trusted_policy_doc,
-                      common_iam_prefix + 'instance-profile:/ec2_ssm_role', 0, False, False))
+    nodes.append(Node(common_iam_prefix + 'role/ec2_ssm_role', 'AIDA00000000000000001', [ec2_for_ssm_policy], [],
+                      ec2_trusted_policy_doc, common_iam_prefix + 'instance-profile:/ec2_ssm_role', 0, False, False))
 
     # ec2 role with admin
-    nodes.append(Node(common_iam_prefix + 'role/ec2_admin_role', [ec2_for_ssm_policy], [], ec2_trusted_policy_doc,
+    nodes.append(Node(common_iam_prefix + 'role/ec2_admin_role', 'AIDA00000000000000002', [ec2_for_ssm_policy], [], ec2_trusted_policy_doc,
                       common_iam_prefix + 'instance-profile/ec2_admin_role', 0, False, True))
 
     # assumable role with s3 access
-    nodes.append(Node(common_iam_prefix + 'role/s3_access_role', [s3_full_access_policy], [], root_trusted_policy_doc,
+    nodes.append(Node(common_iam_prefix + 'role/s3_access_role', 'AIDA00000000000000003', [s3_full_access_policy], [], root_trusted_policy_doc,
                       None, 0, False, False))
 
     # second assumable role with s3 access with alternative trust policy
-    nodes.append(Node(common_iam_prefix + 'role/s3_access_role_alt', [s3_full_access_policy], [],
+    nodes.append(Node(common_iam_prefix + 'role/s3_access_role_alt', 'AIDA00000000000000004', [s3_full_access_policy], [],
                  alt_root_trusted_policy_doc, None, 0, False, False))
 
     # externally assumable role with s3 access
-    nodes.append(Node(common_iam_prefix + 'role/external_s3_access_role', [s3_full_access_policy], [],
+    nodes.append(Node(common_iam_prefix + 'role/external_s3_access_role', 'AIDA00000000000000005', [s3_full_access_policy], [],
                       other_acct_trusted_policy_doc, None, 0, False, False))
 
     # jump user with access to sts:AssumeRole
-    nodes.append(Node(common_iam_prefix + 'user/jumpuser', [jump_policy], [], None, None, 1, True, False))
+    nodes.append(Node(common_iam_prefix + 'user/jumpuser', 'AIDA00000000000000006', [jump_policy], [], None, None, 1, True, False))
 
     # edges to add
     edges = obtain_edges(None, checker_map.keys(), nodes, sys.stdout, True)
@@ -232,3 +233,20 @@ def _make_trust_document(principal_element: dict) -> dict:
             }
         ]
     }
+
+
+def _build_user_with_policy(policy_dict, policy_name='single_user_policy', user_name='asdf', number='0') -> Node:
+    """Helper function: builds an IAM User with a given input policy."""
+    policy = Policy('arn:aws:iam::000000000000:policy/{}'.format(policy_name), policy_name, policy_dict)
+    result = Node(
+        'arn:aws:iam::000000000000:user/{}'.format(user_name),
+        'AIDA0000000000000000{}'.format(number),
+        [policy],
+        [],
+        None,
+        None,
+        1,
+        True,
+        False
+    )
+    return result

@@ -6,7 +6,7 @@ from principalmapper.common.graphs import Graph
 from principalmapper.common.nodes import Node
 from principalmapper.graphing.edge_identification import obtain_edges
 from principalmapper.querying.query_utils import get_search_list, is_connected
-from .build_test_graphs import build_playground_graph
+from tests.build_test_graphs import build_playground_graph
 
 
 class TestEdgeIdentification(unittest.TestCase):

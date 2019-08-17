@@ -8,6 +8,8 @@ from principalmapper.common.edges import Edge
 from principalmapper.common.nodes import Node
 from principalmapper.graphing.edge_checker import EdgeChecker
 from principalmapper.querying import query_interface
+from principalmapper.querying.local_policy_simulation import resource_policy_authorization, ResourcePolicyEvalResult, has_matching_statement
+from principalmapper.util import arns
 
 
 class STSEdgeChecker(EdgeChecker):
@@ -32,33 +34,43 @@ class STSEdgeChecker(EdgeChecker):
 
                 # check if source can call sts:AssumeRole to access the destination if destination is a role
                 if ':role/' in node_destination.arn:
-                    if query_interface.is_authorized_for(iamclient, node_source, 'sts:AssumeRole', node_destination.arn,
-                                                         {}, iamclient is not None, debug):
-                        policy_allows = query_interface.resource_policy_has_matching_statement_for_principal(
+                    # Check against resource policy
+                    sim_result = resource_policy_authorization(
+                        node_source,
+                        arns.get_account_id(node_source.arn),
+                        node_destination.trust_policy,
+                        'sts:AssumeRole',
+                        node_destination.arn,
+                        {},
+                        debug
+                    )
+
+                    if sim_result == ResourcePolicyEvalResult.DENY_MATCH:
+                        continue  # Node was explicitly denied from assuming the role
+
+                    if sim_result == ResourcePolicyEvalResult.NO_MATCH:
+                        continue  # Resource policy must match for sts:AssumeRole, even in same-account scenarios
+
+                    policy_allows = has_matching_statement(node_source, 'Allow', 'sts:AssumeRole',
+                                                           node_destination.arn, {}, debug)
+                    policy_denies = has_matching_statement(node_source, 'Deny', 'sts:AssumeRole',
+                                                           node_destination.arn, {}, debug)
+                    if policy_allows and not policy_denies:
+                        new_edge = Edge(
                             node_source,
-                            node_destination.trust_policy,
-                            'Allow',
-                            'sts:AssumeRole',
-                            node_destination.arn,
-                            {},
-                            debug
+                            node_destination,
+                            'can access via sts:AssumeRole'
                         )
-                        policy_denies = query_interface.resource_policy_has_matching_statement_for_principal(
+                        output.write('Found new edge: {}\n'.format(new_edge.describe_edge()))
+                        result.append(new_edge)
+                    elif not policy_denies and sim_result == ResourcePolicyEvalResult.NODE_MATCH:
+                        # testing same-account scenario, so NODE_MATCH will override a lack of an allow from iam policy
+                        new_edge = Edge(
                             node_source,
-                            node_destination.trust_policy,
-                            'Deny',
-                            'sts:AssumeRole',
-                            node_destination.arn,
-                            {},
-                            debug
+                            node_destination,
+                            'can access via sts:AssumeRole'
                         )
-                        if policy_allows and not policy_denies:
-                            new_edge = Edge(
-                                node_source,
-                                node_destination,
-                                'can access via sts:AssumeRole'
-                            )
-                            output.write('Found new edge: {}\n'.format(new_edge.describe_edge()))
-                            result.append(new_edge)
+                        output.write('Found new edge: {}\n'.format(new_edge.describe_edge()))
+                        result.append(new_edge)
 
         return result

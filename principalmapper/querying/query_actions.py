@@ -45,17 +45,4 @@ def argquery_response(session: botocore.session.Session, graph: Graph, principal
                                                    condition_param, iamclient is not None, debug))
 
     for query_result in result:
-        if query_result.allowed:
-            if len(query_result.edge_list) == 0:
-                # node itself is auth'd
-                output.write('{} is authorized to call action {} for resource {}\n'.format(
-                    query_result.node.searchable_name(), action_param, resource_param))
-
-            else:
-                # node has to go through the edge list
-                output.write('{} is authorized to call action {} for resource {} via {}:'.format(
-                    query_result.node.searchable_name(), action_param, resource_param,
-                    query_result.edge_list[-1].destination
-                ))
-                for edge in query_result.edge_list:
-                    output.write('   {}'.format(edge.describe_edge()))
+        query_result.write_result(action_param, resource_param, output)

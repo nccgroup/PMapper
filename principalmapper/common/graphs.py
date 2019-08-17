@@ -153,10 +153,10 @@ class Graph(object):
                 if group.arn in node['group_memberships']:
                     group_memberships.append(group)
                     break
-            nodes.append(Node(arn=node['arn'], attached_policies=node_policies, group_memberships=group_memberships,
-                              trust_policy=node['trust_policy'], instance_profile=node['instance_profile'],
-                              num_access_keys=node['access_keys'], active_password=node['active_password'],
-                              is_admin=node['is_admin']))
+            nodes.append(Node(arn=node['arn'], id_value=node['id_value'], attached_policies=node_policies,
+                              group_memberships=group_memberships, trust_policy=node['trust_policy'],
+                              instance_profile=node['instance_profile'], num_access_keys=node['access_keys'],
+                              active_password=node['active_password'], is_admin=node['is_admin']))
 
         with open(edgesfilepath) as f:
             unresolved_edges = json.load(f)

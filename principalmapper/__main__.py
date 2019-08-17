@@ -32,10 +32,6 @@ def main():
         '--account',
         help='When running offline operations, this parameter determines which account to act against.'
     )
-    argument_parser.add_argument(
-        '--offline',
-        help='Executes actions in offline mode where possible.'
-    )
 
     # Create subparser for various subcommands
     subparser = argument_parser.add_subparsers(
@@ -124,10 +120,10 @@ def main():
         help='An AWS resource (denoted by ARN) to test for.'
     )
     # TODO: --condition arg
-    # argqueryparser.add_argument(
-    #     '--condition',
-    #     help='A set of key-value pairs to test specific conditions'
-    # )
+    argqueryparser.add_argument(
+        '--condition',
+        help='A set of key-value pairs to test specific conditions'
+    )
 
     # REPL subcommand
     replparser = subparser.add_parser(
@@ -155,6 +151,19 @@ def main():
         help='The (lowercase) filetype to output the image as.'
     )
 
+    # Analysis subcommand
+    analysisparser = subparser.add_parser(
+        'analysis',
+        description='Analyzes and reports identified issues',
+        help='Analyzes and reports identified issues'
+    )
+    analysisparser.add_argument(
+        '--output-type',
+        default='text',
+        choices=['text', 'json'],
+        help='The type of output for identified issues.'
+    )
+
     # TODO: Cross-Account subcommand
 
     # TODO: Recommendations subcommand
@@ -174,6 +183,8 @@ def main():
         handle_repl(parsed_args)
     elif parsed_args.picked_cmd == 'visualize':
         handle_visualization(parsed_args)
+    elif parsed_args.picked_cmd == 'analysis':
+        handle_analysis(parsed_args)
     return 0
 
 
@@ -205,10 +216,10 @@ def handle_graph(parsed_args):
             print(direct.name)
 
     elif parsed_args.update_nodes:  # --update-nodes
-        pass  # TODO: update_nodes functionality
+        raise NotImplementedError('--update-nodes not yet implemented')  # TODO: update_nodes functionality
 
     elif parsed_args.update_edges:  # --update-edges
-        pass  # TODO: update_edges functionality
+        raise NotImplementedError('--update-edges not yet implemented')  # TODO: update_edges functionality
 
 
 def handle_query(parsed_args):
@@ -225,7 +236,7 @@ def handle_argquery(parsed_args):
     graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account, parsed_args.debug)
 
     query_actions.argquery_response(session, graph, parsed_args.principal, parsed_args.action, parsed_args.resource,
-                                    None, parsed_args.skip_admin, sys.stdout, parsed_args.debug)
+                                    parsed_args.condition, parsed_args.skip_admin, sys.stdout, parsed_args.debug)
 
 
 def handle_repl(parsed_args):
@@ -235,4 +246,9 @@ def handle_repl(parsed_args):
 
 def handle_visualization(parsed_args):
     """Processes the arguments for the visualization subcommand and executes related tasks"""
-    raise NotImplementedError('visualization subcommand is not ready for use')  # TODO: visualization functionality
+    raise NotImplementedError('visualize subcommand is not ready for use')  # TODO: visualization functionality
+
+
+def handle_analysis(parsed_args):
+    """Processes the arguments for the analysis subcommand and executes related tasks"""
+    raise NotImplementedError('analysis subcommand is not ready for use')

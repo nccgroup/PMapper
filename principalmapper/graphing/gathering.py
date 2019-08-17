@@ -58,6 +58,7 @@ def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False)
         for user in page['Users']:
             result.append(Node(
                 arn=user['Arn'],
+                id_value=user['UserId'],
                 attached_policies=[],
                 group_memberships=[],
                 trust_policy=None,
@@ -76,6 +77,7 @@ def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False)
         for role in page['Roles']:
             result.append(Node(
                 arn=role['Arn'],
+                id_value=role['RoleId'],
                 attached_policies=[],
                 group_memberships=[],
                 trust_policy=role['AssumeRolePolicyDocument'],

@@ -16,6 +16,10 @@ class CloudFormationEdgeChecker(EdgeChecker):
     def return_edges(self, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
         """Fulfills expected method return_edges. If session object is None, runs checks in offline mode."""
         result = []
+
+        # Grab existing stacks in each region
+
+        # For each node...
         for node_source in nodes:
             for node_destination in nodes:
                 # skip self-access checks
