@@ -265,7 +265,7 @@ def update_admin_status(iamclient, nodes: List[Node], use_api: bool = True, outp
             action = 'iam:PutUserPolicy'
         else:  # node_type == 'role'
             action = 'iam:PutRolePolicy'
-        if query_interface.is_authorized_for(iamclient, node, action, node.arn, {}, use_api, debug):
+        if query_interface.local_check_authorization(node, action, node.arn, {}, debug):
             node.is_admin = True
             continue
 
@@ -275,44 +275,41 @@ def update_admin_status(iamclient, nodes: List[Node], use_api: bool = True, outp
         else:
             action = 'iam:AttachRolePolicy'
         condition_keys = {'iam:PolicyARN': 'arn:aws:iam::aws:policy/AdministratorAccess'}
-        if query_interface.is_authorized_for(iamclient, node, action, node.arn, condition_keys, use_api, debug):
+        if query_interface.local_check_authorization(node, action, node.arn, condition_keys, debug):
             node.is_admin = True
             continue
 
         # check if node can create a role and attach the AdministratorAccess policy or an inline policy
-        if query_interface.is_authorized_for(iamclient, node, 'iam:CreateRole', '*', {}, use_api, debug):
-            if query_interface.is_authorized_for(iamclient, node, 'iam:AttachRolePolicy', '*', condition_keys,
-                                                 use_api, debug):
+        if query_interface.local_check_authorization(node, 'iam:CreateRole', '*', {}, debug):
+            if query_interface.local_check_authorization(node, 'iam:AttachRolePolicy', '*', condition_keys, debug):
                 node.is_admin = True
                 continue
-            if query_interface.is_authorized_for(iamclient, node, 'iam:PutRolePolicy', '*', condition_keys, 
-                                                 use_api, debug):
+            if query_interface.local_check_authorization(node, 'iam:PutRolePolicy', '*', condition_keys, debug):
                 node.is_admin = True
                 continue
 
         # check if node can update an attached customer-managed policy (assumes SetAsDefault is set to True)
         for attached_policy in node.attached_policies:
             if attached_policy.arn != node.arn:
-                if query_interface.is_authorized_for(iamclient, node, 'iam:CreatePolicyVersion', attached_policy.arn,
-                                                     {}, use_api, debug):
+                if query_interface.local_check_authorization(node, 'iam:CreatePolicyVersion', attached_policy.arn, {},
+                                                             debug):
                     node.is_admin = True
                     continue
 
         # check if node is a user, and if it can attach or modify any of its groups's policies
         if node_type == 'user':
             for group in node.group_memberships:
-                if query_interface.is_authorized_for(iamclient, node, 'iam:PutGroupPolicy', group.arn, {}, use_api,
-                                                     debug):
+                if query_interface.local_check_authorization(node, 'iam:PutGroupPolicy', group.arn, {}, debug):
                     node.is_admin = True
                     break  # break the loop through groups
-                if query_interface.is_authorized_for(iamclient, node, 'iam:AttachGroupPolicy', group.arn,
-                                                     condition_keys, use_api, debug):
+                if query_interface.local_check_authorization(node, 'iam:AttachGroupPolicy', group.arn, condition_keys,
+                                                             debug):
                     node.is_admin = True
                     break  # as above
                 for attached_policy in group.attached_policies:
                     if attached_policy.arn != group.arn:
-                        if query_interface.is_authorized_for(iamclient, node, 'iam:CreatePolicyVersion',
-                                                             attached_policy.arn, {}, use_api, debug):
+                        if query_interface.local_check_authorization(node, 'iam:CreatePolicyVersion',
+                                                                     attached_policy.arn, {}, debug):
                             node.is_admin = True
                             break  # break the loop through policies
                 if node.is_admin:

@@ -67,27 +67,16 @@ class LambdaEdgeChecker(EdgeChecker):
                     continue  # Lambda wasn't auth'd to assume the role
 
                 # check that source can pass the destination role (store result for future reference)
-                can_pass_role = query_interface.is_authorized_for(
-                    iamclient,
-                    node_source,
-                    'iam:PassRole',
-                    node_destination.arn,
-                    {'iam:PassedToService': 'lambda.amazonaws.com'},
-                    iamclient is not None,
-                    debug
-                )
+                can_pass_role = query_interface.local_check_authorization(node_source, 'iam:PassRole',
+                                                                          node_destination.arn, {
+                                                                              'iam:PassedToService': 'lambda.amazonaws.com'},
+                                                                          debug)
 
                 # check that source can create a Lambda function and pass it an execution role
                 if can_pass_role:
-                    can_create_function = query_interface.is_authorized_for(
-                        iamclient,
-                        node_source,
-                        'lambda:CreateFunction',
-                        '*',
-                        {},
-                        iamclient is not None,
-                        debug
-                    )
+                    can_create_function = query_interface.local_check_authorization(node_source,
+                                                                                    'lambda:CreateFunction', '*', {},
+                                                                                    debug)
                     if can_create_function:
                         new_edge = Edge(
                             node_source,
@@ -99,24 +88,12 @@ class LambdaEdgeChecker(EdgeChecker):
 
                 func_data = []
                 for func in function_list:
-                    can_change_code = query_interface.is_authorized_for(
-                        iamclient,
-                        node_source,
-                        'lambda:UpdateFunctionCode',
-                        func['FunctionArn'],
-                        {},
-                        iamclient is not None,
-                        debug
-                    )
-                    can_change_config = query_interface.is_authorized_for(
-                        iamclient,
-                        node_source,
-                        'lambda:UpdateFunctionConfiguration',
-                        func['FunctionArn'],
-                        {},
-                        iamclient is not None,
-                        debug
-                    )
+                    can_change_code = query_interface.local_check_authorization(node_source,
+                                                                                'lambda:UpdateFunctionCode',
+                                                                                func['FunctionArn'], {}, debug)
+                    can_change_config = query_interface.local_check_authorization(node_source,
+                                                                                  'lambda:UpdateFunctionConfiguration',
+                                                                                  func['FunctionArn'], {}, debug)
                     func_data.append((func, can_change_code, can_change_config))
 
                 # check that source can modify a Lambda function and use its existing role

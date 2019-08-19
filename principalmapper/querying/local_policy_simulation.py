@@ -101,7 +101,7 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
 
         # String operators
         if 'String' in block:
-            # string comparisons
+            # string comparison after expansion
             pass
 
         if 'Numeric' in block:
@@ -113,11 +113,11 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
             pass
 
         if 'Bool' in block:
-            # straight string comparison?
+            # straight string comparison
             pass
 
         if 'BinaryEquals' in block:
-            # straight string comparison?
+            # straight string comparison
             pass
 
         if 'IpAddress' in block:
@@ -125,8 +125,31 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
             pass
 
         if 'Arn' in block:
-            # need arns module, create a util function for comparison?
-            pass
+            # string comparison after expansion
+            if block.startswith('ForAllValues:'):
+                # fail to match match unless all of the provided context values match
+                for policy_key in condition[block]:
+                    if policy_key in context.keys():
+                        for context_value in _listify_string(context[policy_key]):
+                            if context_value != '':
+                                if not _get_arn_match(block, policy_key, condition[block][policy_key], context, debug):
+                                    return False
+            elif block.startswith('ForAnyValue:'):
+                # match if at least one of the provided context values match
+                no_match = True
+                for policy_key in condition[block]:
+                    if policy_key in context.keys():
+                        for context_value in _listify_string(context[policy_key]):
+                            if context_value != '':
+                                if _get_arn_match(block, policy_key, condition[block][policy_key], context, debug):
+                                    no_match = False
+                if no_match:
+                    return False
+            else:
+                for policy_context_key in condition[block]:
+                    if not _get_arn_match(block, policy_context_key, condition[block][policy_context_key], context,
+                                          debug):
+                        return False
 
         # handle Null, ForAllValues:Null, ForAnyValue:Null
         if 'Null' in block:
@@ -155,6 +178,33 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                         return False
 
     return True
+
+
+def _get_arn_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: Dict, debug: bool = False):
+    """Helper method for dealing with Arn* conditions: ArnEquals, ArnLike, ArnNotEquals, ArnNotLike"""
+    dprint(debug, 'Checking {} for value {} with context {}, condition element {}'.format(
+        policy_key, policy_value, context, block
+    ))
+
+    for value in _listify_string(policy_value):
+        if 'Not' in block:
+            if policy_key not in context:
+                return True  # policy simulator behavior: returns Allowed when context is null for given key in ArnNot*
+            for context_value in _listify_string(context[policy_key]):
+                if not arns.validate_arn(context_value):
+                    return False  # policy simulator behavior: reject if provided value isn't a legit ARN
+                if _matches_after_expansion(context_value, value, debug=debug):
+                    return False
+            return True
+        else:
+            if policy_key not in context:
+                return False
+            for context_value in _listify_string(context[policy_key]):
+                if not arns.validate_arn(context_value):
+                    continue  # skip invalid arns
+                if _matches_after_expansion(context_value, value, debug=debug):
+                    return True
+            return False
 
 
 def _get_null_match(policy_key: str, policy_value: Union[str, List[str]], context: Dict, debug: bool = False) -> bool:

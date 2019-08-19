@@ -32,3 +32,13 @@ def get_account_id(arn: str):
 def get_resource(arn: str):
     """Returns the resource (trailing part) from a string ARN."""
     return ''.join(arn.split(':')[5:])
+
+
+def validate_arn(arn: str) -> bool:
+    """Returns true if the provided ARN appears to follow the expected structure of an ARN."""
+    arn_arr = arn.split(':')
+    if len(arn_arr) < 6:
+        return False
+    if arn_arr[0] != 'arn':
+        return False
+    return True

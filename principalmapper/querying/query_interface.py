@@ -16,13 +16,12 @@ def search_authorization_for(iamclient, graph: Graph, principal: Node, action_to
     if principal.is_admin:
         return QueryResult(True, [], principal)
 
-    if is_authorized_for(iamclient, principal, action_to_check, resource_to_check, condition_keys_to_check,
-                         validate_with_api, debug):
+    if local_check_authorization(principal, action_to_check, resource_to_check, condition_keys_to_check, debug):
         return QueryResult(True, [], principal)
 
     for edge_list in query_utils.get_search_list(graph, principal):
-        if is_authorized_for(iamclient, edge_list[-1].destination, action_to_check, resource_to_check,
-                             condition_keys_to_check, validate_with_api, debug):
+        if local_check_authorization(edge_list[-1].destination, action_to_check, resource_to_check,
+                                     condition_keys_to_check, debug):
             return QueryResult(True, edge_list, principal)
 
     return QueryResult(False, [], principal)
@@ -56,11 +55,10 @@ def _infer_condition_keys(principal: Node, current_keys: dict) -> dict:
     return result
 
 
-def is_authorized_for(iamclient, principal: Node, action_to_check: str, resource_to_check: str,
-                      condition_keys_to_check: dict, validate_with_api: bool = False,
-                      debug: bool = False) -> bool:
-    """Determine if a node is authorized to make an API call. It will either attempt a local evaluation of the
-    principal's policies or call iam:SimulatePrincipalPolicy depending on if validate_with_api is set.
+def local_check_authorization(principal: Node, action_to_check: str, resource_to_check: str,
+                              condition_keys_to_check: dict, debug: bool = False) -> bool:
+    """Determine if a node is authorized to make an API call. It will perform a local evaluation of the attached
+    IAM policies to determine authorization.
 
     NOTE: this will add condition keys that it can infer, assuming they're not set already, such as aws:username or
     aws:userid.
@@ -73,9 +71,6 @@ def is_authorized_for(iamclient, principal: Node, action_to_check: str, resource
     ))
 
     condition_keys_to_check.update(_infer_condition_keys(principal, condition_keys_to_check))
-
-    if validate_with_api:
-        raise NotImplementedError('Simulation with the API is not implemented yet.')
 
     # must have a matching Allow statement, otherwise it's an implicit deny
     if not has_matching_statement(principal, 'Allow', action_to_check, resource_to_check,

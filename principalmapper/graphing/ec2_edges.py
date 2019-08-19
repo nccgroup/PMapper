@@ -53,25 +53,25 @@ class EC2EdgeChecker(EdgeChecker):
 
                 # check if source can pass the destination role
                 condition_keys = {'iam:PassedToService': 'ec2.amazonaws.com'}
-                if not query_interface.is_authorized_for(iamclient, node_source, 'iam:PassRole', node_destination.arn,
-                                                         condition_keys, iamclient is not None, debug):
+                if not query_interface.local_check_authorization(node_source, 'iam:PassRole', node_destination.arn,
+                                                                 condition_keys, debug):
                     continue  # source can't pass the destination role, which is checked at launch or association
 
                 # check if destination has an instance profile, if not: check if source can create it
                 if node_destination.trust_policy is None:
-                    if not query_interface.is_authorized_for(iamclient, node_source, 'iam:CreateInstanceProfile',
-                                                             '*', {}, iamclient is not None, debug):
+                    if not query_interface.local_check_authorization(node_source, 'iam:CreateInstanceProfile', '*', {},
+                                                                     debug):
                         continue  # destination doesn't have an instance profile, source can't make one
 
-                    if not query_interface.is_authorized_for(iamclient, node_source, 'iam:AddRoleToInstanceProfile',
-                                                             node_destination.arn, {}, iamclient is not None, debug):
+                    if not query_interface.local_check_authorization(node_source, 'iam:AddRoleToInstanceProfile',
+                                                                     node_destination.arn, {}, debug):
                         continue  # source can make an instance profile but cannot attach it
 
                 # check if source can run an instance with the instance profile condition, add edge if so and continue
                 iprofile = node_destination.instance_profile if node_destination.instance_profile is not None else '*'
                 condition_keys = {'ec2:InstanceProfile': iprofile}
-                if query_interface.is_authorized_for(iamclient, node_source, 'ec2:RunInstances', '*', condition_keys,
-                                                     iamclient is not None, debug):
+                if query_interface.local_check_authorization(node_source, 'ec2:RunInstances', '*', condition_keys,
+                                                             debug):
                     if iprofile is not None:
                         reason = 'can use EC2 to run an instance with an existing instance profile to access'
                     else:
@@ -85,8 +85,7 @@ class EC2EdgeChecker(EdgeChecker):
                     result.append(new_edge)
 
                 # check if source can run an instance without an instance profile then add the profile, add edge if so
-                if query_interface.is_authorized_for(iamclient, node_source, 'ec2:RunInstances', '*', {},
-                                                     iamclient is not None, debug):
+                if query_interface.local_check_authorization(node_source, 'ec2:RunInstances', '*', {}, debug):
                     if iprofile is not None:
                         reason = 'can use EC2 to run an instance and then attach an existing instance profile to access'
                     else:
