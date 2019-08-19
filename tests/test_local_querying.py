@@ -95,6 +95,47 @@ class LocalQueryingTests(unittest.TestCase):
             )
         )
 
+        # Array use validation
+        test_node_null_array = _build_user_with_policy(
+            {
+                'Version': '2012-10-17',
+                'Statement': [
+                    {
+                        'Effect': 'Allow',
+                        'Action': '*',
+                        'Resource': '*',
+                        'Condition': {
+                            'Null': {
+                                'aws:username': ['true', 'false'],  # doesn't matter if it's in or not
+                            }
+                        }
+                    }
+                ]
+            }
+        )
+        self.assertTrue(
+            is_authorized_for(
+                None,
+                test_node_null_array,
+                'iam:CreateUser',
+                '*',
+                {'aws:username': ''},
+                False,
+                True
+            )
+        )
+        self.assertTrue(
+            is_authorized_for(
+                None,
+                test_node_null_array,
+                'iam:CreateUser',
+                '*',
+                {'aws:username': 'asdf'},
+                False,
+                True
+            )
+        )
+
         # ForAllValues: validation
         test_node_null_forallvalues_1 = _build_user_with_policy(
             {
@@ -186,7 +227,7 @@ class LocalQueryingTests(unittest.TestCase):
                         'Resource': '*',
                         'Condition': {
                             'ForAnyValue:Null': {        # Among the valid context values...
-                                'aws:username': 'true',  # aws:username MUST NOT be present
+                                'aws:username': 'true',  # aws:username MUST NOT be present (cannot fulfill this)
                             }
                         }
                     }

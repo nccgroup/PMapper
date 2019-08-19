@@ -101,24 +101,31 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
 
         # String operators
         if 'String' in block:
+            # string comparisons
             pass
 
         if 'Numeric' in block:
+            # convert string to int and compare (floats allowed? how to handle?)
             pass
 
         if 'Date' in block:
+            # need the datetime module to do this, do everything in UTC where possible or undefined
             pass
 
         if 'Bool' in block:
+            # straight string comparison?
             pass
 
         if 'BinaryEquals' in block:
+            # straight string comparison?
             pass
 
         if 'IpAddress' in block:
+            # need ipaddress module, use ipaddress.ip_address in <ipaddress.ip_network obj>
             pass
 
         if 'Arn' in block:
+            # need arns module, create a util function for comparison?
             pass
 
         # handle Null, ForAllValues:Null, ForAnyValue:Null
@@ -129,9 +136,8 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                     if policy_key in context.keys():
                         for context_value in _listify_string(context[policy_key]):
                             if context_value != '':
-                                for policy_value in _listify_string(condition[block][policy_key]):
-                                    if not _get_null_match(policy_key, policy_value, context, debug):
-                                        return False
+                                if not _get_null_match(policy_key, condition[block][policy_key], context, debug):
+                                    return False
             elif block.startswith('ForAnyValue:'):
                 # match if at least one of the provided context values match
                 no_match = True
@@ -139,19 +145,13 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                     if policy_key in context.keys():
                         for context_value in _listify_string(context[policy_key]):
                             if context_value != '':
-                                for policy_value in _listify_string(condition[block][policy_key]):
-                                    if _get_null_match(policy_key, policy_value, context, debug):
-                                        no_match = False
+                                if _get_null_match(policy_key, condition[block][policy_key], context, debug):
+                                    no_match = False
                 if no_match:
                     return False
             else:
                 for policy_context_key in condition[block]:
-                    no_match = True
-                    for context_value in _listify_string(condition[block][policy_context_key]):
-                        if _get_null_match(policy_context_key, context_value, context, debug):
-                            no_match = False
-                            break
-                    if no_match:
+                    if not _get_null_match(policy_context_key, condition[block][policy_context_key], context, debug):
                         return False
 
     return True
@@ -168,7 +168,6 @@ def _get_null_match(policy_key: str, policy_value: Union[str, List[str]], contex
             if policy_key in context and context[policy_key] != '':
                 return True
     return False
-
 
 
 def resource_policy_has_matching_statement_for_principal(principal: Node, resource_policy: dict, effect_value: str,
