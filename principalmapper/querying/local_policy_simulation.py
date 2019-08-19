@@ -45,7 +45,7 @@ def has_matching_statement(principal: Node, effect_value: str, action_to_check: 
                         matches_action = False
                         break  # finish looping
             if not matches_action:
-                continue
+                continue  # cut early
 
             # if action is good, check resource
             if 'Resource' in statement:
@@ -61,10 +61,12 @@ def has_matching_statement(principal: Node, effect_value: str, action_to_check: 
                         break
             else:
                 matches_resource = True  # TODO: examine validity of not using a Resource/NotResource field (trust docs)
+            if not matches_resource:
+                continue  # cut early
 
             # if resource is good, check condition
             if 'Condition' in statement:
-                matches_condition = _get_condition_match(statement['Condition'], condition_keys_to_check)
+                matches_condition = _get_condition_match(statement['Condition'], condition_keys_to_check, debug)
             else:
                 matches_condition = True
 
@@ -74,21 +76,23 @@ def has_matching_statement(principal: Node, effect_value: str, action_to_check: 
     return False
 
 
-def _get_condition_match(condition: Dict, context: Dict) -> bool:
+def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], context: Dict, debug: bool = False) -> bool:
     """
     Internal method. It digs through Null, Bool, DateX, NumericX, StringX conditions and returns false if any of
     them don't match what the context has.
 
+    Also handles ForAnyValue and ForAllValues
+
     See: https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_condition_operators.html
     """
     for block in condition.keys():
+        dprint(debug, 'Testing condition field: {}'.format(block))
         # Start by handling ...IfExists
         # If our passed context doesn't have the condition key, we can skip since it doesn't exist
-        # TODO: can this be combined with ForAnyValue or ForAllValues? God help me if so.
-        if 'IfExists' in block:
+        if block.endswith('IfExists'):
             can_skip = True
-            for context_key in condition[block]:
-                if context_key in context.keys():
+            for policy_context_key in condition[block]:
+                if policy_context_key in context.keys():
                     can_skip = False
                     break
 
@@ -105,10 +109,10 @@ def _get_condition_match(condition: Dict, context: Dict) -> bool:
         if 'Date' in block:
             pass
 
-        if 'Bool' == block:
+        if 'Bool' in block:
             pass
 
-        if 'BinaryEquals' == block:
+        if 'BinaryEquals' in block:
             pass
 
         if 'IpAddress' in block:
@@ -117,16 +121,54 @@ def _get_condition_match(condition: Dict, context: Dict) -> bool:
         if 'Arn' in block:
             pass
 
-        if 'Null' == block:
-            for context_key in condition[block]:
-                if context_key in context.keys():
-                    if condition[block][context_key] == 'false' and context[context_key] != '':
+        # handle Null, ForAllValues:Null, ForAnyValue:Null
+        if 'Null' in block:
+            if block.startswith('ForAllValues:'):
+                # fail to match match unless all of the provided context values match
+                for policy_key in condition[block]:
+                    if policy_key in context.keys():
+                        for context_value in _listify_string(context[policy_key]):
+                            if context_value != '':
+                                for policy_value in _listify_string(condition[block][policy_key]):
+                                    if not _get_null_match(policy_key, policy_value, context, debug):
+                                        return False
+            elif block.startswith('ForAnyValue:'):
+                # match if at least one of the provided context values match
+                no_match = True
+                for policy_key in condition[block]:
+                    if policy_key in context.keys():
+                        for context_value in _listify_string(context[policy_key]):
+                            if context_value != '':
+                                for policy_value in _listify_string(condition[block][policy_key]):
+                                    if _get_null_match(policy_key, policy_value, context, debug):
+                                        no_match = False
+                if no_match:
+                    return False
+            else:
+                for policy_context_key in condition[block]:
+                    no_match = True
+                    for context_value in _listify_string(condition[block][policy_context_key]):
+                        if _get_null_match(policy_context_key, context_value, context, debug):
+                            no_match = False
+                            break
+                    if no_match:
                         return False
 
-                if context_key not in context.keys() and condition[block][context_key] == 'true':
-                    return False
-
     return True
+
+
+def _get_null_match(policy_key: str, policy_value: Union[str, List[str]], context: Dict, debug: bool = False) -> bool:
+    """Helper method for dealing with Null conditions"""
+    dprint(debug, 'Checking {} for value {} with context {}'.format(policy_key, policy_value, context))
+    for value in _listify_string(policy_value):
+        if value == 'true':  # key is expected not to be in context, or empty
+            if policy_key not in context or context[policy_key] == '':
+                return True
+        else:  # key is expected to be in the context with a non-empty value
+            if policy_key in context and context[policy_key] != '':
+                return True
+    return False
+
 
 
 def resource_policy_has_matching_statement_for_principal(principal: Node, resource_policy: dict, effect_value: str,

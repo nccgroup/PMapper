@@ -48,8 +48,12 @@ class LocalQueryingTests(unittest.TestCase):
 
     def test_null_condition_handling(self):
         """ Validate the following conditions are correctly handled:
-            Null
+            Null, ForAnyValue:Null, ForAllValues:Null
+
+            Validated against the Simulator API
         """
+
+        # Basic use validation
         test_node_null = _build_user_with_policy(
             {
                 'Version': '2012-10-17',
@@ -60,8 +64,8 @@ class LocalQueryingTests(unittest.TestCase):
                         'Resource': '*',
                         'Condition': {
                             'Null': {
-                                'aws:username': 'false',
-                                'aws:userid': 'true'
+                                'aws:username': 'true',  # aws:username MUST NOT be present
+                                'aws:userid': 'false'    # aws:userid MUST be present
                             }
                         }
                     }
@@ -75,6 +79,178 @@ class LocalQueryingTests(unittest.TestCase):
                 'iam:CreateUser',
                 '*',
                 {'aws:userid': 'asdf', 'aws:username': ''},
+                False,
+                True
+            )
+        )
+        self.assertFalse(
+            is_authorized_for(
+                None,
+                test_node_null,
+                'iam:CreateUser',
+                '*',
+                {'aws:userid': '', 'aws:username': ''},
+                False,
+                True
+            )
+        )
+
+        # ForAllValues: validation
+        test_node_null_forallvalues_1 = _build_user_with_policy(
+            {
+                'Version': '2012-10-17',
+                'Statement': [
+                    {
+                        'Effect': 'Allow',
+                        'Action': '*',
+                        'Resource': '*',
+                        'Condition': {
+                            'ForAllValues:Null': {        # For all valid context values...
+                                'aws:username': 'false',  # aws:username MUST be present
+                            }
+                        }
+                    }
+                ]
+            }
+        )
+        self.assertTrue(
+            is_authorized_for(
+                None,
+                test_node_null_forallvalues_1,
+                'iam:CreateUser',
+                '*',
+                {'aws:username': 'asdf'},
+                False,
+                True
+            )
+        )
+        self.assertTrue(
+            is_authorized_for(
+                None,
+                test_node_null_forallvalues_1,
+                'iam:CreateUser',
+                '*',
+                {'aws:username': ''},
+                False,
+                True
+            )
+        )
+        test_node_null_forallvalues_2 = _build_user_with_policy(
+            {
+                'Version': '2012-10-17',
+                'Statement': [
+                    {
+                        'Effect': 'Allow',
+                        'Action': '*',
+                        'Resource': '*',
+                        'Condition': {
+                            'ForAllValues:Null': {       # For all valid context values...
+                                'aws:username': 'true',  # aws:username MUST NOT be present
+                            }
+                        }
+                    }
+                ]
+            }
+        )
+        self.assertFalse(
+            is_authorized_for(
+                None,
+                test_node_null_forallvalues_2,
+                'iam:CreateUser',
+                '*',
+                {'aws:username': 'asdf'},
+                False,
+                True
+            )
+        )
+        self.assertTrue(
+            is_authorized_for(
+                None,
+                test_node_null_forallvalues_2,
+                'iam:CreateUser',
+                '*',
+                {'aws:username': ''},
+                False,
+                True
+            )
+        )
+
+        # ForAnyValue: validation
+        test_node_null_foranyvalue_1 = _build_user_with_policy(
+            {
+                'Version': '2012-10-17',
+                'Statement': [
+                    {
+                        'Effect': 'Allow',
+                        'Action': '*',
+                        'Resource': '*',
+                        'Condition': {
+                            'ForAnyValue:Null': {        # Among the valid context values...
+                                'aws:username': 'true',  # aws:username MUST NOT be present
+                            }
+                        }
+                    }
+                ]
+            }
+        )
+        self.assertFalse(
+            is_authorized_for(
+                None,
+                test_node_null_foranyvalue_1,
+                'iam:CreateUser',
+                '*',
+                {'aws:username': 'asdf'},
+                False,
+                True
+            )
+        )
+        self.assertFalse(
+            is_authorized_for(
+                None,
+                test_node_null_foranyvalue_1,
+                'iam:CreateUser',
+                '*',
+                {'aws:username': ''},
+                False,
+                True
+            )
+        )
+
+        test_node_null_foranyvalue_2 = _build_user_with_policy(
+            {
+                'Version': '2012-10-17',
+                'Statement': [
+                    {
+                        'Effect': 'Allow',
+                        'Action': '*',
+                        'Resource': '*',
+                        'Condition': {
+                            'ForAnyValue:Null': {         # Among the valid context values...
+                                'aws:username': 'false',  # aws:username MUST be present
+                            }
+                        }
+                    }
+                ]
+            }
+        )
+        self.assertTrue(
+            is_authorized_for(
+                None,
+                test_node_null_foranyvalue_2,
+                'iam:CreateUser',
+                '*',
+                {'aws:username': 'asdf'},
+                False,
+                True
+            )
+        )
+        self.assertFalse(
+            is_authorized_for(
+                None,
+                test_node_null_foranyvalue_2,
+                'iam:CreateUser',
+                '*',
+                {'aws:username': ''},
                 False,
                 True
             )
