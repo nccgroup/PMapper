@@ -469,3 +469,80 @@ class LocalQueryingTests(unittest.TestCase):
                                                   {'aws:CurrentTime': '2018-08-10T00:00:00Z'}, True))
         self.assertFalse(local_check_authorization(test_node_date_less_than_equals, 'iam:CreateUser', '*',
                                                   {'aws:CurrentTime': '2018-08-10T00:00:01Z'}, True))
+
+    def test_ipaddress_condition_handling(self):
+        """ Validate the following conditions are handled:
+            * IpAddress
+            * NotIpAddress
+        """
+        # IpAddress: single IP
+        test_node_ipaddress = _build_user_with_policy(
+            {
+                'Version': '2012-10-17',
+                'Statement': [
+                    {
+                        'Effect': 'Allow',
+                        'Action': '*',
+                        'Resource': '*',
+                        'Condition': {
+                            'IpAddress': {
+                                'aws:SourceIp': '10.0.0.1'
+                            }
+                        }
+                    }
+                ]
+            }
+        )
+        self.assertTrue(local_check_authorization(test_node_ipaddress, 'iam:CreateUser', '*',
+                                                  {'aws:SourceIp': '10.0.0.1'}, True))
+        self.assertFalse(local_check_authorization(test_node_ipaddress, 'iam:CreateUser', '*',
+                                                  {'aws:SourceIp': '10.0.0.2'}, True))
+
+        # IpAddress: IP range
+        test_node_ipaddress = _build_user_with_policy(
+            {
+                'Version': '2012-10-17',
+                'Statement': [
+                    {
+                        'Effect': 'Allow',
+                        'Action': '*',
+                        'Resource': '*',
+                        'Condition': {
+                            'IpAddress': {
+                                'aws:SourceIp': '10.0.0.0/8'
+                            }
+                        }
+                    }
+                ]
+            }
+        )
+        self.assertTrue(local_check_authorization(test_node_ipaddress, 'iam:CreateUser', '*',
+                                                  {'aws:SourceIp': '10.0.0.1'}, True))
+        self.assertFalse(local_check_authorization(test_node_ipaddress, 'iam:CreateUser', '*',
+                                                   {'aws:SourceIp': '127.0.0.1'}, True))
+
+        # IpAddress: IP ranges
+        test_node_ipaddress = _build_user_with_policy(
+            {
+                'Version': '2012-10-17',
+                'Statement': [
+                    {
+                        'Effect': 'Allow',
+                        'Action': '*',
+                        'Resource': '*',
+                        'Condition': {
+                            'IpAddress': {
+                                'aws:SourceIp': ['10.0.0.0/8', '127.0.0.0/8']
+                            }
+                        }
+                    }
+                ]
+            }
+        )
+        self.assertTrue(local_check_authorization(test_node_ipaddress, 'iam:CreateUser', '*',
+                                                  {'aws:SourceIp': '10.0.0.1'}, True))
+        self.assertTrue(local_check_authorization(test_node_ipaddress, 'iam:CreateUser', '*',
+                                                   {'aws:SourceIp': '127.0.0.1'}, True))
+        self.assertFalse(local_check_authorization(test_node_ipaddress, 'iam:CreateUser', '*',
+                                                  {'aws:SourceIp': '192.168.0.1'}, True))
+

@@ -4,6 +4,7 @@ API calls to AWS."""
 import datetime as dt
 import dateutil.parser as dup
 from enum import Enum
+import ipaddress
 from typing import List, Dict, Optional, Union
 import re
 
@@ -113,7 +114,7 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
         if 'Date' in block:
             # need the datetime and dateutil module to do this, do everything in UTC where undefined
             if block.startswith('ForAllValues:'):
-                # fail to match match unless all of the provided context values match
+                # fail to match unless all of the provided context values match
                 for policy_key in condition[block]:
                     if policy_key in context.keys():
                         for context_value in _listify_string(context[policy_key]):
@@ -121,7 +122,7 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                                 if not _get_date_match(block, policy_key, condition[block][policy_key], context, debug):
                                     return False
             elif block.startswith('ForAnyValue:'):
-                # match if at least one of the provided context values match
+                # fail to match unless at least one of the provided context values match
                 no_match = True
                 for policy_key in condition[block]:
                     if policy_key in context.keys():
@@ -147,12 +148,37 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
 
         if 'IpAddress' in block:
             # need ipaddress module, use ipaddress.ip_address in <ipaddress.ip_network obj>
-            pass
+            if block.startswith('ForAllValues:'):
+                # fail to match unless all of the provided context values match
+                for policy_key in condition[block]:
+                    if policy_key in context.keys():
+                        for context_value in _listify_string(context[policy_key]):
+                            if context_value != '':
+                                if not _get_ipaddress_match(block, policy_key, condition[block][policy_key], context,
+                                                            debug):
+                                    return False
+            elif block.startswith('ForAnyValue:'):
+                # fail to match unless at least one of the provided context values match
+                no_match = True
+                for policy_key in condition[block]:
+                    if policy_key in context.keys():
+                        for context_value in _listify_string(context[policy_key]):
+                            if context_value != '':
+                                if _get_ipaddress_match(block, policy_key, condition[block][policy_key], context,
+                                                        debug):
+                                    no_match = False
+                if no_match:
+                    return False
+            else:
+                for policy_context_key in condition[block]:
+                    if not _get_ipaddress_match(block, policy_context_key, condition[block][policy_context_key],
+                                                context, debug):
+                        return False
 
         if 'Arn' in block:
             # string comparison after expansion
             if block.startswith('ForAllValues:'):
-                # fail to match match unless all of the provided context values match
+                # fail to match unless all of the provided context values match
                 for policy_key in condition[block]:
                     if policy_key in context.keys():
                         for context_value in _listify_string(context[policy_key]):
@@ -160,7 +186,7 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                                 if not _get_arn_match(block, policy_key, condition[block][policy_key], context, debug):
                                     return False
             elif block.startswith('ForAnyValue:'):
-                # match if at least one of the provided context values match
+                # fail to match if none of the provided context values match
                 no_match = True
                 for policy_key in condition[block]:
                     if policy_key in context.keys():
@@ -179,7 +205,7 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
         # handle Null, ForAllValues:Null, ForAnyValue:Null
         if 'Null' in block:
             if block.startswith('ForAllValues:'):
-                # fail to match match unless all of the provided context values match
+                # fail to match unless all of the provided context values match
                 for policy_key in condition[block]:
                     if policy_key in context.keys():
                         for context_value in _listify_string(context[policy_key]):
@@ -187,7 +213,7 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                                 if not _get_null_match(policy_key, condition[block][policy_key], context, debug):
                                     return False
             elif block.startswith('ForAnyValue:'):
-                # match if at least one of the provided context values match
+                # fail to match unless at least one of the provided context values match
                 no_match = True
                 for policy_key in condition[block]:
                     if policy_key in context.keys():
@@ -203,6 +229,41 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                         return False
 
     return True
+
+
+def _get_ipaddress_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict,
+                         debug: bool = False):
+    """Helper method for dealing with *IpAddress conditions: IpAddress, NotIpAddress
+
+    Parses the policy value as an IPvXNetwork, then the context value as an IPvXAddress, then uses
+    the `in` operator to determine a match.
+    """
+    dprint(debug, 'Checking {} for value {} with context {}, condition element {}'.format(
+        policy_key, policy_value, context, block
+    ))
+
+    for value in _listify_string(policy_value):
+        value_net = ipaddress.ip_network(value)
+        if block == 'IpAddress':
+            if policy_key not in context:
+                return False
+            for context_value in _listify_string(context[policy_key]):
+                context_value_addr = ipaddress.ip_address(context_value)
+                if context_value_addr in value_net:
+                    return True
+        else:
+            if policy_key not in context:
+                return True  # simulator behavior: treat absence as approval
+            for context_value in _listify_string(context[policy_key]):
+                context_value_addr = ipaddress.ip_address(context_value)
+                if context_value_addr in value_net:
+                    return False
+
+    # Finished loops without an answer, give defaults
+    if block == 'IpAddress':
+        return False
+    else:
+        return True
 
 
 def _get_date_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict,
@@ -226,7 +287,6 @@ def _get_date_match(block: str, policy_key: str, policy_value: Union[str, List[s
                 context_value_dt = _convert_timestamp_to_datetime_obj(context_value)
                 if value_dt == context_value_dt:
                     return True
-            return False
         elif block == 'DateNotEquals':
             if policy_key not in context:
                 return True
@@ -234,7 +294,6 @@ def _get_date_match(block: str, policy_key: str, policy_value: Union[str, List[s
                 context_value_dt = _convert_timestamp_to_datetime_obj(context_value)
                 if value_dt == context_value_dt:
                     return False
-            return True
         else:  # block == 'DateGreaterThan' or 'DateGreaterThanEquals' or 'DateLessThan' or 'DateLessThanEquals'
             if policy_key not in context:
                 return False
@@ -253,6 +312,13 @@ def _get_date_match(block: str, policy_key: str, policy_value: Union[str, List[s
                     if context_value_dt <= value_dt:
                         return True
             return False
+    # Finished loops, give default answers
+    if block == 'DateEquals':
+        return False
+    elif block == 'DateNotEquals':
+        return True
+    else:  # DateGreaterThan, DateGreaterThanEquals, DateLessThan, DateLessThanEquals
+        return False
 
 
 def _convert_timestamp_to_datetime_obj(timestamp: str):
@@ -284,7 +350,6 @@ def _get_arn_match(block: str, policy_key: str, policy_value: Union[str, List[st
                     return False  # policy simulator behavior: reject if provided value isn't a legit ARN
                 if _matches_after_expansion(context_value, value, debug=debug):
                     return False
-            return True
         else:
             if policy_key not in context:
                 return False
@@ -293,7 +358,12 @@ def _get_arn_match(block: str, policy_key: str, policy_value: Union[str, List[st
                     continue  # skip invalid arns
                 if _matches_after_expansion(context_value, value, debug=debug):
                     return True
-            return False
+
+    # Made it through the loops without an answer, give default response
+    if 'Not' in block:
+        return True
+    else:
+        return False
 
 
 def _get_null_match(policy_key: str, policy_value: Union[str, List[str]], context: Dict, debug: bool = False) -> bool:
