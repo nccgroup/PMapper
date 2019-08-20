@@ -1,6 +1,8 @@
 """Utility code for the querying module: creates functions for simulating the authorization of principals making
 API calls to AWS."""
 
+import datetime as dt
+import dateutil.parser as dup
 from enum import Enum
 from typing import List, Dict, Optional, Union
 import re
@@ -16,13 +18,13 @@ def has_matching_statement(principal: Node, effect_value: str, action_to_check: 
     is the meat of the local policy evaluation.
     """
     dprint(debug, 'local test for matching statement, principal: {}, effect: {}, action: {}, resource: {}, '
-           'conditions: {}'.format(
-            principal.arn,
-            effect_value,
-            action_to_check,
-            resource_to_check,
-            condition_keys_to_check
-            ))
+                  'conditions: {}'.format(
+        principal.arn,
+        effect_value,
+        action_to_check,
+        resource_to_check,
+        condition_keys_to_check
+    ))
 
     # For each policy...
     for policy in principal.attached_policies:
@@ -109,8 +111,31 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
             pass
 
         if 'Date' in block:
-            # need the datetime module to do this, do everything in UTC where possible or undefined
-            pass
+            # need the datetime and dateutil module to do this, do everything in UTC where undefined
+            if block.startswith('ForAllValues:'):
+                # fail to match match unless all of the provided context values match
+                for policy_key in condition[block]:
+                    if policy_key in context.keys():
+                        for context_value in _listify_string(context[policy_key]):
+                            if context_value != '':
+                                if not _get_date_match(block, policy_key, condition[block][policy_key], context, debug):
+                                    return False
+            elif block.startswith('ForAnyValue:'):
+                # match if at least one of the provided context values match
+                no_match = True
+                for policy_key in condition[block]:
+                    if policy_key in context.keys():
+                        for context_value in _listify_string(context[policy_key]):
+                            if context_value != '':
+                                if _get_date_match(block, policy_key, condition[block][policy_key], context, debug):
+                                    no_match = False
+                if no_match:
+                    return False
+            else:
+                for policy_context_key in condition[block]:
+                    if not _get_date_match(block, policy_context_key, condition[block][policy_context_key], context,
+                                           debug):
+                        return False
 
         if 'Bool' in block:
             # straight string comparison
@@ -180,7 +205,45 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
     return True
 
 
-def _get_arn_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: Dict, debug: bool = False):
+def _get_date_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict,
+                    debug: bool = False):
+    """Helper method for dealing with Date* conditions: DateEquals, DateNotEquals, DateGreaterThan,
+    DateGreaterThanEquals, DateLessThan, DateLessThanEquals.
+
+    Parses values by distinguishing between epoch values and ISO 8601/RFC 3339 datetimestamps. Assumes
+    the timezone is UTC when not specified.
+    """
+    dprint(debug, 'Checking {} for value {} with context {}, condition element {}'.format(
+        policy_key, policy_value, context, block
+    ))
+
+    for value in _listify_string(policy_value):
+        value_dt = _convert_timestamp_to_datetime_obj(value)
+        if block == 'DateEquals':
+            if policy_key not in context:
+                return False
+            for context_value in _listify_string(context[policy_key]):
+                context_value_dt = _convert_timestamp_to_datetime_obj(context_value)
+                if value_dt == context_value_dt:
+                    return True
+            return False
+
+
+def _convert_timestamp_to_datetime_obj(timestamp: str):
+    """Helper method for the helper method: converts string to datetime object"""
+    if '-' in timestamp:  # policy simulator behavior: datetimestamps need dashes, even though ISO 8601 doesn't (?)
+        # parse as ISO 8601/RFC 3339
+        result = dup.parse(timestamp)
+        if result.tzinfo is None:
+            result.replace(tzinfo=dt.timezone.utc)
+        return result
+    else:
+        # parse as epoch timestamp
+        return dt.datetime.fromtimestamp(float(timestamp), dt.timezone.utc)  # TODO: concern around float imprecision
+
+
+def _get_arn_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict,
+                   debug: bool = False):
     """Helper method for dealing with Arn* conditions: ArnEquals, ArnLike, ArnNotEquals, ArnNotLike"""
     dprint(debug, 'Checking {} for value {} with context {}, condition element {}'.format(
         policy_key, policy_value, context, block
@@ -469,8 +532,8 @@ def _matches_after_expansion(string_to_check: str, string_to_check_against: str,
     Handles matching with respect to wildcards, variables.
     """
     dprint(debug, 'Checking for post-expansion match.\n   string to check: {}\n   '.format(string_to_check) +
-                  'string to check against: {}\n'.format(string_to_check_against) +
-                  '   condition_keys: {}'.format(condition_keys))
+           'string to check against: {}\n'.format(string_to_check_against) +
+           '   condition_keys: {}'.format(condition_keys))
 
     # regexify string_to_check_against
     # handles use of ${} var substitution, wildcards (*), and periods (.)
@@ -481,11 +544,11 @@ def _matches_after_expansion(string_to_check: str, string_to_check_against: str,
             full_key = '${' + k + '}'
             copy_string = copy_string.replace(full_key, v)
 
-    pattern_string = copy_string\
-        .replace(".", "\\.")\
-        .replace("*", ".*")\
-        .replace("?", ".")\
-        .replace("$", "\\$")\
+    pattern_string = copy_string \
+        .replace(".", "\\.") \
+        .replace("*", ".*") \
+        .replace("?", ".") \
+        .replace("$", "\\$") \
         .replace("^", "\\^")
     pattern_string = "^{}$".format(pattern_string)
     dprint(debug, '   post-processed pattern_string: {}'.format(pattern_string))

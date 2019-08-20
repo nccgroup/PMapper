@@ -39,10 +39,10 @@ def _infer_condition_keys(principal: Node, current_keys: dict) -> dict:
     # Date and Time: aws:CurrentTime and aws:EpochTime
     # TODO: Examine if using datetime.isoformat() is good enough to avoid bugs
     if 'aws:CurrentTime' not in current_keys:
-        result['aws:CurrentTime'] = dt.datetime.utcnow().isoformat()
+        result['aws:CurrentTime'] = dt.datetime.now(dt.timezone.utc).isoformat()
 
     if 'aws:EpochTime' not in current_keys:
-        result['aws:EpochTime'] = str(round(dt.datetime.utcnow().timestamp()))
+        result['aws:EpochTime'] = str(round(dt.datetime.now(dt.timezone.utc).timestamp()))
 
     # UserID and Username: aws:userid and aws:username
     # TODO: Double-check how roles handle aws:username, IIRC it's not filled in
@@ -82,8 +82,8 @@ def local_check_authorization(principal: Node, action_to_check: str, resource_to
                                       condition_keys_to_check, debug)
 
 
-def is_authorized_per_simulation(iamclient, principal: Node, action_to_check: str, resource_to_check: str,
-                                 condition_keys_to_check: dict, debug: bool = False) -> bool:
+def simulation_api_check_authorization(iamclient, principal: Node, action_to_check: str, resource_to_check: str,
+                                       condition_keys_to_check: dict, debug: bool = False) -> bool:
     """Determine if a node is authorized for an API call via iam:SimulatePrincipalPolicy."""
     dprint(debug, 'calling iam:SimulatePrincipalPolicy with principal: {}, action: {}, resource: {}, conditions: {}'
            .format(principal.arn, action_to_check, resource_to_check, condition_keys_to_check))

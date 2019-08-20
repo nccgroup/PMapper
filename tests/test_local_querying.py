@@ -342,6 +342,11 @@ class LocalQueryingTests(unittest.TestCase):
 
         self.assertTrue(local_check_authorization(test_node_date_equals, 'iam:CreateUser', '*',
                                                   {'aws:CurrentTime': '2018-08-10T00:00:00Z'}, True))
-
+        self.assertTrue(local_check_authorization(test_node_date_equals, 'iam:CreateUser', '*',
+                                                  {'aws:CurrentTime': '1533859200.0'}, True))
+        self.assertTrue(local_check_authorization(test_node_date_equals, 'iam:CreateUser', '*',
+                                                  {'aws:CurrentTime': '1533859200'}, True))
+        self.assertFalse(local_check_authorization(test_node_date_equals, 'iam:CreateUser', '*',
+                                                  {'aws:CurrentTime': '1533859201'}, True))
         self.assertFalse(local_check_authorization(test_node_date_equals, 'iam:CreateUser', '*',
                                                    {'aws:CurrentTime': '2018-08-10T00:00:01Z'}, True))
