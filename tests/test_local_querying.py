@@ -322,6 +322,7 @@ class LocalQueryingTests(unittest.TestCase):
             DateGreaterThan
             DateGreaterThanEquals
         """
+        # DateEquals
         test_node_date_equals = _build_user_with_policy(
             {
                 'Version': '2012-10-17',
@@ -339,7 +340,6 @@ class LocalQueryingTests(unittest.TestCase):
                 ]
             }
         )
-
         self.assertTrue(local_check_authorization(test_node_date_equals, 'iam:CreateUser', '*',
                                                   {'aws:CurrentTime': '2018-08-10T00:00:00Z'}, True))
         self.assertTrue(local_check_authorization(test_node_date_equals, 'iam:CreateUser', '*',
@@ -350,3 +350,122 @@ class LocalQueryingTests(unittest.TestCase):
                                                   {'aws:CurrentTime': '1533859201'}, True))
         self.assertFalse(local_check_authorization(test_node_date_equals, 'iam:CreateUser', '*',
                                                    {'aws:CurrentTime': '2018-08-10T00:00:01Z'}, True))
+
+        # DateNotEquals
+        test_node_date_not_equals = _build_user_with_policy(
+            {
+                'Version': '2012-10-17',
+                'Statement': [
+                    {
+                        'Effect': 'Allow',
+                        'Action': '*',
+                        'Resource': '*',
+                        'Condition': {
+                            'DateNotEquals': {
+                                'aws:CurrentTime': '2018-08-10T00:00:00Z'
+                            }
+                        }
+                    }
+                ]
+            }
+        )
+        self.assertFalse(local_check_authorization(test_node_date_not_equals, 'iam:CreateUser', '*',
+                                                  {'aws:CurrentTime': '2018-08-10T00:00:00Z'}, True))
+        self.assertTrue(local_check_authorization(test_node_date_not_equals, 'iam:CreateUser', '*',
+                                                   {'aws:CurrentTime': '2018-08-10T00:00:01Z'}, True))
+
+        # DateGreaterThan
+        test_node_date_greater_than = _build_user_with_policy(
+            {
+                'Version': '2012-10-17',
+                'Statement': [
+                    {
+                        'Effect': 'Allow',
+                        'Action': '*',
+                        'Resource': '*',
+                        'Condition': {
+                            'DateGreaterThan': {
+                                'aws:CurrentTime': '2018-08-10T00:00:00Z'
+                            }
+                        }
+                    }
+                ]
+            }
+        )
+        self.assertFalse(local_check_authorization(test_node_date_greater_than, 'iam:CreateUser', '*',
+                                                   {'aws:CurrentTime': '2018-08-10T00:00:00Z'}, True))
+        self.assertTrue(local_check_authorization(test_node_date_greater_than, 'iam:CreateUser', '*',
+                                                  {'aws:CurrentTime': '2018-08-10T00:00:01Z'}, True))
+
+        # DateGreaterThanEquals
+        test_node_date_greater_than_equals = _build_user_with_policy(
+            {
+                'Version': '2012-10-17',
+                'Statement': [
+                    {
+                        'Effect': 'Allow',
+                        'Action': '*',
+                        'Resource': '*',
+                        'Condition': {
+                            'DateGreaterThanEquals': {
+                                'aws:CurrentTime': '2018-08-10T00:00:00Z'
+                            }
+                        }
+                    }
+                ]
+            }
+        )
+        self.assertFalse(local_check_authorization(test_node_date_greater_than_equals, 'iam:CreateUser', '*',
+                                                  {'aws:CurrentTime': '2018-08-09T23:59:59Z'}, True))
+        self.assertTrue(local_check_authorization(test_node_date_greater_than_equals, 'iam:CreateUser', '*',
+                                                   {'aws:CurrentTime': '2018-08-10T00:00:00Z'}, True))
+        self.assertTrue(local_check_authorization(test_node_date_greater_than_equals, 'iam:CreateUser', '*',
+                                                  {'aws:CurrentTime': '2018-08-10T00:00:01Z'}, True))
+
+        # DateLessThan
+        test_node_date_less_than = _build_user_with_policy(
+            {
+                'Version': '2012-10-17',
+                'Statement': [
+                    {
+                        'Effect': 'Allow',
+                        'Action': '*',
+                        'Resource': '*',
+                        'Condition': {
+                            'DateLessThan': {
+                                'aws:CurrentTime': '2018-08-10T00:00:00Z'
+                            }
+                        }
+                    }
+                ]
+            }
+        )
+        self.assertTrue(local_check_authorization(test_node_date_less_than, 'iam:CreateUser', '*',
+                                                   {'aws:CurrentTime': '2018-08-09T23:59:59Z'}, True))
+        self.assertFalse(local_check_authorization(test_node_date_less_than, 'iam:CreateUser', '*',
+                                                  {'aws:CurrentTime': '2018-08-10T00:00:01Z'}, True))
+
+        # DateLessThanEquals
+        test_node_date_less_than_equals = _build_user_with_policy(
+            {
+                'Version': '2012-10-17',
+                'Statement': [
+                    {
+                        'Effect': 'Allow',
+                        'Action': '*',
+                        'Resource': '*',
+                        'Condition': {
+                            'DateLessThanEquals': {
+                                'aws:CurrentTime': '2018-08-10T00:00:00Z'
+                            }
+                        }
+                    }
+                ]
+            }
+        )
+        self.assertTrue(local_check_authorization(test_node_date_less_than_equals, 'iam:CreateUser', '*',
+                                                   {'aws:CurrentTime': '2018-08-09T23:59:59Z'}, True))
+        self.assertTrue(local_check_authorization(test_node_date_less_than_equals, 'iam:CreateUser', '*',
+                                                  {'aws:CurrentTime': '2018-08-10T00:00:00Z'}, True))
+        self.assertFalse(local_check_authorization(test_node_date_less_than_equals, 'iam:CreateUser', '*',
+                                                  {'aws:CurrentTime': '2018-08-10T00:00:01Z'}, True))

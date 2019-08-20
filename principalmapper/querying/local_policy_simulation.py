@@ -227,6 +227,32 @@ def _get_date_match(block: str, policy_key: str, policy_value: Union[str, List[s
                 if value_dt == context_value_dt:
                     return True
             return False
+        elif block == 'DateNotEquals':
+            if policy_key not in context:
+                return True
+            for context_value in _listify_string(context[policy_key]):
+                context_value_dt = _convert_timestamp_to_datetime_obj(context_value)
+                if value_dt == context_value_dt:
+                    return False
+            return True
+        else:  # block == 'DateGreaterThan' or 'DateGreaterThanEquals' or 'DateLessThan' or 'DateLessThanEquals'
+            if policy_key not in context:
+                return False
+            for context_value in _listify_string(context[policy_key]):
+                context_value_dt = _convert_timestamp_to_datetime_obj(context_value)
+                if block == 'DateGreaterThan':
+                    if context_value_dt > value_dt:
+                        return True
+                elif block == 'DateGreaterThanEquals':
+                    if context_value_dt >= value_dt:
+                        return True
+                elif block == 'DateLessThan':
+                    if context_value_dt < value_dt:
+                        return True
+                elif block == 'DateLessThanEquals':
+                    if context_value_dt <= value_dt:
+                        return True
+            return False
 
 
 def _convert_timestamp_to_datetime_obj(timestamp: str):
