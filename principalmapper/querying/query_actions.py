@@ -28,21 +28,20 @@ def argquery_response(session: botocore.session.Session, graph: Graph, principal
         for node in graph.nodes:
             if skip_admins:
                 if not node.is_admin:
-                    result.append(search_authorization_for(iamclient, graph, node, action_param, resource_param,
-                                                           condition_param, iamclient is not None, debug))
+                    result.append(
+                        search_authorization_for(graph, node, action_param, resource_param, condition_param, debug))
             else:
-                result.append(search_authorization_for(iamclient, graph, node, action_param, resource_param,
-                                                       condition_param, iamclient is not None, debug))
+                result.append(
+                    search_authorization_for(graph, node, action_param, resource_param, condition_param, debug))
 
     else:
         node = graph.get_node_by_searchable_name(principal_param)
         if skip_admins:
             if not node.is_admin:
-                result.append(search_authorization_for(iamclient, graph, node, action_param, resource_param,
-                                                       condition_param, iamclient is not None, debug))
+                result.append(
+                    search_authorization_for(graph, node, action_param, resource_param, condition_param, debug))
         else:
-            result.append(search_authorization_for(iamclient, graph, node, action_param, resource_param,
-                                                   condition_param, iamclient is not None, debug))
+            result.append(search_authorization_for(graph, node, action_param, resource_param, condition_param, debug))
 
     for query_result in result:
         query_result.write_result(action_param, resource_param, output)

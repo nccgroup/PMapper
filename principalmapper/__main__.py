@@ -160,8 +160,6 @@ def main():
 
     # TODO: Cross-Account subcommand
 
-    # TODO: Recommendations subcommand
-
     parsed_args = argument_parser.parse_args()
 
     dprint(parsed_args.debug, 'Debugging mode enabled.')

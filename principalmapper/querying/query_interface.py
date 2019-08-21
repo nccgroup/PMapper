@@ -1,5 +1,6 @@
 """Code for querying a graph about specific access to actions and resources in AWS"""
 
+import copy
 import datetime as dt
 
 from principalmapper.common.graphs import Graph
@@ -8,9 +9,8 @@ from principalmapper.querying.local_policy_simulation import *
 from principalmapper.querying.query_result import QueryResult
 
 
-def search_authorization_for(iamclient, graph: Graph, principal: Node, action_to_check: str, resource_to_check: str,
-                             condition_keys_to_check: dict, validate_with_api: bool = True,
-                             debug: bool = False) -> QueryResult:
+def search_authorization_for(graph: Graph, principal: Node, action_to_check: str, resource_to_check: str,
+                             condition_keys_to_check: dict, debug: bool = False) -> QueryResult:
     """Determines if the passed principal, or any principals it can access, can perform a given action for a
     given resource/condition."""
     if principal.is_admin:
@@ -52,7 +52,35 @@ def _infer_condition_keys(principal: Node, current_keys: dict) -> dict:
     if ':user/' in principal.arn and 'aws:username' not in current_keys:
         result['aws:username'] = principal.searchable_name().split('/')[1]
 
+    # TODO: Add aws:SecureTransport and aws:PrincipalArn ?
+
     return result
+
+
+def local_check_authorization_handling_mfa(principal: Node, action_to_check: str, resource_to_check: str,
+                                           condition_keys_to_check: dict, debug: bool = False) -> (bool, bool):
+    """Determine if a node is authorized to make an API call. If the node is an IAM User, it will perform authorization
+    checks with and without MFA enabled. It returns a (bool, bool) tuple: if the user was authorized and if MFA was
+    required for the authorization.
+    """
+
+    if ':role/' in principal.arn:  # TODO: aws:MultiFactorAuthPresent pass-through?
+        return local_check_authorization(principal, action_to_check, resource_to_check, condition_keys_to_check,
+                                         debug), False
+
+    if local_check_authorization(principal, action_to_check, resource_to_check, condition_keys_to_check, debug):
+        return True, False
+
+    new_condition_keys = copy.deepcopy(condition_keys_to_check)
+    new_condition_keys.update({
+        'aws:MultiFactorAuthAge': '1',
+        'aws:MultiFactorAuthPresent': 'true'
+    })
+
+    if local_check_authorization(principal, action_to_check, resource_to_check, new_condition_keys, debug):
+        return True, True
+
+    return False, False
 
 
 def local_check_authorization(principal: Node, action_to_check: str, resource_to_check: str,
@@ -63,14 +91,15 @@ def local_check_authorization(principal: Node, action_to_check: str, resource_to
     NOTE: this will add condition keys that it can infer, assuming they're not set already, such as aws:username or
     aws:userid.
     """
-    dprint(debug, 'testing for matching statement, principal: {}, action: {}, resource: {}, conditions: {}'.format(
+
+    condition_keys_to_check.update(_infer_condition_keys(principal, condition_keys_to_check))
+
+    dprint(debug, 'Testing authorization for: principal: {}, action: {}, resource: {}, conditions: {}'.format(
         principal.arn,
         action_to_check,
         resource_to_check,
         condition_keys_to_check
     ))
-
-    condition_keys_to_check.update(_infer_condition_keys(principal, condition_keys_to_check))
 
     # must have a matching Allow statement, otherwise it's an implicit deny
     if not has_matching_statement(principal, 'Allow', action_to_check, resource_to_check,

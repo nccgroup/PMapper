@@ -4,7 +4,9 @@ import unittest
 
 from tests.build_test_graphs import *
 from tests.build_test_graphs import _build_user_with_policy
-from principalmapper.querying.query_interface import local_check_authorization, has_matching_statement, _infer_condition_keys
+from principalmapper.common.nodes import Node
+from principalmapper.common.policies import Policy
+from principalmapper.querying.query_interface import local_check_authorization, local_check_authorization_handling_mfa, has_matching_statement, _infer_condition_keys
 
 
 class LocalQueryingTests(unittest.TestCase):
@@ -742,3 +744,108 @@ class LocalQueryingTests(unittest.TestCase):
                 True
             )
         )
+
+    def test_local_mfa_handling(self):
+        mfa_policy = Policy(
+            arn='arn:aws:iam::000000000000:policy/mfa_policy',
+            name='mfa_policy',
+            policy_doc={
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Sid": "AllowViewAccountInfo",
+                        "Effect": "Allow",
+                        "Action": "iam:ListVirtualMFADevices",
+                        "Resource": "*"
+                    },
+                    {
+                        "Sid": "AllowManageOwnVirtualMFADevice",
+                        "Effect": "Allow",
+                        "Action": [
+                            "iam:CreateVirtualMFADevice",
+                            "iam:DeleteVirtualMFADevice"
+                        ],
+                        "Resource": "arn:aws:iam::*:mfa/${aws:username}"
+                    },
+                    {
+                        "Sid": "AllowManageOwnUserMFA",
+                        "Effect": "Allow",
+                        "Action": [
+                            "iam:DeactivateMFADevice",
+                            "iam:EnableMFADevice",
+                            "iam:GetUser",
+                            "iam:ListMFADevices",
+                            "iam:ResyncMFADevice"
+                        ],
+                        "Resource": "arn:aws:iam::*:user/${aws:username}"
+                    },
+                    {
+                        "Sid": "DenyAllExceptListedIfNoMFA",
+                        "Effect": "Deny",
+                        "NotAction": [
+                            "iam:CreateVirtualMFADevice",
+                            "iam:EnableMFADevice",
+                            "iam:GetUser",
+                            "iam:ListMFADevices",
+                            "iam:ListVirtualMFADevices",
+                            "iam:ResyncMFADevice",
+                            "sts:GetSessionToken"
+                        ],
+                        "Resource": "*",
+                        "Condition": {
+                            "BoolIfExists": {"aws:MultiFactorAuthPresent": "false"}
+                        }
+                    }
+                ]
+            }
+        )
+        s3_policy = Policy(
+            'arn:aws:iam::000000000000:policy/s3access',
+            's3access',
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Sid": "AllowViewAccountInfo",
+                        "Effect": "Allow",
+                        "Action": "s3:ListAllMyBuckets",
+                        "Resource": "*"
+                    }
+                ]
+            }
+        )
+        test_node = Node(
+            'arn:aws:iam::000000000000:user/uses_mfa',
+            'AIDA00000000000000000',
+            [mfa_policy, s3_policy],
+            [],
+            None,
+            None,
+            1,
+            False,
+            False
+        )
+        print(mfa_policy.to_dictionary())
+        print(s3_policy.to_dictionary())
+        print(test_node.to_dictionary())
+        auth_result, mfa_result = local_check_authorization_handling_mfa(
+            test_node,
+            's3:ListAllMyBuckets',
+            '*',
+            {},
+            True
+        )
+
+        self.assertTrue(auth_result)
+        self.assertTrue(mfa_result)
+
+        auth_result, mfa_result = local_check_authorization_handling_mfa(
+            test_node,
+            'iam:EnableMFADevice',
+            'arn:aws:iam::000000000000:user/uses_mfa',
+            {},
+            True
+        )
+
+        self.assertFalse(mfa_result)
+        self.assertTrue(auth_result)

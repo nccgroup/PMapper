@@ -10,19 +10,19 @@ from typing import List, Dict, Optional, Union
 import re
 
 from principalmapper.common.nodes import Node
+from principalmapper.common.policies import Policy
 from principalmapper.util.debug_print import dprint
 from principalmapper.util import arns
 
 
 def has_matching_statement(principal: Node, effect_value: str, action_to_check: str,
                            resource_to_check: str, condition_keys_to_check: dict, debug: bool = False) -> bool:
-    """Locally determine if a node's attached policies has at least one matching statement with the given effect. This
-    is the meat of the local policy evaluation.
+    """Locally determine if a node's attached policies (and group's policies if applicable) has at least one matching
+    statement with the given effect. This is the meat of the local policy evaluation.
     """
     dprint(
         debug,
-        'local test for matching statement, principal: {}, effect: {}, action: {}, resource: {}, conditions: {}'.format(
-            principal.arn,
+        '   Looking for statement match - effect: {}, action: {}, resource: {}, conditions: {}'.format(
             effect_value,
             action_to_check,
             resource_to_check,
@@ -30,54 +30,75 @@ def has_matching_statement(principal: Node, effect_value: str, action_to_check: 
         )
     )
 
-    # For each policy...
     for policy in principal.attached_policies:
-        # go through each policy_doc
-        for statement in _listify_dictionary(policy.policy_doc['Statement']):
-            if statement['Effect'] != effect_value:
-                continue  # skip if effect doesn't match
+        if policy_has_matching_statement(policy, effect_value, action_to_check, resource_to_check,
+                                         condition_keys_to_check, debug):
+            return True
 
-            matches_action, matches_resource, matches_condition = False, False, False
-
-            # start by checking the action
-            if 'Action' in statement:
-                for action in _listify_string(statement['Action']):
-                    matches_action = _matches_after_expansion(action_to_check, action, debug=debug)
-                    break
-            else:  # 'NotAction' in statement
-                matches_action = True
-                for notaction in _listify_string(statement['NotAction']):
-                    if _matches_after_expansion(action_to_check, notaction, debug=debug):
-                        matches_action = False
-                        break  # finish looping
-            if not matches_action:
-                continue  # cut early
-
-            # if action is good, check resource
-            if 'Resource' in statement:
-                for resource in _listify_string(statement['Resource']):
-                    if _matches_after_expansion(resource_to_check, resource, condition_keys_to_check, debug=debug):
-                        matches_resource = True
-                        break
-            elif 'NotResource' in statement:  # 'NotResource' in statement
-                matches_resource = True
-                for notresource in _listify_string(statement['NotResource']):
-                    if _matches_after_expansion(resource_to_check, notresource, condition_keys_to_check, debug=debug):
-                        matches_resource = False
-                        break
-            else:
-                matches_resource = True  # TODO: examine validity of not using a Resource/NotResource field (trust docs)
-            if not matches_resource:
-                continue  # cut early
-
-            # if resource is good, check condition
-            if 'Condition' in statement:
-                matches_condition = _get_condition_match(statement['Condition'], condition_keys_to_check, debug)
-            else:
-                matches_condition = True
-
-            if matches_action and matches_resource and matches_condition:
+    for group in principal.group_memberships:
+        for policy in group.attached_policies:
+            if policy_has_matching_statement(policy, effect_value, action_to_check, resource_to_check,
+                                             condition_keys_to_check, debug):
                 return True
+
+    return False
+
+
+def policy_has_matching_statement(policy: Policy, effect_value: str, action_to_check: str, resource_to_check: str,
+                                  condition_keys_to_check: dict, debug: bool = False) -> bool:
+    """Searches a specific Policy object"""
+
+    dprint(debug, 'looking at policy named: {}\n'.format(policy.name))
+
+    # go through each policy_doc
+    for statement in _listify_dictionary(policy.policy_doc['Statement']):
+        if statement['Effect'] != effect_value:
+            continue  # skip if effect doesn't match
+
+        dprint(debug, 'Checking statement: {}\n'.format(str(statement)))
+
+        matches_action, matches_resource, matches_condition = False, False, False
+
+        # start by checking the action
+        if 'Action' in statement:
+            for action in _listify_string(statement['Action']):
+                if _matches_after_expansion(action_to_check, action, debug=debug):
+                    matches_action = True
+                    break
+        else:  # 'NotAction' in statement
+            matches_action = True
+            for notaction in _listify_string(statement['NotAction']):
+                if _matches_after_expansion(action_to_check, notaction, debug=debug):
+                    matches_action = False
+                    break  # finish looping
+        if not matches_action:
+            continue  # cut early
+
+        # if action is good, check resource
+        if 'Resource' in statement:
+            for resource in _listify_string(statement['Resource']):
+                if _matches_after_expansion(resource_to_check, resource, condition_keys_to_check, debug=debug):
+                    matches_resource = True
+                    break
+        elif 'NotResource' in statement:  # 'NotResource' in statement
+            matches_resource = True
+            for notresource in _listify_string(statement['NotResource']):
+                if _matches_after_expansion(resource_to_check, notresource, condition_keys_to_check, debug=debug):
+                    matches_resource = False
+                    break
+        else:
+            matches_resource = True  # TODO: examine validity of not using a Resource/NotResource field (trust docs)
+        if not matches_resource:
+            continue  # cut early
+
+        # if resource is good, check condition
+        if 'Condition' in statement:
+            matches_condition = _get_condition_match(statement['Condition'], condition_keys_to_check, debug)
+        else:
+            matches_condition = True
+
+        if matches_action and matches_resource and matches_condition:
+            return True
 
     return False
 
