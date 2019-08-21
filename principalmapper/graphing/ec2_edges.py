@@ -18,10 +18,6 @@ class EC2EdgeChecker(EdgeChecker):
     def return_edges(self, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
         """Fulfills expected method return_edges. If session object is None, runs checks in offline mode."""
         result = []
-        if self.session is not None:
-            iamclient = self.session.create_client('iam')
-        else:
-            iamclient = None
 
         for node_source in nodes:
             for node_destination in nodes:
@@ -37,9 +33,9 @@ class EC2EdgeChecker(EdgeChecker):
                 if ':user/' in node_destination.arn:
                     continue
 
-                # check that the destination role can be assumed by Lambda
+                # check that the destination role can be assumed by EC2
                 sim_result = resource_policy_authorization(
-                    'lambda.amazonaws.com',
+                    'ec2.amazonaws.com',
                     arns.get_account_id(node_source.arn),
                     node_destination.trust_policy,
                     'sts:AssumeRole',
@@ -53,19 +49,32 @@ class EC2EdgeChecker(EdgeChecker):
 
                 # check if source can pass the destination role
                 condition_keys = {'iam:PassedToService': 'ec2.amazonaws.com'}
-                if not query_interface.local_check_authorization(node_source, 'iam:PassRole', node_destination.arn,
-                                                                 condition_keys, debug):
-                    continue  # source can't pass the destination role, which is checked at launch or association
+                pass_role_auth, need_mfa_to_pass = query_interface.local_check_authorization_handling_mfa(
+                    node_source,
+                    'iam:PassRole',
+                    node_destination.arn,
+                    condition_keys,
+                    debug
+                )
+                if not pass_role_auth:
+                    continue  # source can't pass the role to use it
 
                 # check if destination has an instance profile, if not: check if source can create it
-                if node_destination.trust_policy is None:
-                    if not query_interface.local_check_authorization(node_source, 'iam:CreateInstanceProfile', '*', {},
-                                                                     debug):
-                        continue  # destination doesn't have an instance profile, source can't make one
+                need_mfa_for_ip = False
+                if node_destination.instance_profile is None:
+                    create_ip_auth, need_mfa_0 = query_interface.local_check_authorization_handling_mfa(
+                        node_source, 'iam:CreateInstanceProfile', '*', {}, debug)
+                    if not create_ip_auth:
+                        continue  # node_source can't make the instance profile
+                    if need_mfa_0:
+                        need_mfa_for_ip = True
 
-                    if not query_interface.local_check_authorization(node_source, 'iam:AddRoleToInstanceProfile',
-                                                                     node_destination.arn, {}, debug):
-                        continue  # source can make an instance profile but cannot attach it
+                    create_ip_auth, need_mfa_0 = query_interface.local_check_authorization_handling_mfa(
+                        node_source, 'iam:AddRoleToInstanceProfile', node_destination.arn, {}, debug)
+                    if not create_ip_auth:
+                        continue  # node_source can't attach a new instance profile to node_destination
+                    if need_mfa_0:
+                        need_mfa_for_ip = True
 
                 # check if source can run an instance with the instance profile condition, add edge if so and continue
                 iprofile = node_destination.instance_profile if node_destination.instance_profile is not None else '*'

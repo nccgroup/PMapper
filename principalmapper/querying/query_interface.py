@@ -72,10 +72,10 @@ def local_check_authorization_handling_mfa(principal: Node, action_to_check: str
         return True, False
 
     new_condition_keys = copy.deepcopy(condition_keys_to_check)
-    new_condition_keys.update({
-        'aws:MultiFactorAuthAge': '1',
-        'aws:MultiFactorAuthPresent': 'true'
-    })
+    if 'aws:MultiFactorAuthAge' not in new_condition_keys:
+        new_condition_keys.update({'aws:MultiFactorAuthAge': '1'})
+    if 'aws:MultiFactorAuthPresent' not in new_condition_keys:
+        new_condition_keys.update({'aws:MultiFactorAuthPresent': 'true'})
 
     if local_check_authorization(principal, action_to_check, resource_to_check, new_condition_keys, debug):
         return True, True

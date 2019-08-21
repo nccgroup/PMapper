@@ -114,17 +114,6 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
     """
     for block in condition.keys():
         dprint(debug, 'Testing condition field: {}'.format(block))
-        # Start by handling ...IfExists
-        # If our passed context doesn't have the condition key, we can skip since it doesn't exist
-        if block.endswith('IfExists'):
-            can_skip = True
-            for policy_context_key in condition[block]:
-                if policy_context_key in context.keys():
-                    can_skip = False
-                    break
-
-            if can_skip:
-                continue
 
         # String operators
         if 'String' in block:
@@ -375,9 +364,11 @@ def _get_str_match(block: str, policy_key: str, policy_value: Union[str, List[st
         policy_key, policy_value, context, block
     ))
 
+    if_exists_op = 'IfExists' in block
+
     if 'StringEquals' in block:
         if policy_key not in context:
-            return False
+            return if_exists_op
         for value in _listify_string(policy_value):
             for context_value in _listify_string(context[policy_key]):
                 if 'IgnoreCase' in block:
@@ -389,7 +380,7 @@ def _get_str_match(block: str, policy_key: str, policy_value: Union[str, List[st
         return False
     elif 'StringLike' in block:
         if policy_key not in context:
-            return False
+            return if_exists_op
         for value in _listify_string(policy_value):
             for context_value in _listify_string(context[policy_key]):
                 if _expand_str_and_compare(value, context_value):
@@ -409,7 +400,7 @@ def _get_str_match(block: str, policy_key: str, policy_value: Union[str, List[st
         return True
     elif 'StringNotLike' in block:
         if policy_key not in context:
-            return True
+            return if_exists_op
         for value in _listify_string(policy_value):
             for context_value in _listify_string(context[policy_key]):
                 if _expand_str_and_compare(value, context_value):
@@ -446,9 +437,11 @@ def _get_num_match(block: str, policy_key: str, policy_value: Union[str, List[st
         policy_key, policy_value, context, block
     ))
 
+    if_exists_op = 'IfExists' in block
+
     if block == 'NumericEquals':
         if policy_key not in context:
-            return False
+            return if_exists_op
         for value in _listify_string(policy_value):
             value_num = ast.literal_eval(value)
             for context_value in _listify_string(context[policy_key]):
@@ -468,7 +461,7 @@ def _get_num_match(block: str, policy_key: str, policy_value: Union[str, List[st
         return True
     else:
         if policy_key not in context:
-            return False
+            return if_exists_op
         for value in _listify_string(policy_value):
             value_num = ast.literal_eval(value)
             for context_value in _listify_string(context[policy_key]):
@@ -498,8 +491,10 @@ def _get_bool_match(block: str, policy_key: str, policy_value: Union[str, List[s
         policy_key, policy_value, context, block
     ))
 
+    if_exists_op = 'IfExists' in block
+
     if policy_key not in context:
-        return False
+        return if_exists_op
 
     for value in _listify_string(policy_value):
         for context_value in _listify_string(context[policy_key]):

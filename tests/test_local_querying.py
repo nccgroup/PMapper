@@ -753,21 +753,6 @@ class LocalQueryingTests(unittest.TestCase):
                 "Version": "2012-10-17",
                 "Statement": [
                     {
-                        "Sid": "AllowViewAccountInfo",
-                        "Effect": "Allow",
-                        "Action": "iam:ListVirtualMFADevices",
-                        "Resource": "*"
-                    },
-                    {
-                        "Sid": "AllowManageOwnVirtualMFADevice",
-                        "Effect": "Allow",
-                        "Action": [
-                            "iam:CreateVirtualMFADevice",
-                            "iam:DeleteVirtualMFADevice"
-                        ],
-                        "Resource": "arn:aws:iam::*:mfa/${aws:username}"
-                    },
-                    {
                         "Sid": "AllowManageOwnUserMFA",
                         "Effect": "Allow",
                         "Action": [
@@ -825,9 +810,34 @@ class LocalQueryingTests(unittest.TestCase):
             False,
             False
         )
+
         print(mfa_policy.to_dictionary())
         print(s3_policy.to_dictionary())
         print(test_node.to_dictionary())
+
+        # Test that lack of MFA conditions is not allowed (note the function call diff)
+        # This matches policy sim feedback
+        auth_result = local_check_authorization(
+            test_node,
+            's3:ListAllMyBuckets',
+            '*',
+            {},
+            True
+        )
+        self.assertFalse(auth_result)
+
+        # Test that MFA set to false is disallowed
+        auth_result, mfa_result = local_check_authorization_handling_mfa(
+            test_node,
+            's3:ListAllMyBuckets',
+            '*',
+            {'aws:MultiFactorAuthPresent': 'false'},
+            True
+        )
+        self.assertFalse(auth_result)
+        self.assertFalse(mfa_result)
+
+        # Test that testing both with and without MFA yields correct results
         auth_result, mfa_result = local_check_authorization_handling_mfa(
             test_node,
             's3:ListAllMyBuckets',
@@ -835,10 +845,10 @@ class LocalQueryingTests(unittest.TestCase):
             {},
             True
         )
-
         self.assertTrue(auth_result)
         self.assertTrue(mfa_result)
 
+        # Test that iam:EnableMFADevice is allowed despite lack of MFA
         auth_result, mfa_result = local_check_authorization_handling_mfa(
             test_node,
             'iam:EnableMFADevice',

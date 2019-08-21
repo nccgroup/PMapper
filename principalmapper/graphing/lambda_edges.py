@@ -76,7 +76,8 @@ class LambdaEdgeChecker(EdgeChecker):
                 can_pass_role, need_mfa_passrole = query_interface.local_check_authorization_handling_mfa(
                     node_source,
                     'iam:PassRole',
-                    node_destination.arn, {
+                    node_destination.arn,
+                    {
                         'iam:PassedToService': 'lambda.amazonaws.com'
                     },
                     debug
