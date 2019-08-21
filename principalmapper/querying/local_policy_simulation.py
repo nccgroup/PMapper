@@ -539,11 +539,13 @@ def _get_ipaddress_match(block: str, policy_key: str, policy_value: Union[str, L
         policy_key, policy_value, context, block
     ))
 
+    if_exists_op = 'IfExists' in block
+
     for value in _listify_string(policy_value):
         value_net = ipaddress.ip_network(value)
         if block == 'IpAddress':
             if policy_key not in context:
-                return False
+                return if_exists_op
             for context_value in _listify_string(context[policy_key]):
                 context_value_addr = ipaddress.ip_address(context_value)
                 if context_value_addr in value_net:
@@ -575,11 +577,13 @@ def _get_date_match(block: str, policy_key: str, policy_value: Union[str, List[s
         policy_key, policy_value, context, block
     ))
 
+    if_exists_op = 'IfExists' in block
+
     for value in _listify_string(policy_value):
         value_dt = _convert_timestamp_to_datetime_obj(value)
         if block == 'DateEquals':
             if policy_key not in context:
-                return False
+                return if_exists_op
             for context_value in _listify_string(context[policy_key]):
                 context_value_dt = _convert_timestamp_to_datetime_obj(context_value)
                 if value_dt == context_value_dt:
@@ -593,7 +597,7 @@ def _get_date_match(block: str, policy_key: str, policy_value: Union[str, List[s
                     return False
         else:  # block == 'DateGreaterThan' or 'DateGreaterThanEquals' or 'DateLessThan' or 'DateLessThanEquals'
             if policy_key not in context:
-                return False
+                return if_exists_op
             for context_value in _listify_string(context[policy_key]):
                 context_value_dt = _convert_timestamp_to_datetime_obj(context_value)
                 if block == 'DateGreaterThan':
@@ -638,6 +642,8 @@ def _get_arn_match(block: str, policy_key: str, policy_value: Union[str, List[st
         policy_key, policy_value, context, block
     ))
 
+    if_exists_op = 'IfExists' in block
+
     for value in _listify_string(policy_value):
         if 'Not' in block:
             if policy_key not in context:
@@ -649,7 +655,7 @@ def _get_arn_match(block: str, policy_key: str, policy_value: Union[str, List[st
                     return False
         else:
             if policy_key not in context:
-                return False
+                return if_exists_op
             for context_value in _listify_string(context[policy_key]):
                 if not arns.validate_arn(context_value):
                     continue  # skip invalid arns
