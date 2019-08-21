@@ -53,6 +53,8 @@ class LocalQueryingTests(unittest.TestCase):
             Note, ArnEquals and ArnLike have the same behavior, as well as ArnNotEquals and ArnNotLike
 
             Validated against the Simulator API
+
+            TODO: Check on ForAnyValue and ForAllValues
         """
 
         # ArnEquals (and ArnLike) testing: no wildcards
@@ -321,6 +323,8 @@ class LocalQueryingTests(unittest.TestCase):
             DateLessThanEquals
             DateGreaterThan
             DateGreaterThanEquals
+
+            TODO: Check on ForAnyValue and ForAllValues
         """
         # DateEquals
         test_node_date_equals = _build_user_with_policy(
@@ -474,6 +478,8 @@ class LocalQueryingTests(unittest.TestCase):
         """ Validate the following conditions are handled:
             * IpAddress
             * NotIpAddress
+
+            TODO: Check on ForAnyValue and ForAllValues
         """
         # IpAddress: single IP
         test_node_ipaddress = _build_user_with_policy(
@@ -546,3 +552,193 @@ class LocalQueryingTests(unittest.TestCase):
         self.assertFalse(local_check_authorization(test_node_ipaddress, 'iam:CreateUser', '*',
                                                   {'aws:SourceIp': '192.168.0.1'}, True))
 
+    def test_bool_condition_handling(self):
+        """ Validate the following conditions are handled:
+            * Bool
+
+            TODO: Check on ForAnyValue and ForAllValues
+        """
+        # Bool: true
+        test_node_true = _build_user_with_policy(
+            {
+                'Version': '2012-10-17',
+                'Statement': [
+                    {
+                        'Effect': 'Allow',
+                        'Action': '*',
+                        'Resource': '*',
+                        'Condition': {
+                            'Bool': {
+                                'aws:SecureTransport': 'true'
+                            }
+                        }
+                    }
+                ]
+            }
+        )
+        self.assertTrue(local_check_authorization(test_node_true, 'iam:CreateUser', '*',
+                                                  {'aws:SecureTransport': 'true'}, True))
+        self.assertTrue(local_check_authorization(test_node_true, 'iam:CreateUser', '*',
+                                                  {'aws:SecureTransport': 'True'}, True))
+        self.assertFalse(local_check_authorization(test_node_true, 'iam:CreateUser', '*',
+                                                  {'aws:SecureTransport': 'tru'}, True))
+        self.assertFalse(local_check_authorization(test_node_true, 'iam:CreateUser', '*',
+                                                   {'aws:SecureTransport': ''}, True))
+        self.assertFalse(local_check_authorization(test_node_true, 'iam:CreateUser', '*',
+                                                   {'aws:SecureTransport': 'false'}, True))
+
+        # Bool: false
+        test_node_false = _build_user_with_policy(
+            {
+                'Version': '2012-10-17',
+                'Statement': [
+                    {
+                        'Effect': 'Allow',
+                        'Action': '*',
+                        'Resource': '*',
+                        'Condition': {
+                            'Bool': {
+                                'aws:SecureTransport': 'false'
+                            }
+                        }
+                    }
+                ]
+            }
+        )
+        self.assertTrue(local_check_authorization(test_node_false, 'iam:CreateUser', '*',
+                                                  {'aws:SecureTransport': 'false'}, True))
+        self.assertFalse(local_check_authorization(test_node_false, 'iam:CreateUser', '*',
+                                                   {'aws:SecureTransport': 'true'}, True))
+        self.assertTrue(local_check_authorization(test_node_false, 'iam:CreateUser', '*',
+                                                   {'aws:SecureTransport': 'asdf'}, True))  # policy sim behavior
+        self.assertTrue(local_check_authorization(test_node_false, 'iam:CreateUser', '*',
+                                                  {'aws:SecureTransport': 't'}, True))
+
+    def test_documented_ddb_authorization_behavior(self):
+        test_node = _build_user_with_policy(
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": "dynamodb:GetItem",
+                        "Resource": "arn:aws:dynamodb:*:*:table/Thread",
+                        "Condition": {
+                            "ForAllValues:StringEquals": {
+                                "dynamodb:Attributes": [
+                                    "ID",
+                                    "Message",
+                                    "Tags"
+                                ]
+                            }
+                        }
+                    }
+                ]
+            }
+        )
+        self.assertTrue(
+            local_check_authorization(
+                test_node,
+                'dynamodb:GetItem',
+                'arn:aws:dynamodb:us-west-2:000000000000:table/Thread',
+                {
+                    'dynamodb:Attributes': ['ID', 'Message', 'Tags']
+                },
+                True
+            )
+        )
+        self.assertTrue(
+            local_check_authorization(
+                test_node,
+                'dynamodb:GetItem',
+                'arn:aws:dynamodb:us-west-2:000000000000:table/Thread',
+                {
+                    'dynamodb:Attributes': ['ID', 'Message']
+                },
+                True
+            )
+        )
+        self.assertTrue(
+            local_check_authorization(
+                test_node,
+                'dynamodb:GetItem',
+                'arn:aws:dynamodb:us-west-2:000000000000:table/Thread',
+                {},
+                True
+            )
+        )
+        self.assertFalse(
+            local_check_authorization(
+                test_node,
+                'dynamodb:GetItem',
+                'arn:aws:dynamodb:us-west-2:000000000000:table/Thread',
+                {
+                    'dynamodb:Attributes': ['ID', 'Message', 'Tags', 'Password']
+                },
+                True
+            )
+        )
+
+        test_node = _build_user_with_policy(
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": "dynamodb:GetItem",
+                        "Resource": "arn:aws:dynamodb:*:*:table/Thread",
+                        "Condition": {
+                            "ForAnyValue:StringEquals": {
+                                "dynamodb:Attributes": [
+                                    "ID",
+                                    "Message",
+                                    "Tags"
+                                ]
+                            }
+                        }
+                    }
+                ]
+            }
+        )
+        self.assertTrue(
+            local_check_authorization(
+                test_node,
+                'dynamodb:GetItem',
+                'arn:aws:dynamodb:us-west-2:000000000000:table/Thread',
+                {
+                    'dynamodb:Attributes': ['ID', 'Message', 'Tags',]
+                },
+                True
+            )
+        )
+        self.assertTrue(
+            local_check_authorization(
+                test_node,
+                'dynamodb:GetItem',
+                'arn:aws:dynamodb:us-west-2:000000000000:table/Thread',
+                {
+                    'dynamodb:Attributes': ['Tags', 'Password']
+                },
+                True
+            )
+        )
+        self.assertFalse(
+            local_check_authorization(
+                test_node,
+                'dynamodb:GetItem',
+                'arn:aws:dynamodb:us-west-2:000000000000:table/Thread',
+                {
+                    'dynamodb:Attributes': ['Password']
+                },
+                True
+            )
+        )
+        self.assertFalse(
+            local_check_authorization(
+                test_node,
+                'dynamodb:GetItem',
+                'arn:aws:dynamodb:us-west-2:000000000000:table/Thread',
+                {},
+                True
+            )
+        )

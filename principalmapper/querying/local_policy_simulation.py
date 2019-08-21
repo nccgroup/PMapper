@@ -1,6 +1,7 @@
 """Utility code for the querying module: creates functions for simulating the authorization of principals making
 API calls to AWS."""
 
+import ast
 import datetime as dt
 import dateutil.parser as dup
 from enum import Enum
@@ -18,14 +19,16 @@ def has_matching_statement(principal: Node, effect_value: str, action_to_check: 
     """Locally determine if a node's attached policies has at least one matching statement with the given effect. This
     is the meat of the local policy evaluation.
     """
-    dprint(debug, 'local test for matching statement, principal: {}, effect: {}, action: {}, resource: {}, '
-                  'conditions: {}'.format(
-        principal.arn,
-        effect_value,
-        action_to_check,
-        resource_to_check,
-        condition_keys_to_check
-    ))
+    dprint(
+        debug,
+        'local test for matching statement, principal: {}, effect: {}, action: {}, resource: {}, conditions: {}'.format(
+            principal.arn,
+            effect_value,
+            action_to_check,
+            resource_to_check,
+            condition_keys_to_check
+        )
+    )
 
     # For each policy...
     for policy in principal.attached_policies:
@@ -105,11 +108,62 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
         # String operators
         if 'String' in block:
             # string comparison after expansion
-            pass
+            if block.startswith('ForAllValues:'):
+                # fail to match unless all of the provided context values match
+                for policy_key in condition[block]:
+                    if policy_key in context.keys():
+                        for context_value in _listify_string(context[policy_key]):
+                            if context_value != '':
+                                if not _get_str_match(
+                                        block,
+                                        policy_key,
+                                        condition[block][policy_key],
+                                        {policy_key: context_value},
+                                        debug):
+                                    return False
+            elif block.startswith('ForAnyValue:'):
+                # fail to match unless at least one of the provided context values match
+                no_match = True
+                for policy_key in condition[block]:
+                    if policy_key in context.keys():
+                        for context_value in _listify_string(context[policy_key]):
+                            if context_value != '':
+                                if _get_str_match(block, policy_key, condition[block][policy_key], context, debug):
+                                    no_match = False
+                if no_match:
+                    return False
+            else:
+                for policy_context_key in condition[block]:
+                    if not _get_str_match(block, policy_context_key, condition[block][policy_context_key], context,
+                                          debug):
+                        return False
 
         if 'Numeric' in block:
             # convert string to int and compare (floats allowed? how to handle?)
-            pass
+            if block.startswith('ForAllValues:'):
+                # fail to match unless all of the provided context values match
+                for policy_key in condition[block]:
+                    if policy_key in context.keys():
+                        for context_value in _listify_string(context[policy_key]):
+                            if context_value != '':
+                                if not _get_num_match(block, policy_key, condition[block][policy_key], context, debug):
+                                    return False
+            elif block.startswith('ForAnyValue:'):
+                # fail to match unless at least one of the provided context values match
+                no_match = True
+                for policy_key in condition[block]:
+                    if policy_key in context.keys():
+                        for context_value in _listify_string(context[policy_key]):
+                            if context_value != '':
+                                if _get_num_match(block, policy_key, condition[block][policy_key], context, debug):
+                                    no_match = False
+                if no_match:
+                    return False
+            else:
+                for policy_context_key in condition[block]:
+                    if not _get_num_match(block, policy_context_key, condition[block][policy_context_key], context,
+                                          debug):
+                        return False
 
         if 'Date' in block:
             # need the datetime and dateutil module to do this, do everything in UTC where undefined
@@ -139,12 +193,61 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                         return False
 
         if 'Bool' in block:
-            # straight string comparison
-            pass
-
+            # boolean comparison
+            if block.startswith('ForAllValues:'):
+                # fail to match unless all of the provided context values match
+                for policy_key in condition[block]:
+                    if policy_key in context.keys():
+                        for context_value in _listify_string(context[policy_key]):
+                            if context_value != '':
+                                if not _get_bool_match(block, policy_key, condition[block][policy_key], context,
+                                                       debug):
+                                    return False
+            elif block.startswith('ForAnyValue:'):
+                # fail to match unless at least one of the provided context values match
+                no_match = True
+                for policy_key in condition[block]:
+                    if policy_key in context.keys():
+                        for context_value in _listify_string(context[policy_key]):
+                            if context_value != '':
+                                if _get_bool_match(block, policy_key, condition[block][policy_key], context,
+                                                   debug):
+                                    no_match = False
+                if no_match:
+                    return False
+            else:
+                for policy_context_key in condition[block]:
+                    if not _get_bool_match(block, policy_context_key, condition[block][policy_context_key],
+                                           context, debug):
+                        return False
         if 'BinaryEquals' in block:
             # straight string comparison
-            pass
+            if block.startswith('ForAllValues:'):
+                # fail to match unless all of the provided context values match
+                for policy_key in condition[block]:
+                    if policy_key in context.keys():
+                        for context_value in _listify_string(context[policy_key]):
+                            if context_value != '':
+                                if not _get_straight_str_match(block, policy_key, condition[block][policy_key], context,
+                                                               debug):
+                                    return False
+            elif block.startswith('ForAnyValue:'):
+                # fail to match unless at least one of the provided context values match
+                no_match = True
+                for policy_key in condition[block]:
+                    if policy_key in context.keys():
+                        for context_value in _listify_string(context[policy_key]):
+                            if context_value != '':
+                                if _get_straight_str_match(block, policy_key, condition[block][policy_key], context,
+                                                           debug):
+                                    no_match = False
+                if no_match:
+                    return False
+            else:
+                for policy_context_key in condition[block]:
+                    if not _get_straight_str_match(block, policy_context_key, condition[block][policy_context_key],
+                                                   context, debug):
+                        return False
 
         if 'IpAddress' in block:
             # need ipaddress module, use ipaddress.ip_address in <ipaddress.ip_network obj>
@@ -231,8 +334,186 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
     return True
 
 
+def _get_str_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict,
+                   debug: bool = False):
+    """Helper method for dealing with String* conditions, including: StringEquals, StringNotEquals,
+    StringEqualsIgnoreCase, StringNotEqualsIgnoreCase, StringLike, StringNotLike
+
+    Observed policy simulator behavior for *IgnoreCase: if I compare the following, it returns denied:
+
+    * ê <- 'LATIN SMALL LETTER E WITH CIRCUMFLEX'
+    * ê <- 'LATIN SMALL LETTER E' + 'COMBINING CIRCUMFLEX ACCENT'
+
+    So even though they're the "same" they end up not matching. Just using casefold() on the strings is enough to match
+    the policy simulator behavior without having to dip into the insanity of unicode.
+
+    Many thanks to https://stackoverflow.com/a/29247821 for helping this code on this journey.
+    """
+
+    dprint(debug, 'Checking {} for value {} with context {}, condition element {}'.format(
+        policy_key, policy_value, context, block
+    ))
+
+    if 'StringEquals' in block:
+        if policy_key not in context:
+            return False
+        for value in _listify_string(policy_value):
+            for context_value in _listify_string(context[policy_key]):
+                if 'IgnoreCase' in block:
+                    if value.casefold() == context_value.casefold():
+                        return True
+                else:
+                    if value == context_value:
+                        return True
+        return False
+    elif 'StringLike' in block:
+        if policy_key not in context:
+            return False
+        for value in _listify_string(policy_value):
+            for context_value in _listify_string(context[policy_key]):
+                if _expand_str_and_compare(value, context_value):
+                    return True
+        return False
+    elif 'StringNotEquals' in block:
+        if policy_key not in context:
+            return True
+        for value in _listify_string(policy_value):
+            for context_value in _listify_string(context[policy_key]):
+                if 'IgnoreCase' in block:
+                    if value.casefold() == context_value.casefold():
+                        return False
+                else:
+                    if value == context_value:
+                        return False
+        return True
+    elif 'StringNotLike' in block:
+        if policy_key not in context:
+            return True
+        for value in _listify_string(policy_value):
+            for context_value in _listify_string(context[policy_key]):
+                if _expand_str_and_compare(value, context_value):
+                    return False
+        return True
+
+
+def _expand_str_and_compare(pattern: str, input_value: str) -> bool:
+    """Helper method for string comparison for *Like string conditions. Takes a Unicode pattern string,
+    replaces the asterisk and question mark with regex-equivalents, then test if input_value if found in that pattern.
+    Returns result.
+
+    Note: Docs say that *Like conditions are case-sensitive
+    """
+    pattern_string = pattern \
+        .replace(".", "\\.") \
+        .replace("*", ".*") \
+        .replace("?", ".") \
+        .replace("$", "\\$") \
+        .replace("^", "\\^")
+    pattern_string = "^{}$".format(pattern_string)
+    return re.match(pattern_string, input_value, flags=re.UNICODE) is not None
+
+
+def _get_num_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict,
+                   debug: bool = False) -> bool:
+    """Helper method for dealing with Numeric* conditions, including: NumericEquals, NumericNotEquals,
+    NumericLessThan, NumericLessThanEquals, NumericGreaterThan, NumericGreaterThanEquals
+
+    Parses the string inputs into numbers before doing comparisons.
+    """
+
+    dprint(debug, 'Checking {} for value {} with context {}, condition element {}'.format(
+        policy_key, policy_value, context, block
+    ))
+
+    if block == 'NumericEquals':
+        if policy_key not in context:
+            return False
+        for value in _listify_string(policy_value):
+            value_num = ast.literal_eval(value)
+            for context_value in _listify_string(context[policy_key]):
+                context_value_num = ast.literal_eval(context_value)
+                if value_num == context_value_num:
+                    return True
+        return False
+    elif block == 'NumericNotEquals':
+        if policy_key not in context:
+            return True
+        for value in _listify_string(policy_value):
+            value_num = ast.literal_eval(value)
+            for context_value in _listify_string(context[policy_key]):
+                context_value_num = ast.literal_eval(context_value)
+                if value_num == context_value_num:
+                    return False
+        return True
+    else:
+        if policy_key not in context:
+            return False
+        for value in _listify_string(policy_value):
+            value_num = ast.literal_eval(value)
+            for context_value in _listify_string(context[policy_key]):
+                context_value_num = ast.literal_eval(context_value)
+                if block == 'NumericLessThan':
+                    if context_value_num < value_num:
+                        return True
+                elif block == 'NumericLessThanEquals':
+                    if context_value_num <= value_num:
+                        return True
+                elif block == 'NumericGreaterThan':
+                    if context_value_num > value_num:
+                        return True
+                elif block == 'NumericGreaterThanEquals':
+                    if context_value_num >= value_num:
+                        return True
+        return False
+
+
+def _get_bool_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict,
+                    debug: bool = False) -> bool:
+    """Helper method for dealing with Bool. For 'true' policy values, returns True if context has 'true' as a value. For
+    'false' policy values, returns True if context has value that's not 'true'. Returns False if no context value.
+    """
+
+    dprint(debug, 'Checking {} for value {} with context {}, condition element {}'.format(
+        policy_key, policy_value, context, block
+    ))
+
+    if policy_key not in context:
+        return False
+
+    for value in _listify_string(policy_value):
+        for context_value in _listify_string(context[policy_key]):
+            if value == 'true' and context_value.lower() == 'true':
+                return True
+            if value == 'false' and context_value.lower() != 'true':
+                return True
+
+    return False
+
+
+def _get_straight_str_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict,
+                            debug: bool = False) -> bool:
+    """Helper method for dealing with BinaryEquals
+
+    Does a straight string comparison to search for a match.
+    """
+    dprint(debug, 'Checking {} for value {} with context {}, condition element {}'.format(
+        policy_key, policy_value, context, block
+    ))
+
+    # can knock this out up here
+    if policy_key not in context:
+        return False
+
+    for value in _listify_string(policy_value):
+        for context_value in _listify_string(context[policy_key]):
+            if value == context_value:
+                return True
+
+    return False
+
+
 def _get_ipaddress_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict,
-                         debug: bool = False):
+                         debug: bool = False) -> bool:
     """Helper method for dealing with *IpAddress conditions: IpAddress, NotIpAddress
 
     Parses the policy value as an IPvXNetwork, then the context value as an IPvXAddress, then uses
@@ -267,7 +548,7 @@ def _get_ipaddress_match(block: str, policy_key: str, policy_value: Union[str, L
 
 
 def _get_date_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict,
-                    debug: bool = False):
+                    debug: bool = False) -> bool:
     """Helper method for dealing with Date* conditions: DateEquals, DateNotEquals, DateGreaterThan,
     DateGreaterThanEquals, DateLessThan, DateLessThanEquals.
 
@@ -335,7 +616,7 @@ def _convert_timestamp_to_datetime_obj(timestamp: str):
 
 
 def _get_arn_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict,
-                   debug: bool = False):
+                   debug: bool = False) -> bool:
     """Helper method for dealing with Arn* conditions: ArnEquals, ArnLike, ArnNotEquals, ArnNotLike"""
     dprint(debug, 'Checking {} for value {} with context {}, condition element {}'.format(
         policy_key, policy_value, context, block
@@ -637,6 +918,8 @@ def _matches_after_expansion(string_to_check: str, string_to_check_against: str,
 
     if condition_keys is not None:
         for k, v in condition_keys.items():
+            if isinstance(v, list):
+                v = str(v)  # TODO: how would a multi-valued context value be handled in resource fields?
             full_key = '${' + k + '}'
             copy_string = copy_string.replace(full_key, v)
 
