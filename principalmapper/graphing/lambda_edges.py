@@ -4,6 +4,8 @@ import io
 import os
 from typing import List
 
+from botocore.exceptions import ClientError
+
 from principalmapper.common.edges import Edge
 from principalmapper.common.nodes import Node
 from principalmapper.graphing.edge_checker import EdgeChecker
@@ -33,10 +35,14 @@ class LambdaEdgeChecker(EdgeChecker):
         # grab existing lambda functions
         function_list = []
         for lambda_client in lambda_clients:
-            paginator = lambda_client.get_paginator('list_functions')
-            for page in paginator.paginate(PaginationConfig={'PageSize': 25}):
-                for func in page['Functions']:
-                    function_list.append(func)
+            try:
+                paginator = lambda_client.get_paginator('list_functions')
+                for page in paginator.paginate(PaginationConfig={'PageSize': 25}):
+                    for func in page['Functions']:
+                        function_list.append(func)
+            except ClientError:
+                output.write('Encountered an exception when listing functions in the region {}\n'.format(
+                    lambda_client.meta.region_name))
 
         for node_source in nodes:
             for node_destination in nodes:

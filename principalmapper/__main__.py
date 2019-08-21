@@ -64,12 +64,6 @@ def main():
         help='List the Account IDs of graphs stored on this computer.'
     )
     command_group.add_argument(
-        '--update-nodes',
-        action='store_true',
-        help='Updates which principals are available in an AWS account. Deletes IAM users or roles that are no longer '
-             'present. Removes edges for deleted IAM users or roles. Does not add new edges.'
-    )
-    command_group.add_argument(
         '--update-edges',
         action='store_true',
         help='Updates the edges of an AWS account. Does not gather information about IAM users or roles.'
@@ -215,11 +209,17 @@ def handle_graph(parsed_args):
         for direct in storage_root.iterdir():
             print(direct.name)
 
-    elif parsed_args.update_nodes:  # --update-nodes
-        raise NotImplementedError('--update-nodes not yet implemented')  # TODO: update_nodes functionality
-
     elif parsed_args.update_edges:  # --update-edges
-        raise NotImplementedError('--update-edges not yet implemented')  # TODO: update_edges functionality
+        graph = principalmapper.graphing.graph_actions.get_existing_graph(
+            session,
+            parsed_args.account,
+            parsed_args.debug
+        )
+        graph.edges = principalmapper.graphing.edge_identification.obtain_edges(session, checker_map.keys(),
+                                                                                graph.nodes, sys.stdout,
+                                                                                parsed_args.debug)
+        principalmapper.graphing.graph_actions.print_graph_data(graph)
+        graph.store_graph_as_json(os.path.join(get_storage_root(), graph.metadata['account_id']))
 
 
 def handle_query(parsed_args):
