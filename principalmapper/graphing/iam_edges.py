@@ -14,7 +14,7 @@ class IAMEdgeChecker(EdgeChecker):
     """Goes through the IAM service to locate potential edges between nodes."""
 
     def return_edges(self, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
-        """Fulfills expected method return_edges. If session object is None, runs checks in offline mode."""
+        """Fulfills expected method return_edges."""
         result = []
         for node_source in nodes:
             for node_destination in nodes:
@@ -26,12 +26,82 @@ class IAMEdgeChecker(EdgeChecker):
                 if node_source.is_admin:
                     continue
 
-                # TODO: check if source can change destination's creds (access keys/password) if destination is a user
-                if ':role/' in node_destination.arn:
-                    pass
-
-                # TODO: check if source can change destination's trust policy if destination is a role
                 if ':user/' in node_destination.arn:
-                    pass
+                    # Change the user's access keys
+                    access_keys_mfa = False
+
+                    create_auth_res, mfa_res = query_interface.local_check_authorization_handling_mfa(
+                        node_source,
+                        'iam:CreateAccessKey',
+                        node_destination.arn,
+                        {},
+                        debug
+                    )
+
+                    if mfa_res:
+                        access_keys_mfa = True
+
+                    if node_destination.access_keys == 2:
+                        # can have a max of two access keys, need to delete before making a new one
+                        auth_res, mfa_res = query_interface.local_check_authorization_handling_mfa(
+                            node_source,
+                            'iam:DeleteAccessKey',
+                            node_destination.arn,
+                            {},
+                            debug
+                        )
+                        if not auth_res:
+                            create_auth_res = False  # can't delete target access key, can't generate a new one
+                        if mfa_res:
+                            access_keys_mfa = True
+
+                    if create_auth_res:
+                        reason = 'can create access keys to authenticate as'
+                        if access_keys_mfa:
+                            reason = '(MFA required) ' + reason
+
+                        result.append(
+                            Edge(
+                                node_source, node_destination, reason
+                            )
+                        )
+
+                    # Change the user's password
+                    if node_destination.active_password:
+                        pass_auth_res, mfa_res = query_interface.local_check_authorization_handling_mfa(
+                            node_source,
+                            'iam:UpdateLoginProfile',
+                            node_destination.arn,
+                            {},
+                            debug
+                        )
+                    else:
+                        pass_auth_res, mfa_res = query_interface.local_check_authorization_handling_mfa(
+                            node_source,
+                            'iam:CreateLoginProfile',
+                            node_destination.arn,
+                            {},
+                            debug
+                        )
+                    if pass_auth_res:
+                        reason = 'can set the password to authenticate as'
+                        if mfa_res:
+                            reason = '(MFA required) ' + reason
+                        result.append(Edge(node_source, node_destination, reason))
+
+                if ':role/' in node_destination.arn:
+                    # Change the role's trust doc
+                    update_role_res, mfa_res = query_interface.local_check_authorization_handling_mfa(
+                        node_source,
+                        'iam:UpdateAssumeRolePolicy',
+                        node_destination.arn,
+                        {},
+                        debug
+                    )
+                    if update_role_res:
+                        reason = 'can update the trust document to access'
+                        if mfa_res:
+                            reason = '(MFA required) ' + reason
+                        result.append(Edge(node_source, node_destination, reason))
 
         return result
