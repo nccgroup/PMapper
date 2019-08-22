@@ -20,10 +20,6 @@ class LambdaEdgeChecker(EdgeChecker):
     def return_edges(self, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
         """Fulfills expected method return_edges. If session object is None, runs checks in offline mode."""
         result = []
-        if self.session is not None:
-            iamclient = self.session.create_client('iam')
-        else:
-            iamclient = None
 
         lambda_clients = []
         if self.session is not None:

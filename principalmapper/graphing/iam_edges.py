@@ -104,4 +104,6 @@ class IAMEdgeChecker(EdgeChecker):
                             reason = '(MFA required) ' + reason
                         result.append(Edge(node_source, node_destination, reason))
 
+        for edge in result:
+            output.write("Found new edge: {}\n".format(edge.describe_edge()))
         return result

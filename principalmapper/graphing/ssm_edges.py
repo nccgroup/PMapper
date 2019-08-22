@@ -51,7 +51,6 @@ class SSMEdgeChecker(EdgeChecker):
                         reason = '(Requires MFA) ' + reason
                     result.append(Edge(node_source, node_destination, reason))
 
-
                 sesh_auth_res, mfa_res_2 = query_interface.local_check_authorization_handling_mfa(
                     node_source,
                     'ssm:StartSession',
@@ -66,4 +65,6 @@ class SSMEdgeChecker(EdgeChecker):
                         reason = '(Requires MFA) ' + reason
                     result.append(Edge(node_source, node_destination, reason))
 
+        for edge in result:
+            output.write("Found new edge: {}\n".format(edge.describe_edge()))
         return result
