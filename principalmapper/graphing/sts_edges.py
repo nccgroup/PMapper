@@ -18,10 +18,6 @@ class STSEdgeChecker(EdgeChecker):
     def return_edges(self, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
         """Fulfills expected method return_edges. If the session object is None, performs checks in offline-mode"""
         result = []
-        if self.session is not None:
-            iamclient = self.session.create_client('iam')
-        else:
-            iamclient = None
         for node_source in nodes:
             for node_destination in nodes:
                 # skip self-access checks
@@ -51,19 +47,42 @@ class STSEdgeChecker(EdgeChecker):
                     if sim_result == ResourcePolicyEvalResult.NO_MATCH:
                         continue  # Resource policy must match for sts:AssumeRole, even in same-account scenarios
 
-                    policy_allows = has_matching_statement(node_source, 'Allow', 'sts:AssumeRole',
-                                                           node_destination.arn, {}, debug)
-                    policy_denies = has_matching_statement(node_source, 'Deny', 'sts:AssumeRole',
-                                                           node_destination.arn, {}, debug)
-                    if policy_allows and not policy_denies:
+                    assume_auth, need_mfa = query_interface.local_check_authorization_handling_mfa(
+                        node_source, 'sts:AssumeRole', node_destination.arn, {}, debug
+                    )
+                    policy_denies = has_matching_statement(
+                        node_source,
+                        'Deny',
+                        'sts:AssumeRole',
+                        node_destination.arn,
+                        {},
+                        debug
+                    )
+                    policy_denies_mfa = has_matching_statement(
+                        node_source,
+                        'Deny',
+                        'sts:AssumeRole',
+                        node_destination.arn,
+                        {
+                            'aws:MultiFactorAuthAge': '1',
+                            'aws:MultiFactorAuthPresent': 'true'
+                        },
+                        debug
+                    )
+
+                    if assume_auth:
+                        if need_mfa:
+                            reason = '(requires MFA) can access via sts:AssumeRole'
+                        else:
+                            reason = 'can access via sts:AssumeRole'
                         new_edge = Edge(
                             node_source,
                             node_destination,
-                            'can access via sts:AssumeRole'
+                            reason
                         )
                         output.write('Found new edge: {}\n'.format(new_edge.describe_edge()))
                         result.append(new_edge)
-                    elif not policy_denies and sim_result == ResourcePolicyEvalResult.NODE_MATCH:
+                    elif not (policy_denies_mfa and policy_denies) and sim_result == ResourcePolicyEvalResult.NODE_MATCH:
                         # testing same-account scenario, so NODE_MATCH will override a lack of an allow from iam policy
                         new_edge = Edge(
                             node_source,
