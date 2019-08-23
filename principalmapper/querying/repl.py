@@ -166,4 +166,4 @@ Skipping Results for Admins (-s or --skip-admin both work):
 Using Preset Queries:
    repl> query 'preset privesc *'
    repl> argquery --principal user/PowerUser --resource role/AssumableRole --preset connected
-        ''')
+''')
