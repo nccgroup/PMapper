@@ -16,7 +16,7 @@ setup(
     scripts=['pmapper.py'],
     packages=['principalmapper'],
     package_data={},
-    install_requires=['botocore', 'packaging', 'python-dateutil'],
+    install_requires=['botocore', 'packaging', 'python-dateutil', 'pydot'],
     entry_points={
         'console_scripts': [
             'pmapper = principalmapper.__main__:main'

@@ -15,6 +15,7 @@ from principalmapper.querying import repl
 from principalmapper.util import botocore_tools
 from principalmapper.util.debug_print import dprint
 from principalmapper.util.storage import get_storage_root
+from principalmapper.visualizing import graph_writer
 
 
 def main():
@@ -139,7 +140,7 @@ def main():
     visualizationparser.add_argument(
         '--filetype',
         default='svg',
-        choices=['svg', 'png'],
+        choices=['svg', 'png', 'dot'],
         help='The (lowercase) filetype to output the image as.'
     )
 
@@ -267,7 +268,16 @@ def handle_repl(parsed_args):
 
 def handle_visualization(parsed_args):
     """Processes the arguments for the visualization subcommand and executes related tasks"""
-    raise NotImplementedError('visualize subcommand is not ready for use')  # TODO: visualization functionality
+    # get Graph to draw/write
+    if parsed_args.account is None:
+        session = botocore_tools.get_session(parsed_args.profile)
+    else:
+        session = None
+    graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account, parsed_args.debug)
+
+    # create file
+    filepath = './{}.{}'.format(graph.metadata['account_id'], parsed_args.filetype)
+    graph_writer.handle_request(graph, filepath, parsed_args.filetype)
 
 
 def handle_analysis(parsed_args):
