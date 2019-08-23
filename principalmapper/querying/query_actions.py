@@ -42,6 +42,7 @@ def query_response(graph: Graph, query: str, skip_admins: bool = False, output: 
                 return
 
             # doing this funky stuff in case condition values can have spaces
+            # we make the (bad, but good enough?) assumption that condition values don't have ' and ' in them
             condition_str = ' '.join(tokens[7:])
             condition_tokens = re.split(r'\s+and\s+', condition_str, flags=re.UNICODE)
             condition = {}

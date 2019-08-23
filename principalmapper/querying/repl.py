@@ -1,1 +1,169 @@
 """Code that implements a Read-Evaluated-Print-Loop (REPL) for the query interfaces of Principal Mapper."""
+
+import argparse
+import shlex
+import sys
+
+from principalmapper.common.graphs import Graph
+from principalmapper.querying import query_actions
+
+
+class PMapperREPL:
+    """Class for creating and using a REPL"""
+
+    def __init__(self, graph: Graph):
+        # TODO: Handle up/down on keyboard for navigating command history
+        self.cmd_history = []
+        self.graph = graph
+
+        self.argparser = argparse.ArgumentParser()
+        self.argparser.add_argument('-d', '--debug', help='Enable debugging for this command.')
+        self.subparsers = self.argparser.add_subparsers(
+            title='subcommand',
+            dest='subcommand',
+            description='The command to run: query, argquery, help, exit'
+        )
+        self.helpparser = self.subparsers.add_parser('help')
+        self.exitparser = self.subparsers.add_parser('exit')
+
+        self.queryparser = self.subparsers.add_parser(
+            'query',
+            description='Displays information corresponding to a roughly human-readable query.',
+            help='Displays information corresponding to a query'
+        )
+        self.queryparser.add_argument(
+            '-s',
+            '--skip-admin',
+            action='store_true',
+            help='Ignores "admin" level principals when querying about multiple principals in an account'
+        )
+        self.queryparser.add_argument(
+            'query',
+            help='The query to execute.'
+        )
+
+        # New Query subcommand
+        self.argqueryparser = self.subparsers.add_parser(
+            'argquery',
+            description='Displays information corresponding to a arg-specified query.',
+            help='Displays information corresponding to a query'
+        )
+        self.argqueryparser.add_argument(
+            '-s',
+            '--skip-admin',
+            action='store_true',
+            help='Ignores administrative principals when querying about multiple principals in an account'
+        )
+        self.argqueryparser.add_argument(
+            '--principal',
+            default='*',
+            help='A string matching one or more IAM users or roles in the account, or use * (the default) to include all'
+        )
+        self.argqueryparser.add_argument(
+            '--action',
+            help='An AWS action to test for, allows * wildcards'
+        )
+        self.argqueryparser.add_argument(
+            '--resource',
+            default='*',
+            help='An AWS resource (denoted by ARN) to test for'
+        )
+        self.argqueryparser.add_argument(
+            '--condition',
+            action='append',
+            help='A set of key-value pairs to test specific conditions'
+        )
+        self.argqueryparser.add_argument(
+            '--preset',
+            help='A preset query to run'
+        )
+
+    def begin_repl(self):
+        """The meat of our work: Read, Eval, Print, and Loop"""
+        print('##############################')
+        print('#                            #')
+        print('#   Principal Mapper REPL    #')
+        print('#                            #')
+        print('##############################')
+        print()
+        while True:
+            # Read
+            try:
+                command = input('repl> ')
+            except KeyboardInterrupt as ex:
+                print('Ctrl+C detected. Exiting.')
+                break
+
+            # Eval/Print
+            try:
+                args = shlex.split(command)
+                parsed_args = self.argparser.parse_args(args)
+                if parsed_args.subcommand == 'query':
+                    query_actions.query_response(self.graph, parsed_args.query, parsed_args.skip_admin, sys.stdout,
+                                                 parsed_args.debug)
+
+                elif parsed_args.subcommand == 'argquery':
+                    conditions = {}
+                    if parsed_args.condition is not None:
+                        for arg in parsed_args.condition:
+                            # split on equals-sign (=), assume first instance separates the key and value
+                            components = arg.split('=')
+                            if len(components) < 2:
+                                raise ValueError('Format for condition args not matched: <key>=<value>')
+                            key = components[0]
+                            value = '='.join(components[1:])
+                            conditions.update({key: value})
+
+                    query_actions.argquery(self.graph, parsed_args.principal, parsed_args.action, parsed_args.resource,
+                                           conditions, parsed_args.preset, parsed_args.skip_admin, sys.stdout,
+                                           parsed_args.debug)
+
+                elif parsed_args.subcommand == 'help':
+                    self._print_help()
+                elif parsed_args.subcommand == 'exit':
+                    print('Exiting.')
+                    break
+                else:
+                    self._print_help()
+            except KeyboardInterrupt as ex:
+                print('Ctrl+C detected. Exiting.')
+                break
+            except Exception as ex:
+                print('Encountered an error when executing input: {}'.format(command))
+                print(ex.args)
+
+            # Loop
+
+    @staticmethod
+    def _print_help():
+        """Prints a helppage for using the REPL."""
+        print('''##### How to Use the Principal Mapper REPL #####
+        
+Available Commands:
+   * query
+   * argquery
+   * help
+   * exit
+   
+The query/argquery commands behave the same as calling it from the regular 
+command line. You must include quotation marks or apostrophes around the 
+query for query commands, as the input is parsed like you were on the command 
+line. 
+   
+Simple English(-ish) Querying:
+   repl> query 'who can do s3:GetObject with arn:aws:s3:::<some bucket>/<sensitive object>'
+   repl> query 'can user/PowerUser do iam:CreateUser'
+   repl> query 'can user/PowerUser do sts:AssumeRole with * when aws:MultiFactorAuthPresent=true'
+   
+Using Argquery:
+   repl> argquery --principal user/PowerUser --action ec2:RunInstances
+   repl> argquery --action s3:GetObject --resource '*'
+
+Skipping Results for Admins (-s or --skip-admin both work):
+   repl> query -s 'who can do s3:GetObject with *'
+   repl> argquery --skip-admin --principal '*' --action s3:GetObject --resource '*'
+
+Using Preset Queries:
+   repl> query 'preset privesc *'
+   repl> argquery --principal user/PowerUser --resource role/AssumableRole --preset connected
+        ''')

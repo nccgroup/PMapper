@@ -11,6 +11,7 @@ import sys
 import principalmapper.graphing.graph_actions
 from principalmapper.graphing.edge_identification import checker_map
 from principalmapper.querying import query_actions
+from principalmapper.querying import repl
 from principalmapper.util import botocore_tools
 from principalmapper.util.debug_print import dprint
 from principalmapper.util.storage import get_storage_root
@@ -254,7 +255,14 @@ def handle_argquery(parsed_args):
 
 def handle_repl(parsed_args):
     """Processes the arguments for the query REPL and initiates"""
-    raise NotImplementedError('query REPL subcommand is not ready for use')  # TODO: repl functionality
+    if parsed_args.account is None:
+        session = botocore_tools.get_session(parsed_args.profile)
+    else:
+        session = None
+    graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account, parsed_args.debug)
+
+    repl_obj = repl.PMapperREPL(graph)
+    repl_obj.begin_repl()
 
 
 def handle_visualization(parsed_args):

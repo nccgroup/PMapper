@@ -40,7 +40,7 @@ class CloudFormationEdgeChecker(EdgeChecker):
                                                         'DELETE_IN_PROGRESS']:  # ignore unusable stacks
                             stack_list.append(stack)
             except ClientError:
-                output.write('Encountered an exception when listing functions in the region {}\n'.format(
+                output.write('Encountered an exception when listing stacks in the region {}\n'.format(
                     cf_client.meta.region_name))
 
         # For each node...
