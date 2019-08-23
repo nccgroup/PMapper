@@ -8,3 +8,9 @@ def dprint(debugging: bool, message: str) -> None:
     if debugging:
         sys.stderr.write(message)
         sys.stderr.write("\n")
+
+
+def dwrite(debugging: bool, message: str) -> None:
+    """Writes message to console if debugging (no newline at the end)"""
+    if debugging:
+        sys.stderr.write(message)

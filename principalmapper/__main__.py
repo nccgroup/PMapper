@@ -96,27 +96,30 @@ def main():
         '-s',
         '--skip-admin',
         action='store_true',
-        help='Ignores "admin" level principals when querying about multiple principals in an account'
+        help='Ignores administrative principals when querying about multiple principals in an account'
     )
     argqueryparser.add_argument(
         '--principal',
         default='*',
-        help='A string matching one or more IAM users or roles in the account, allows * wildcards'
+        help='A string matching one or more IAM users or roles in the account, or use * (the default) to include all'
     )
     argqueryparser.add_argument(
         '--action',
-        default='*',
         help='An AWS action to test for, allows * wildcards'
     )
     argqueryparser.add_argument(
         '--resource',
         default='*',
-        help='An AWS resource (denoted by ARN) to test for.'
+        help='An AWS resource (denoted by ARN) to test for'
     )
-    # TODO: --condition arg
     argqueryparser.add_argument(
         '--condition',
+        action='append',
         help='A set of key-value pairs to test specific conditions'
+    )
+    argqueryparser.add_argument(
+        '--preset',
+        help='A preset query to run'
     )
 
     # REPL subcommand
@@ -124,12 +127,6 @@ def main():
         'repl',
         description='Runs a read-evaluate-print-loop of queries, avoiding the need to read from disk for each query',
         help='Runs a REPL for querying'
-    )
-    replparser.add_argument(
-        '--mode',
-        choices=['query', 'argquery'],
-        default='query',
-        help='Select which mode of querying to use'
     )
 
     # Visualization subcommand
@@ -222,7 +219,13 @@ def handle_graph(parsed_args):
 
 def handle_query(parsed_args):
     """Processes the arguments for the query subcommand and executes related tasks"""
-    raise NotImplementedError('query subcommand is not ready for use')  # TODO: query functionality
+    if parsed_args.account is None:
+        session = botocore_tools.get_session(parsed_args.profile)
+    else:
+        session = None
+    graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account, parsed_args.debug)
+
+    query_actions.query_response(graph, parsed_args.query, parsed_args.skip_admin, sys.stdout, parsed_args.debug)
 
 
 def handle_argquery(parsed_args):
@@ -233,8 +236,20 @@ def handle_argquery(parsed_args):
         session = None
     graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account, parsed_args.debug)
 
-    query_actions.argquery_response(session, graph, parsed_args.principal, parsed_args.action, parsed_args.resource,
-                                    parsed_args.condition, parsed_args.skip_admin, sys.stdout, parsed_args.debug)
+    # process condition args to generate input dict
+    conditions = {}
+    if parsed_args.condition is not None:
+        for arg in parsed_args.condition:
+            # split on equals-sign (=), assume first instance separates the key and value
+            components = arg.split('=')
+            if len(components) < 2:
+                raise ValueError('Format for condition args not matched: <key>=<value>')
+            key = components[0]
+            value = '='.join(components[1:])
+            conditions.update({key: value})
+
+    query_actions.argquery(graph, parsed_args.principal, parsed_args.action, parsed_args.resource, conditions,
+                           parsed_args.preset, parsed_args.skip_admin, sys.stdout, parsed_args.debug)
 
 
 def handle_repl(parsed_args):
