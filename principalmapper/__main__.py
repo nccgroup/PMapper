@@ -8,6 +8,7 @@ import os.path
 from pathlib import Path
 import sys
 
+from principalmapper.analysis.risks import gen_findings_and_print
 import principalmapper.graphing.graph_actions
 from principalmapper.graphing.edge_identification import checker_map
 from principalmapper.querying import query_actions
@@ -282,4 +283,12 @@ def handle_visualization(parsed_args):
 
 def handle_analysis(parsed_args):
     """Processes the arguments for the analysis subcommand and executes related tasks"""
-    raise NotImplementedError('analysis subcommand is not ready for use')
+    # get Graph
+    if parsed_args.account is None:
+        session = botocore_tools.get_session(parsed_args.profile)
+    else:
+        session = None
+    graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account, parsed_args.debug)
+
+    # execute analysis
+    gen_findings_and_print(graph, parsed_args.output_type)
