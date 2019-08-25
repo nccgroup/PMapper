@@ -1,0 +1,4 @@
+botocore
+packaging
+python-dateutil
+pydot

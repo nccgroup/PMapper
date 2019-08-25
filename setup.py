@@ -19,18 +19,25 @@
 
 # TODO: write setup script
 
-from setuptools import setup
+from setuptools import setup, find_packages
 import principalmapper
 
+with open("README.md", "r") as fh:
+    long_description = fh.read()
+
 setup(
-    name='pmapper',
+    name='principalmapper',
     version=principalmapper.__version__,
     description='A Python script and library for analyzing an AWS account\'s use of IAM.',
+    long_description=long_description,
+    long_description_content_type='text/markdown',
+    license='AGPLv3',
     url='https://github.com/nccgroup/PMapper',
     author='Erik Steringer',
     author_email='erik.steringer@nccgroup.com',
     scripts=['pmapper.py'],
-    packages=['principalmapper'],
+    include_package_data=True,
+    packages=find_packages(),
     package_data={},
     install_requires=['botocore', 'packaging', 'python-dateutil', 'pydot'],
     entry_points={
@@ -38,5 +45,19 @@ setup(
             'pmapper = principalmapper.__main__:main'
         ]
     },
+    classifiers=[
+        'Environment :: Console',
+        'Intended Audience :: System Administrators',
+        'License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)',
+        'Natural Language :: English',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Topic :: Security'
+    ],
+    keywords=[
+        'AWS', 'IAM', 'Security', 'PMapper', 'principalmapper', 'Principal Mapper', 'NCC Group'
+    ],
     zip_safe=False
 )
