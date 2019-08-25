@@ -121,7 +121,12 @@ pmapper visualize --filetype svg
 ## Analysis
 
 PMapper provides analysis to identify risks with the configuration in an account. It provides details on the risk, what 
-impact it could have on the account, which principals are affected, and a recommendation on how to mitigate the risk.
+impact it could have on the account, which principals are affected, and a recommendation on how to mitigate the risk. 
+The outputs from `analysis` can be in text or JSON format, and can be created with the following command:
+
+~~~bash
+pmapper analysis --output-type text
+~~~
 
 # Credentials and Global Parameters
 

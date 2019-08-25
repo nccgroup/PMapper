@@ -4,6 +4,21 @@ Beyond G = (N, E), this object also holds the policy + group objects that are al
 create a graph object, you need all the policies, then all the groups, then you can build the lists of nodes and edges.
 """
 
+#  Copyright NCC Group (c) 2019. This file is part of Principal Mapper.
+#
+#      Principal Mapper is free software: you can redistribute it and/or modify
+#      it under the terms of the GNU Affero General Public License as published by
+#      the Free Software Foundation, either version 3 of the License, or
+#      (at your option) any later version.
+#
+#      Principal Mapper is distributed in the hope that it will be useful,
+#      but WITHOUT ANY WARRANTY; without even the implied warranty of
+#      MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#      GNU General Public License for more details.
+#
+#      You should have received a copy of the GNU Affero General Public License
+#      along with Foobar.  If not, see <https://www.gnu.org/licenses/>.
+
 import json
 import os
 import os.path

@@ -1,12 +1,27 @@
 """Code to write Graph data to various output formats."""
 
+#  Copyright NCC Group (c) 2019. This file is part of Principal Mapper.
+#
+#      Principal Mapper is free software: you can redistribute it and/or modify
+#      it under the terms of the GNU Affero General Public License as published by
+#      the Free Software Foundation, either version 3 of the License, or
+#      (at your option) any later version.
+#
+#      Principal Mapper is distributed in the hope that it will be useful,
+#      but WITHOUT ANY WARRANTY; without even the implied warranty of
+#      MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#      GNU General Public License for more details.
+#
+#      You should have received a copy of the GNU Affero General Public License
+#      along with Foobar.  If not, see <https://www.gnu.org/licenses/>.
+
 import pydot
 
 from principalmapper.common.graphs import Graph
 from principalmapper.querying.presets.privesc import can_privesc
 
 
-def handle_request(graph: Graph, path: str, format: str) -> None:
+def handle_request(graph: Graph, path: str, file_format: str) -> None:
     """Meat of the graph_writer.py module, writes graph data in a given file-format to the given path."""
     # Load graph data into pydot
     pydg = pydot.Dot(
@@ -35,4 +50,4 @@ def handle_request(graph: Graph, path: str, format: str) -> None:
             pydg.add_edge(pydot.Edge(pyd_nd[edge.source], pyd_nd[edge.destination]))
 
     # and draw
-    pydg.write(path, format=format)
+    pydg.write(path, format=file_format)
