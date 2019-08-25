@@ -46,6 +46,7 @@ def gen_all_findings(graph: Graph) -> List[dict]:
     result = []
     result.extend(gen_privesc_findings(graph))
     result.extend(gen_mfa_actions_finding(graph))
+    # TODO: result.extend(gen_mfa_evasion_finding(graph))
     result.extend(gen_overprivileged_function_finding(graph))
     result.extend(gen_overprivileged_instance_profile_finding(graph))
     result.extend(gen_overprivileged_stack_finding(graph))
