@@ -1,9 +1,4 @@
-"""Python code for implementing a graph
-
-Beyond G = (N, E), this object also holds the policy + group objects that are also part of evaluation. To
-create a graph object, you need all the policies, then all the groups, then you can build the lists of nodes and edges.
-"""
-
+"""Python module containing the Graph class and any Graph-specific utility functions (currently none)."""
 
 
 #  Copyright (c) NCC Group and Erik Steringer 2019. This file is part of Principal Mapper.
@@ -37,7 +32,11 @@ from principalmapper.common.policies import Policy
 
 
 class Graph(object):
-    """The basic Graph object"""
+    """The basic Graph object: contains nodes, edges, policies, and groups. Also includes code for saving and loading
+    Graph data to/from files stored on-disk. The actual attributes of each graph/node/edge/policy/group object
+    will remain the same across the same major/minor version of Principal Mapper, so a graph generated in v1.0.0
+    should be loadable in v1.0.1, but not v1.1.0.
+    """
 
     def __init__(self, nodes: list = None, edges: list = None, policies: list = None, groups: list = None,
                  metadata: dict = None):
@@ -64,7 +63,7 @@ class Graph(object):
         return None
 
     def store_graph_as_json(self, root_directory: str):
-        """Stores the current Graph as a set of JSON documents on-disk at a standard location.
+        """Stores the current Graph as a set of JSON documents on-disk in a standard layout.
 
         If the directory does not exist yet, it is created.
 
@@ -76,10 +75,8 @@ class Graph(object):
         |-------- edges.json
         |-------- policies.json
         |-------- groups.json
-        |---- visualizations/
-        |-------- output.svg
 
-        Client app (such as __main__.py) will specify where to retrieve the data.
+        The client app (such as __main__.py of principalmapper) will specify where to retrieve the data.
         """
         rootpath = root_directory
         if not os.path.exists(rootpath):
@@ -108,9 +105,22 @@ class Graph(object):
 
     @classmethod
     def create_graph_from_local_disk(cls, root_directory: str):
-        """Generates a Graph object by pulling data from disk at root_directory
+        """Generates a Graph object by pulling data from disk at root_directory.
 
-        Loads metadata, then policies, then groups, then nodes, then edges (to handle dependencies)
+        Structure:
+        | <root_directory parameter>
+        |---- metadata.json
+        |---- graph/
+        |-------- nodes.json
+        |-------- edges.json
+        |-------- policies.json
+        |-------- groups.json
+
+        Loads metadata, then policies, then groups, then nodes, then edges. Specific ordering is for handling
+        different dependencies when generating the objects.
+
+        Validates, using metadata, that the version of Principal Mapper that created the graph is the same
+        major/minor version of the current version of Principal Mapper. Raises a ValueError otherwise.
         """
         rootpath = root_directory
         if not os.path.exists(rootpath):

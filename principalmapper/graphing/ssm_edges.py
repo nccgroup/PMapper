@@ -1,4 +1,4 @@
-"""Code to identify if a principal in an AWS account can use access to STS to access other principals."""
+"""Code to identify if a principal in an AWS account can use access to SSM to access other principals."""
 
 #  Copyright (c) NCC Group and Erik Steringer 2019. This file is part of Principal Mapper.
 #
@@ -19,14 +19,13 @@ import io
 import os
 from typing import List
 
-from principalmapper.common.edges import Edge
-from principalmapper.common.nodes import Node
+from principalmapper.common import Edge, Node
 from principalmapper.graphing.edge_checker import EdgeChecker
 from principalmapper.querying import query_interface
 
 
 class SSMEdgeChecker(EdgeChecker):
-    """Goes through the SSM service to locate potential edges between nodes."""
+    """Class for identifying if SSM can be used by IAM principals to gain access to other IAM principals."""
 
     def return_edges(self, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
         """Fulfills expected method return_edges. If session object is None, runs checks in offline mode."""

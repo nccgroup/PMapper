@@ -21,8 +21,7 @@ from typing import List
 
 from botocore.exceptions import ClientError
 
-from principalmapper.common.edges import Edge
-from principalmapper.common.nodes import Node
+from principalmapper.common import Edge, Node
 from principalmapper.graphing.edge_checker import EdgeChecker
 from principalmapper.querying import query_interface
 from principalmapper.querying.local_policy_simulation import resource_policy_authorization, ResourcePolicyEvalResult
@@ -30,7 +29,7 @@ from principalmapper.util import arns
 
 
 class CloudFormationEdgeChecker(EdgeChecker):
-    """Goes through the CloudFormation service to locate potential edges between nodes."""
+    """Class for identifying if CloudFormation can be used by IAM principals to gain access to other IAM principals."""
 
     def return_edges(self, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
         """Fulfills expected method return_edges."""
@@ -65,7 +64,7 @@ class CloudFormationEdgeChecker(EdgeChecker):
                 if node_source == node_destination:
                     continue
 
-                # check if source is an admin, if so it can access destination but this is not tracked via an Edge
+                # check if source is an admin: if so, it can access destination but this is not tracked via an Edge
                 if node_source.is_admin:
                     continue
 

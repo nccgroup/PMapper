@@ -19,10 +19,7 @@ import io
 import os
 
 import botocore.session
-from principalmapper.common.groups import Group
-from principalmapper.common.graphs import Graph
-from principalmapper.common.nodes import Node
-from principalmapper.common.policies import Policy
+from principalmapper.common import Node, Group, Policy, Graph
 from principalmapper.graphing import edge_identification
 from principalmapper.querying import query_interface
 from principalmapper.util import arns

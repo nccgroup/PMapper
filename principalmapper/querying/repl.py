@@ -19,15 +19,14 @@ import argparse
 import shlex
 import sys
 
-from principalmapper.common.graphs import Graph
+from principalmapper.common import Graph
 from principalmapper.querying import query_actions
 
 
 class PMapperREPL:
-    """Class for creating and using a REPL"""
+    """The Principal Mapper REPL class, handles the state and interactions of the REPL."""
 
     def __init__(self, graph: Graph):
-        # TODO: Handle up/down on keyboard for navigating command history
         self.cmd_history = []
         self.graph = graph
 
@@ -40,6 +39,7 @@ class PMapperREPL:
         )
         self.helpparser = self.subparsers.add_parser('help')
         self.exitparser = self.subparsers.add_parser('exit')
+        # TODO: Add graphdata subcommand
 
         self.queryparser = self.subparsers.add_parser(
             'query',
@@ -72,7 +72,8 @@ class PMapperREPL:
         self.argqueryparser.add_argument(
             '--principal',
             default='*',
-            help='A string matching one or more IAM users or roles in the account, or use * (the default) to include all'
+            help='A string matching one or more IAM users or roles in the account, or use * (the default) to include '
+                 'all'
         )
         self.argqueryparser.add_argument(
             '--action',
@@ -104,7 +105,11 @@ class PMapperREPL:
         while True:
             # Read
             try:
+                # TODO: handle key-up/down for command history (instead of input()?)
+                # TODO: handle key-left/right gracefully
+                # TODO: handle tabbing gracefully
                 command = input('repl> ')
+                # TODO: save input to history (cmd_history list)
             except KeyboardInterrupt as ex:
                 print('Ctrl+C detected. Exiting.')
                 break

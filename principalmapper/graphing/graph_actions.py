@@ -21,7 +21,7 @@ import sys
 
 import botocore.session
 import principalmapper
-from principalmapper.common.graphs import Graph
+from principalmapper.common import Graph
 from principalmapper.graphing import gathering
 from principalmapper.util.debug_print import dprint
 from principalmapper.util.storage import get_storage_root

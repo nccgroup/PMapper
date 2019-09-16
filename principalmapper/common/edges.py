@@ -1,5 +1,4 @@
-"""Python code for implementing the edges of a graph"""
-
+"""Python module containing the basic Edge class, as well as any utility functions (currently none)."""
 
 
 #  Copyright (c) NCC Group and Erik Steringer 2019. This file is part of Principal Mapper.
@@ -22,7 +21,9 @@ from principalmapper.util import arns
 
 
 class Edge(object):
-    """The basic Edge object"""
+    """The Edge object: contains a source and destination Node object, as well as a string that explains how
+    the source Node is able to access the destination Node.
+    """
 
     def __init__(self, source: Node, destination: Node, reason: str):
         """Constructor"""
@@ -31,13 +32,13 @@ class Edge(object):
         if destination is None:
             raise ValueError('Edges must have a destination Node object')
         if reason is None:
-            raise ValueError('Edges must be constructed with a string reason parameter')
+            raise ValueError('Edges must be constructed with a reason parameter (str object)')
 
         self.source = source
         self.destination = destination
         self.reason = reason
 
-    def describe_edge(self):
+    def describe_edge(self) -> str:
         """Returns a human-readable string explaining the edge"""
         return "{} {} {}".format(
             arns.get_resource(self.source.arn),
@@ -45,7 +46,7 @@ class Edge(object):
             arns.get_resource(self.destination.arn)
         )
 
-    def to_dictionary(self):
+    def to_dictionary(self) -> dict:
         """Returns a dictionary representation of this object for storage"""
         return {
             'source': self.source.arn,

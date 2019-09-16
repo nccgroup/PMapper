@@ -13,5 +13,4 @@
 #      You should have received a copy of the GNU Affero General Public License
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
-
-
+"""The Python module containing the code for identifying risks in an AWS account based on Principal Mapper data."""

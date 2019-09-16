@@ -13,4 +13,6 @@
 #      You should have received a copy of the GNU Affero General Public License
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Module for graphing code"""
+"""Module for graphing code: handles creating Graphs, Nodes, Edges, Policies, and Groups using access to the
+AWS account being examined. All edge-identification code resides in here.
+"""

@@ -19,9 +19,7 @@ import io
 import os
 from typing import List
 
-from principalmapper.common.edges import Edge
-from principalmapper.common.graphs import Graph
-from principalmapper.common.nodes import Node
+from principalmapper.common import Edge, Node, Graph
 from principalmapper.querying.query_utils import get_search_list
 
 

@@ -23,6 +23,7 @@ arn:<partition>:<service>:<region>:<account id>:<resource/identifier>
 #      You should have received a copy of the GNU Affero General Public License
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
+
 def get_partition(arn: str):
     """Returns the partition from a string ARN."""
     return arn.split(':')[1]

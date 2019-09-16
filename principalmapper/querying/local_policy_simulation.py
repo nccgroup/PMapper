@@ -25,8 +25,7 @@ import ipaddress
 from typing import List, Dict, Optional, Union
 import re
 
-from principalmapper.common.nodes import Node
-from principalmapper.common.policies import Policy
+from principalmapper.common import Node, Policy
 from principalmapper.util.debug_print import dprint
 from principalmapper.util import arns
 

@@ -1,5 +1,4 @@
-"""Python code for handling AWS IAM groups"""
-
+"""Python module containing the Group class and any Group-specific utility functions (currently none)."""
 
 
 #  Copyright (c) NCC Group and Erik Steringer 2019. This file is part of Principal Mapper.
@@ -17,15 +16,16 @@
 #      You should have received a copy of the GNU Affero General Public License
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
-from typing import List
-from typing import Optional
+from typing import List, Optional
 
 from principalmapper.common.policies import Policy
 from principalmapper.util import arns
 
 
 class Group(object):
-    """A class representing a single IAM group"""
+    """The basic Group object: Contains the ARN and attached IAM policies (inline and attached) of the AWS IAM group
+    that the object represents.
+    """
 
     def __init__(self, arn: str, attached_policies: Optional[List[Policy]]):
         """Constructor"""
@@ -38,7 +38,7 @@ class Group(object):
         else:
             self.attached_policies = attached_policies
 
-    def to_dictionary(self):
+    def to_dictionary(self) -> dict:
         """Returns a dictionary representation of this object for storage"""
         return {
             'arn': self.arn,

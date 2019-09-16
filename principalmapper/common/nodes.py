@@ -1,5 +1,4 @@
-"""Python code for implementing the nodes of a graph"""
-
+"""Python module containing the Node class and any Node-specific utility functions (currently none)."""
 
 
 #  Copyright (c) NCC Group and Erik Steringer 2019. This file is part of Principal Mapper.
@@ -25,12 +24,17 @@ from principalmapper.util import arns
 
 
 class Node(object):
-    """The basic Node object"""
+    """The basic Node object: tracks data about the IAM User/Role this Node represents. Includes the ARN, ID,
+    attached policies (inline or attached), group memberships, trust doc (if IAM Role), instance profiles (if IAM Role),
+    if a password is active (if IAM User), if there are active access keys (if IAM User), and if the IAM User/Role has
+    administrative permissions for the account."""
 
-    def __init__(self, arn: str, id_value: str, attached_policies: Optional[List[Policy]], group_memberships: Optional[List[Group]],
-                 trust_policy: Optional[dict], instance_profile: Optional[str], num_access_keys: int,
-                 active_password: bool, is_admin: bool):
-        """Constructor"""
+    def __init__(self, arn: str, id_value: str, attached_policies: Optional[List[Policy]],
+                 group_memberships: Optional[List[Group]], trust_policy: Optional[dict],
+                 instance_profile: Optional[str], num_access_keys: int, active_password: bool, is_admin: bool):
+        """Constructor. Expects an ARN and ID value. Validates parameters based on the type of Node (User/Role),
+        and rejects contradictory arguments like an IAM User with a trust policy.
+        """
 
         resource_value = arns.get_resource(arn)
         if arn is None or not (resource_value.startswith('user/') or resource_value.startswith('role/')):
@@ -75,7 +79,7 @@ class Node(object):
     def searchable_name(self):
         """Creates and caches the searchable name of this node. First it splits the user/.../name into its
         parts divided by slashes, then returns the first and last element. The last element is supposed to be unique
-        within users and roles.
+        within users and roles (RoleName/--role-name or UserName/--user-name parameter when using the API/CLI).
         """
         if 'searchable_name' not in self.cache:
             components = arns.get_resource(self.arn).split('/')
@@ -83,7 +87,7 @@ class Node(object):
         return self.cache['searchable_name']
 
     def to_dictionary(self):
-        """Creates a dictionary representation of this Node for storage"""
+        """Creates a dictionary representation of this Node for storage."""
         return {
             "arn": self.arn,
             "id_value": self.id_value,

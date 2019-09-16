@@ -21,8 +21,7 @@ from typing import List, Optional
 
 import botocore.session
 
-from principalmapper.common.edges import Edge
-from principalmapper.common.nodes import Node
+from principalmapper.common import Edge, Node
 from principalmapper.graphing.cloudformation_edges import CloudFormationEdgeChecker
 from principalmapper.graphing.ec2_edges import EC2EdgeChecker
 from principalmapper.graphing.iam_edges import IAMEdgeChecker

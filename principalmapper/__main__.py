@@ -22,6 +22,9 @@ import os
 import os.path
 from pathlib import Path
 import sys
+from typing import Optional
+
+import botocore.session
 
 from principalmapper.analysis.risks import gen_findings_and_print
 import principalmapper.graphing.graph_actions
@@ -34,9 +37,9 @@ from principalmapper.util.storage import get_storage_root
 from principalmapper.visualizing import graph_writer
 
 
-def main():
+def main() -> int:
     """Point of entry for command-line"""
-    argument_parser = argparse.ArgumentParser()
+    argument_parser = argparse.ArgumentParser(prog='pmapper')
     argument_parser.add_argument(
         '--profile',
         help='AWS CLI (botocore) profile to use to call the AWS API'
@@ -173,7 +176,7 @@ def main():
         help='The type of output for identified issues.'
     )
 
-    # TODO: Cross-Account subcommand
+    # TODO: Cross-Account subcommand(s)
 
     parsed_args = argument_parser.parse_args()
 
@@ -181,26 +184,24 @@ def main():
     dprint(parsed_args.debug, 'Parsed Args: ' + str(parsed_args))
 
     if parsed_args.picked_cmd == 'graph':
-        handle_graph(parsed_args)
+        return handle_graph(parsed_args)
     elif parsed_args.picked_cmd == 'query':
-        handle_query(parsed_args)
+        return handle_query(parsed_args)
     elif parsed_args.picked_cmd == 'argquery':
-        handle_argquery(parsed_args)
+        return handle_argquery(parsed_args)
     elif parsed_args.picked_cmd == 'repl':
-        handle_repl(parsed_args)
+        return handle_repl(parsed_args)
     elif parsed_args.picked_cmd == 'visualize':
-        handle_visualization(parsed_args)
+        return handle_visualization(parsed_args)
     elif parsed_args.picked_cmd == 'analysis':
-        handle_analysis(parsed_args)
-    return 0
+        return handle_analysis(parsed_args)
+
+    return 64  # /usr/include/sysexits.h
 
 
-def handle_graph(parsed_args):
+def handle_graph(parsed_args) -> int:
     """Processes the arguments for the graph subcommand and executes related tasks"""
-    if parsed_args.account is None:
-        session = botocore_tools.get_session(parsed_args.profile)
-    else:
-        session = None
+    session = _grab_session(parsed_args)
 
     if parsed_args.create:  # --create
         graph = principalmapper.graphing.graph_actions.create_new_graph(session, checker_map.keys(), parsed_args.debug)
@@ -215,7 +216,7 @@ def handle_graph(parsed_args):
         )
         principalmapper.graphing.graph_actions.print_graph_data(graph)
 
-    elif parsed_args.list:
+    elif parsed_args.list:  # --list
         print("Account IDs:")
         print("---")
         storage_root = Path(get_storage_root())
@@ -234,24 +235,22 @@ def handle_graph(parsed_args):
         principalmapper.graphing.graph_actions.print_graph_data(graph)
         graph.store_graph_as_json(os.path.join(get_storage_root(), graph.metadata['account_id']))
 
+    return 0
 
-def handle_query(parsed_args):
+
+def handle_query(parsed_args) -> int:
     """Processes the arguments for the query subcommand and executes related tasks"""
-    if parsed_args.account is None:
-        session = botocore_tools.get_session(parsed_args.profile)
-    else:
-        session = None
+    session = _grab_session(parsed_args)
     graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account, parsed_args.debug)
 
     query_actions.query_response(graph, parsed_args.query, parsed_args.skip_admin, sys.stdout, parsed_args.debug)
 
+    return 0
 
-def handle_argquery(parsed_args):
+
+def handle_argquery(parsed_args) -> int:
     """Processes the arguments for the argquery subcommand and executes related tasks"""
-    if parsed_args.account is None:
-        session = botocore_tools.get_session(parsed_args.profile)
-    else:
-        session = None
+    session = _grab_session(parsed_args)
     graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account, parsed_args.debug)
 
     # process condition args to generate input dict
@@ -261,7 +260,8 @@ def handle_argquery(parsed_args):
             # split on equals-sign (=), assume first instance separates the key and value
             components = arg.split('=')
             if len(components) < 2:
-                raise ValueError('Format for condition args not matched: <key>=<value>')
+                print('Format for condition args not matched: <key>=<value>')
+                return 64
             key = components[0]
             value = '='.join(components[1:])
             conditions.update({key: value})
@@ -269,41 +269,51 @@ def handle_argquery(parsed_args):
     query_actions.argquery(graph, parsed_args.principal, parsed_args.action, parsed_args.resource, conditions,
                            parsed_args.preset, parsed_args.skip_admin, sys.stdout, parsed_args.debug)
 
+    return 0
+
 
 def handle_repl(parsed_args):
     """Processes the arguments for the query REPL and initiates"""
-    if parsed_args.account is None:
-        session = botocore_tools.get_session(parsed_args.profile)
-    else:
-        session = None
+    session = _grab_session(parsed_args)
     graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account, parsed_args.debug)
 
     repl_obj = repl.PMapperREPL(graph)
     repl_obj.begin_repl()
 
+    return 0
+
 
 def handle_visualization(parsed_args):
     """Processes the arguments for the visualization subcommand and executes related tasks"""
     # get Graph to draw/write
-    if parsed_args.account is None:
-        session = botocore_tools.get_session(parsed_args.profile)
-    else:
-        session = None
+    session = _grab_session(parsed_args)
     graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account, parsed_args.debug)
 
     # create file
     filepath = './{}.{}'.format(graph.metadata['account_id'], parsed_args.filetype)
     graph_writer.handle_request(graph, filepath, parsed_args.filetype)
 
+    return 0
+
 
 def handle_analysis(parsed_args):
     """Processes the arguments for the analysis subcommand and executes related tasks"""
-    # get Graph
-    if parsed_args.account is None:
-        session = botocore_tools.get_session(parsed_args.profile)
-    else:
-        session = None
+    # get Graph object
+    session = _grab_session(parsed_args)
     graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account, parsed_args.debug)
 
     # execute analysis
     gen_findings_and_print(graph, parsed_args.output_type)
+
+    return 0
+
+
+def _grab_session(parsed_args) -> Optional[botocore.session.Session]:
+    if parsed_args.account is None:
+        return botocore_tools.get_session(parsed_args.profile)
+    else:
+        return None
+
+
+if __name__ == '__main__':
+    sys.exit(main())

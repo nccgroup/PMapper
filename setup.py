@@ -17,8 +17,6 @@
 #      You should have received a copy of the GNU Affero General Public License
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
-# TODO: write setup script
-
 from setuptools import setup, find_packages
 import principalmapper
 
@@ -35,10 +33,11 @@ setup(
     url='https://github.com/nccgroup/PMapper',
     author='Erik Steringer',
     author_email='erik.steringer@nccgroup.com',
-    scripts=['pmapper.py'],
+    scripts=[],
     include_package_data=True,
     packages=find_packages(),
     package_data={},
+    python_requires='>=3.5, <4',  # assume Python 4 will break
     install_requires=['botocore', 'packaging', 'python-dateutil', 'pydot'],
     entry_points={
         'console_scripts': [
@@ -47,6 +46,8 @@ setup(
     },
     classifiers=[
         'Environment :: Console',
+        'Intended Audience :: Developers',
+        'Intended Audience :: Information Technology',
         'Intended Audience :: System Administrators',
         'License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)',
         'Natural Language :: English',

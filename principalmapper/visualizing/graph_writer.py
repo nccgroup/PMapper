@@ -19,7 +19,7 @@
 
 import pydot
 
-from principalmapper.common.graphs import Graph
+from principalmapper.common import Graph
 from principalmapper.querying.presets.privesc import can_privesc
 
 

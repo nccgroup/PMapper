@@ -19,7 +19,7 @@
 import copy
 import datetime as dt
 
-from principalmapper.common.graphs import Graph
+from principalmapper.common import Graph
 from principalmapper.querying import query_utils
 from principalmapper.querying.local_policy_simulation import *
 from principalmapper.querying.query_result import QueryResult

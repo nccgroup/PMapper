@@ -1,4 +1,4 @@
-"""Python code for handling AWS IAM policies"""
+"""Python module containing the Policy class and any Policy-specific utility functions (currently none)."""
 
 
 #  Copyright (c) NCC Group and Erik Steringer 2019. This file is part of Principal Mapper.
@@ -17,7 +17,9 @@
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 class Policy(object):
-    """A class representing a single IAM policy"""
+    """The basic Policy object: tracks data about the IAM Policy this represents. This includes who the policy
+    is attached to (arn is the IAM User/Role for inline, policy ARN otherwose), what its name is (inline),
+    and the contents of the policy (in dictionary form)."""
 
     def __init__(self, arn: str, name: str, policy_doc: dict):
         """Constructor.
@@ -35,7 +37,7 @@ class Policy(object):
         self.name = name
         self.policy_doc = policy_doc
 
-    def to_dictionary(self):
+    def to_dictionary(self) -> dict:
         """Returns a dictionary representation of this object for storage"""
         return {
             'arn': self.arn,

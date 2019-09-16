@@ -1,5 +1,4 @@
-"""Holds the base object EdgeChecker to be implemented and used in identifying edges"""
-
+"""Holds the base object EdgeChecker to be implemented and used in other classes that identify edges."""
 
 
 #  Copyright (c) NCC Group and Erik Steringer 2019. This file is part of Principal Mapper.
@@ -23,8 +22,7 @@ from typing import List
 
 import botocore.session
 
-from principalmapper.common.edges import Edge
-from principalmapper.common.nodes import Node
+from principalmapper.common import Edge, Node
 
 
 class EdgeChecker(object):

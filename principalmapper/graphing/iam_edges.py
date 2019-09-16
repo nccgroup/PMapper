@@ -20,14 +20,13 @@ import io
 import os
 from typing import List
 
-from principalmapper.common.edges import Edge
-from principalmapper.common.nodes import Node
+from principalmapper.common import Edge, Node
 from principalmapper.graphing.edge_checker import EdgeChecker
 from principalmapper.querying import query_interface
 
 
 class IAMEdgeChecker(EdgeChecker):
-    """Goes through the IAM service to locate potential edges between nodes."""
+    """Class for identifying if IAM can be used by IAM principals to gain access to other IAM principals."""
 
     def return_edges(self, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
         """Fulfills expected method return_edges."""

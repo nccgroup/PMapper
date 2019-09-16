@@ -10,7 +10,6 @@ dictionary objects with the format:
 """
 
 
-
 #  Copyright (c) NCC Group and Erik Steringer 2019. This file is part of Principal Mapper.
 #
 #      Principal Mapper is free software: you can redistribute it and/or modify
@@ -31,10 +30,8 @@ import json
 from typing import List
 
 import principalmapper
-from principalmapper.common.graphs import Graph
-from principalmapper.common.nodes import Node
+from principalmapper.common import Graph, Node
 from principalmapper.querying import query_interface
-from principalmapper.querying.query_result import QueryResult
 from principalmapper.querying.presets.privesc import can_privesc
 from principalmapper.util import arns
 
@@ -62,11 +59,11 @@ def gen_all_findings(graph: Graph) -> List[dict]:
     """Generates findings of risk, returns a list of finding-dictionary objects."""
     result = []
     result.extend(gen_privesc_findings(graph))
-    result.extend(gen_mfa_actions_finding(graph))
+    result.extend(gen_mfa_actions_findings(graph))
     # TODO: result.extend(gen_mfa_evasion_finding(graph))
-    result.extend(gen_overprivileged_function_finding(graph))
-    result.extend(gen_overprivileged_instance_profile_finding(graph))
-    result.extend(gen_overprivileged_stack_finding(graph))
+    result.extend(gen_overprivileged_function_findings(graph))
+    result.extend(gen_overprivileged_instance_profile_findings(graph))
+    result.extend(gen_overprivileged_stack_findings(graph))
     return result
 
 
@@ -112,7 +109,7 @@ def gen_privesc_findings(graph: Graph) -> List[dict]:
     return result
 
 
-def gen_mfa_actions_finding(graph: Graph) -> List[dict]:
+def gen_mfa_actions_findings(graph: Graph) -> List[dict]:
     """Generates findings related to risk from IAM Users able to call sensitive actions without needing MFA."""
     result = []
     affected_users = []
@@ -170,7 +167,7 @@ def _can_call_without_mfa(node: Node, actions: List[str]) -> bool:
     return False
 
 
-def gen_overprivileged_instance_profile_finding(graph: Graph) -> List[dict]:
+def gen_overprivileged_instance_profile_findings(graph: Graph) -> List[dict]:
     """Generates findings related to risk from EC2 instances being loaded with overprivileged instance profiles."""
     result = []
     affected_roles = []
@@ -205,7 +202,7 @@ def gen_overprivileged_instance_profile_finding(graph: Graph) -> List[dict]:
     return result
 
 
-def gen_overprivileged_function_finding(graph: Graph) -> List[dict]:
+def gen_overprivileged_function_findings(graph: Graph) -> List[dict]:
     """Generates findings related to risk from Lambda functions being loaded with overprivileged roles"""
     result = []
     affected_roles = []
@@ -243,7 +240,7 @@ def gen_overprivileged_function_finding(graph: Graph) -> List[dict]:
     return result
 
 
-def gen_overprivileged_stack_finding(graph: Graph) -> List[dict]:
+def gen_overprivileged_stack_findings(graph: Graph) -> List[dict]:
     """Generates findings related to risk from CloudFormation stacks being loaded with overprivileged roles"""
     result = []
     affected_roles = []

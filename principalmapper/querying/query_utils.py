@@ -17,9 +17,7 @@
 
 from typing import List
 
-from principalmapper.common.edges import Edge
-from principalmapper.common.graphs import Graph
-from principalmapper.common.nodes import Node
+from principalmapper.common import Edge, Graph, Node
 
 
 def get_search_list(graph: Graph, node: Node) -> List[List[Edge]]:
