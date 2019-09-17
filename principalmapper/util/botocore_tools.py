@@ -28,7 +28,7 @@ def get_session(profile_arg: Optional[str]) -> botocore.session.Session:
     # command-line args (--profile)
     if profile_arg is not None:
         result = botocore.session.Session(profile=profile_arg)
-    else:  # pull from environment vars
+    else:  # pull from environment vars / metadata
         result = botocore.session.get_session()
 
     stsclient = result.create_client('sts')

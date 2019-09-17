@@ -26,7 +26,7 @@ from typing import Optional
 
 import botocore.session
 
-from principalmapper.analysis.risks import gen_findings_and_print
+from principalmapper.analysis.find_risks import gen_findings_and_print
 import principalmapper.graphing.graph_actions
 from principalmapper.graphing.edge_identification import checker_map
 from principalmapper.querying import query_actions

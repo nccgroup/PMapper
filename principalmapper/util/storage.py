@@ -37,6 +37,7 @@ def get_storage_root():
         result = os.path.join(appdatadir, 'principalmapper')
     elif platform == 'linux' or platform == 'freebsd':
         # Linux/FreeBSD: follow XDG convention: $XDG_DATA_HOME/principalmapper/
+        # if $XDG_DATA_HOME isn't set, default to ~/.local/share/principalmapper/
         appdatadir = os.getenv('XDG_DATA_HOME')
         if appdatadir is None:
             appdatadir = os.path.join(os.path.expanduser('~'), '.local', 'share')

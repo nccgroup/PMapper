@@ -20,16 +20,25 @@ import os.path
 import sys
 
 import botocore.session
-import principalmapper
 from principalmapper.common import Graph
 from principalmapper.graphing import gathering
 from principalmapper.util.debug_print import dprint
 from principalmapper.util.storage import get_storage_root
-from typing import Optional
+from typing import List, Optional
+
+
+def create_new_graph(session: botocore.session.Session, service_list: List[str], debug=False) -> Graph:
+    """Wraps around principalmapper.graphing.gathering.create_graph(...), specifying to print data to stdout. This
+    fulfills `pmapper graph --create`.
+    """
+
+    return gathering.create_graph(session, service_list, sys.stdout, debug)
 
 
 def print_graph_data(graph: Graph) -> None:
-    """Given a Graph object, print information about the Graph"""
+    """Given a Graph object, prints a small amount of information about the Graph. This fulfills
+    `pmapper graph --display`, and also gets ran after `pmapper graph --create`.
+    """
     print('Graph Data for Account:  {}'.format(graph.metadata['account_id']))
     admin_count = 0
     for node in graph.nodes:
@@ -41,23 +50,19 @@ def print_graph_data(graph: Graph) -> None:
     print('# of (tracked) Policies: {}'.format(len(graph.policies)))
 
 
-def create_new_graph(session: botocore.session.Session, service_list: list, debug=False) -> Graph:
-    """Implements creating a graph from AWS API data and returning the resulting Graph object"""
-    stsclient = session.create_client('sts')
-    caller_identity = stsclient.get_caller_identity()
-    dprint(debug, "Caller Identity: {}".format(caller_identity['Arn']))
-    metadata = {'account_id': caller_identity['Account'], 'pmapper_version': principalmapper.__version__}
-    return gathering.create_graph(session, metadata, service_list, sys.stdout, debug)
-
-
 def get_graph_from_disk(location: str) -> Graph:
-    """Returns a Graph object constructed from data stored on-disk"""
+    """Returns a Graph object constructed from data stored on-disk at any location. This basically wraps around the
+    static method in principalmapper.common.graph named Graph.create_graph_from_local_disk(...).
+    """
 
     return Graph.create_graph_from_local_disk(location)
 
 
 def get_existing_graph(session: Optional[botocore.session.Session], account: Optional[str], debug=False) -> Graph:
-    """Implements creating a graph from data stored on disk and returning the resulting Graph object"""
+    """Returns a Graph object stored on-disk in a standard location (per-OS, using the get_storage_root utility function
+    in principalmapper.util.storage). Uses the session/account parameter to choose the directory from under the
+    standard location.
+    """
     if account is not None:
         dprint(debug, 'Loading account data based on parameter --account')
         graph = get_graph_from_disk(os.path.join(get_storage_root(), account))

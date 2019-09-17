@@ -142,7 +142,7 @@ def handle_preset(graph: Graph, query: str, skip_admins: bool = False, output: i
     elif tokens[1] == 'connected':
         connected.handle_preset_query(graph, tokens, skip_admins, output, debug)
     else:
-        _write_query_help()
+        _write_query_help(output)
         return
 
 

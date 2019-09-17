@@ -4,20 +4,21 @@ Principal Mapper (PMapper) is a script and library for identifying risks in the 
 Access Management (IAM) in an AWS account.
 
 PMapper allows users to identify which IAM users and roles have access to certain actions and resources in an AWS 
-account. This is important for ensuring that sensitive items such as S3 objects with PII are isolated.
+account. This is important for ensuring that sensitive resources, such as S3 objects with PII, are isolated. 
 
-PMapper creates a graph of an AWS account's IAM users and roles. This graph, composed of nodes and edges, represents 
-the different ways that one node could access another. When running a query to determine if an IAM user or role has 
-access to a certain action/resource, it also checks if the user or role could access other users or roles that have 
-access to that action/resource. This catches scenarios such as when a user doesn't have direct access to an S3 object, 
-but could launch an EC2 instance that has access to the S3 object.
+PMapper creates a graph of an AWS account's IAM users and roles (principals). This graph, composed of nodes and edges, 
+represents the different ways that one principal could access another. When running a query to determine if a 
+principal has access to a certain action/resource, it also checks if the user or role could access other users or roles 
+that have access to that action/resource. This catches scenarios such as when a user doesn't have direct access to an 
+S3 object, but could launch an EC2 instance that has access to the S3 object.
 
 # Installation
 
 ## Requirements
 
-Principal Mapper is built using the `botocore` library and Python 3.5+. Python2  is not supported. Principal Mapper 
-also requires `pydot` (available on `pip`), and `graphviz` (available on Windows, macOS, and Linux).
+Principal Mapper is built using the `botocore` library and Python 3.5+. Python 2  is not supported. Principal Mapper 
+also requires `pydot` (available on `pip`), and `graphviz` (available on Windows, macOS, and Linux from 
+https://graphviz.org/ ).
 
 ## Installation From Source Code
 
@@ -38,14 +39,20 @@ pip install .
 
 ## Graphing
 
-To start, create a graph for an AWS account.
+To start, create a graph for an AWS account:
 
 ~~~bash
 pmapper graph --create
 ~~~
 
-This stores information locally on disk about all the IAM users, roles, groups, and policies in the account.
+This stores information locally on disk about all the IAM users, roles, groups, and policies in the account. Accounts 
+that are already graphed can be found using:
 
+~~~bash
+pmapper graph --list
+~~~
+
+The account IDs that are printed can be used in other `pmapper` subcommands via the `--account` parameter.
 
 ## Querying
 
@@ -77,15 +84,15 @@ These presets are accessible from `query` and `argquery`. See the following exam
 pmapper query "preset privesc user/PowerUser"
 pmapper argquery --principal user/PowerUser --preset privesc
 
-# Find all users that can escalate privileges
+# Find all principals that can escalate privileges
 pmapper query "preset privesc *"
 pmapper argquery --principal '*' --preset privesc
 
-# Find all users that PowerUser can connect to
+# Find all principals that PowerUser can access
 pmapper query "preset connected user/PowerUser *"
 pmapper argquery --principal user/PowerUser --resource '*' --preset connected
 
-# Find all users that can connect to PowerUser
+# Find all principals that can access PowerUser
 pmapper query "preset connected * user/PowerUser"
 pmapper argquery --principal * --resource user/PowerUser --preset connected
 ~~~
@@ -106,6 +113,14 @@ launch the repl like so:
 pmapper repl
 ~~~
 
+Interacting with the REPL is very similar to running multiple queries from the command-line:
+
+~~~
+repl> query "who can do s3:GetObject with *"
+...
+repl> argquery --principal "*" --preset privesc
+~~~
+
 ## Visualization
 
 PMapper includes a visualization feature, which draws a specified graph. This graph highlights principals with 
@@ -113,7 +128,7 @@ administrative privileges in blue, and principals that can escalate privileges i
 file outputs. It uses `graphviz` in order to create the image. It can be used like so:
 
 ~~~bash
-pmapper visualize --filetype svg
+pmapper visualize --filetype png
 ~~~
 
 ![](example-viz.png)
@@ -132,14 +147,78 @@ pmapper analysis --output-type text
 
 PMapper grabs credentials in the following order:
 
-1. The `--profile` argument, when specified, is checked first. If specified, PMapper gets credentials for the 
-botocore profile with the same name. 
-2. AWS Access Key Environment Variables (`AWS_ACCESS_KEY_ID`, etc.) is checked next.
-3. The `default` botocore profile is used last.
+1. The `--profile` argument, when specified, is checked first. If specified, PMapper grabs credentials from botocore 
+for that profile name.
+2. PMapper uses the `get_session()` function from `botocore.session`, which should grab credentials from the 
+environment variables/metadata service/default profile.
 
 For querying, REPL, visualization, and analysis, you can specify the `--account` argument with the 12-digit ID of the 
-account being examined. This cannot be specified along with `--profile`. It directs PMapper to use that account 
-for the command, rather that deriving the account from the credentials.
+account to examine. This cannot be specified along with `--profile`. It directs PMapper to use that account 
+for the command, rather that deriving the account from credentials.
+
+# Library Use
+
+Principal Mapper includes a library that can be used instead of the command-line interface. All functions and methods 
+have type-hints and a small amount of documentation for reference. See [example_script.py](example_script.py) for 
+an example.
+
+Future major-version revisions (e.g. 1.X.X -> 2.0.0) of Principal Mapper may alter/remove functions/classes/methods. 
+Minor-version revisions (e.g. 1.1.X -> 1.2.0) will not remove existing functions/classes/methods but may add new ones 
+or alter their behaviors.
+
+## Packages of Interest
+
+### Graphing
+
+* `principalmapper.graphing.graph_actions`
+   * function `get_existing_graph`: grabs a Graph object from disk, based on current botocore session or account ID, 
+   from a standard location on-disk.
+   * function `get_graph_from_disk`: grabs a Graph object from disk, user-specified directory.
+* `principalmapper.graphing.gathering` 
+   * function `create_graph`: generates Graph objects using a botocore Session object.
+* `principalmapper.graphing.edge_identification` 
+   * variable `checker_map`: a dictionary, the keys of which are services that this version of Principal Mapper can get 
+   edge data from. This should always be updated with all services that are supported, and `checker_map.keys()` can 
+   always be passed to `create_graph` without error.
+
+### Querying
+
+* `principalmapper.querying.query_interface`
+   * function `search_authorization_for`: performs an expansive search to determine if a principal can make a given 
+   AWS API call, or if the principal can access another that does have permission. Returns `QueryResult` objects 
+   (defined in `principalmapper.querying.query_result`) with information on if the principal is authorized, or if 
+   it has to chain through other principals with authorization.
+   * function `local_check_authorization`: determines if a principal can make a given AWS API call, but **DOES NOT** 
+   perform the expansive search of `search_authorization_for`.
+   * function `local_check_authorization_handling_mfa`: determines if a principal can make a given AWS API call, 
+   **DOES NOT** perform the expansive search of `search_authorization_for`, but **DOES** manipulate condition keys 
+   to test if the AWS API call can be made with or without MFA.
+
+### Visualizing
+
+* `principalmapper.visualizing.graph_writer`:
+   * function `handle_request`: creates an image file (PNG/SVG) or graph file (DOT)
+   
+### Analysis
+
+* `principalmapper.analysis.find_risks`:
+   * function `gen_findings_and_print`: dumps findings in markdown(text)/JSON format to stdout. Wraps around 
+   `gen_report`, which can be used instead for custom formatting by pulling `Report` and `Finding` objects.
+* `principalmapper.analysis.report`: 
+   * class `Report`: a simple object containing metadata about generated findings (account ID, date, version of 
+   PMapper).
+* `principalmapper.analysis.finding`:
+   * class `Finding`: a simple object containing data about a risk to the AWS account. 
+   
+### Utils
+
+* `principalmapper.util.arns`:
+   * functions prefixed with `get_`: extract a specific chunk of an ARN, like the account ID or region.
+* `principalmapper.util.botocore_tools`:
+   * function `get_session`: get a botocore Session object based on optional profile parameter.
+* `principalmapper.util.storage`:
+   * function `get_storage_root`: returns a path on disk that Principal Mapper will use for storing Graph data by 
+   default. Output depends on OS.
 
 # License
 

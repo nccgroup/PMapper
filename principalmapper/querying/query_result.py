@@ -24,7 +24,10 @@ from principalmapper.common import Edge, Node
 
 
 class QueryResult(object):
-    """Query result object returned by querying methods."""
+    """Query result object returned by querying methods. The allowed field specifies if the passed Node is authorized
+    to make the API call. The edge_list field, if not an empty list, specifies which edges the Node must traverse
+    to make the API call.
+    """
     def __init__(self, allowed: bool, edge_list: List[Edge], node: Node):
         self.allowed = allowed
         self.edge_list = edge_list

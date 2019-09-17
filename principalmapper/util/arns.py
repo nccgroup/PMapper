@@ -45,8 +45,10 @@ def get_account_id(arn: str):
 
 
 def get_resource(arn: str):
-    """Returns the resource (trailing part) from a string ARN."""
-    return ''.join(arn.split(':')[5:])
+    """Returns the resource (trailing part) from a string ARN. Note that we're splitting on colons, so we have to
+    join with colons in case the trailing part uses colon-separators instead of forward-slashes.
+    """
+    return ':'.join(arn.split(':')[5:])
 
 
 def validate_arn(arn: str) -> bool:

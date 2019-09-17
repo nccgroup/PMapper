@@ -1,7 +1,6 @@
 """Code to write Graph data to various output formats."""
 
 
-
 #  Copyright (c) NCC Group and Erik Steringer 2019. This file is part of Principal Mapper.
 #
 #      Principal Mapper is free software: you can redistribute it and/or modify

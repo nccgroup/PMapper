@@ -19,6 +19,7 @@ import io
 import os
 
 import botocore.session
+import principalmapper
 from principalmapper.common import Node, Group, Policy, Graph
 from principalmapper.graphing import edge_identification
 from principalmapper.querying import query_interface
@@ -27,13 +28,20 @@ from principalmapper.util.debug_print import dprint
 from typing import List, Optional
 
 
-def create_graph(session: botocore.session.Session, metadata: dict, service_list: list,
-                 output: io.StringIO = os.devnull, debug=False) -> Graph:
-    """Creates a list of Node objects to use for building a Graph.
+def create_graph(session: botocore.session.Session, service_list: list, output: io.StringIO = os.devnull,
+                 debug=False) -> Graph:
+    """Constructs a Graph object.
 
-    Parameter `metadata` must be a valid dictionary with 'account_id' and 'pmapper_version' correctly filled in
-    Information about the graph as it's built will be written to parameter `output`
+    Information about the graph as it's built will be written to the IO parameter `output`.
     """
+    stsclient = session.create_client('sts')
+    caller_identity = stsclient.get_caller_identity()
+    dprint(debug, "Caller Identity: {}".format(caller_identity['Arn']))
+    metadata = {
+        'account_id': caller_identity['Account'],
+        'pmapper_version': principalmapper.__version__
+    }
+
     iamclient = session.create_client('iam')
 
     # Gather users and roles, generating a Node per user and per role
