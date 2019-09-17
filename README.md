@@ -166,6 +166,10 @@ Future major-version revisions (e.g. 1.X.X -> 2.0.0) of Principal Mapper may alt
 Minor-version revisions (e.g. 1.1.X -> 1.2.0) will not remove existing functions/classes/methods but may add new ones 
 or alter their behaviors.
 
+**Exception:** All instances of the `debug` parameter in all of the functions in this library, which is used by the 
+`dprint` function, will eventually be removed as the logging bits are improved. Just keep the `debug` parameter out 
+of your production code. `dprint` is gonna be replaced too.
+
 ## Packages of Interest
 
 ### Graphing
@@ -192,7 +196,8 @@ or alter their behaviors.
    perform the expansive search of `search_authorization_for`.
    * function `local_check_authorization_handling_mfa`: determines if a principal can make a given AWS API call, 
    **DOES NOT** perform the expansive search of `search_authorization_for`, but **DOES** manipulate condition keys 
-   to test if the AWS API call can be made with or without MFA.
+   to test if the AWS API call can be made with or without MFA. Note that you can achieve the same effect by calling 
+   `local_check_authorization` and setting the multi-factor auth conditions.
 
 ### Visualizing
 
