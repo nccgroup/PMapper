@@ -1,9 +1,4 @@
-#!/usr/bin/env python
-
-"""
-Wrap around principalmapper/__main__.py
-"""
-
+"""Utility functions for working with botocore"""
 
 #  Copyright (c) NCC Group and Erik Steringer 2019. This file is part of Principal Mapper.
 #
@@ -20,9 +15,22 @@ Wrap around principalmapper/__main__.py
 #      You should have received a copy of the GNU Affero General Public License
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
-import sys
+from typing import Optional
 
-from principalmapper.__main__ import main
+import botocore.session
 
-if __name__ == '__main__':
-    sys.exit(main())
+
+def get_session(profile_arg: Optional[str]) -> botocore.session.Session:
+    """Returns a botocore Session object taking into consideration Env-vars, etc.
+
+    Tries to follow order from: https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html
+    """
+    # command-line args (--profile)
+    if profile_arg is not None:
+        result = botocore.session.Session(profile=profile_arg)
+    else:  # pull from environment vars / metadata
+        result = botocore.session.get_session()
+
+    stsclient = result.create_client('sts')
+    stsclient.get_caller_identity()  # raises error if it's not workable
+    return result

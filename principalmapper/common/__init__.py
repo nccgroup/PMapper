@@ -1,10 +1,3 @@
-#!/usr/bin/env python
-
-"""
-Wrap around principalmapper/__main__.py
-"""
-
-
 #  Copyright (c) NCC Group and Erik Steringer 2019. This file is part of Principal Mapper.
 #
 #      Principal Mapper is free software: you can redistribute it and/or modify
@@ -20,9 +13,15 @@ Wrap around principalmapper/__main__.py
 #      You should have received a copy of the GNU Affero General Public License
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
-import sys
 
-from principalmapper.__main__ import main
+"""Module defining classes and functions used commonly across Principal Mapper. Importing this package currently gives
+the Node, Edge, Graph, Group, and Policy classes, i.e. you can use `from principalmapper.common import Graph`."""
 
-if __name__ == '__main__':
-    sys.exit(main())
+from principalmapper.common.nodes import Node
+from principalmapper.common.edges import Edge
+from principalmapper.common.graphs import Graph
+from principalmapper.common.groups import Group
+from principalmapper.common.policies import Policy
+
+# Put submodules into __all__ for neater interface of principalmapper.common
+__all__ = ['Node', 'Edge', 'Graph', 'Group', 'Policy']

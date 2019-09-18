@@ -1,9 +1,4 @@
-#!/usr/bin/env python
-
-"""
-Wrap around principalmapper/__main__.py
-"""
-
+"""Code for handling printing to console depending on if debugging is enabled"""
 
 #  Copyright (c) NCC Group and Erik Steringer 2019. This file is part of Principal Mapper.
 #
@@ -22,7 +17,15 @@ Wrap around principalmapper/__main__.py
 
 import sys
 
-from principalmapper.__main__ import main
 
-if __name__ == '__main__':
-    sys.exit(main())
+def dprint(debugging: bool, message: str) -> None:
+    """Prints message to console if debugging"""
+    if debugging:
+        sys.stderr.write(message)
+        sys.stderr.write("\n")
+
+
+def dwrite(debugging: bool, message: str) -> None:
+    """Writes message to console if debugging (no newline at the end)"""
+    if debugging:
+        sys.stderr.write(message)

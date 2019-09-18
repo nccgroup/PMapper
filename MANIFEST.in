@@ -1,0 +1,3 @@
+include LICENSE README.md example-viz.png
+recursive-exclude * *.pyc
+prune tests*

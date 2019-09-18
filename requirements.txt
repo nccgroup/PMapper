@@ -1,3 +1,4 @@
 botocore
+packaging
+python-dateutil
 pydot
-tqdm

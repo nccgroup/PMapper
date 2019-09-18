@@ -1,9 +1,4 @@
-#!/usr/bin/env python
-
-"""
-Wrap around principalmapper/__main__.py
-"""
-
+"""Module principalmapper: Python code to dissect and analyze an AWS account's use of IAM"""
 
 #  Copyright (c) NCC Group and Erik Steringer 2019. This file is part of Principal Mapper.
 #
@@ -20,9 +15,4 @@ Wrap around principalmapper/__main__.py
 #      You should have received a copy of the GNU Affero General Public License
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
-import sys
-
-from principalmapper.__main__ import main
-
-if __name__ == '__main__':
-    sys.exit(main())
+__version__ = '1.0.0'
