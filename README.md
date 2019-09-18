@@ -20,6 +20,12 @@ Principal Mapper is built using the `botocore` library and Python 3.5+. Python 2
 also requires `pydot` (available on `pip`), and `graphviz` (available on Windows, macOS, and Linux from 
 https://graphviz.org/ ).
 
+## Installation from Pip
+
+~~~bash
+pip install principalmapper
+~~~
+
 ## Installation From Source Code
 
 Clone the repository:
