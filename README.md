@@ -100,7 +100,7 @@ pmapper argquery --principal user/PowerUser --resource '*' --preset connected
 
 # Find all principals that can access PowerUser
 pmapper query "preset connected * user/PowerUser"
-pmapper argquery --principal * --resource user/PowerUser --preset connected
+pmapper argquery --principal '*' --resource user/PowerUser --preset connected
 ~~~
 
 ## REPL
@@ -177,6 +177,16 @@ or alter their behaviors.
 of your production code. `dprint` is gonna be replaced too.
 
 ## Packages of Interest
+
+### Common
+
+* `principalmapper.common`
+   * Classes `Graph`, `Node`, `Edge`, `Group`, and `Policy`. These can be imported 
+   straight through `principalmapper.common` with a single statement:
+   
+      ~~~python
+      from principalmapper.common import Graph, Node, Edge
+      ~~~
 
 ### Graphing
 

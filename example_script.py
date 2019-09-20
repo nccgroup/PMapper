@@ -36,12 +36,12 @@ def main():
     parser.add_argument('--format', default='text', choices=['text', 'json'])
     parsed_args = parser.parse_args()
 
-    # Generate the graph (such as with pmapper graph --create)
+    # Generate the graph (such as with `pmapper graph --create`)
     session = botocore_tools.get_session(parsed_args.profile)
     # graph_obj = gathering.create_graph(session, checker_map.keys())  # gets a Graph object without printing info
     graph_obj = graph_actions.create_new_graph(session, checker_map.keys())
 
-    # Print out identified findings (such as with pmapper analysis)
+    # Print out identified findings (such as with `pmapper analysis`)
     find_risks.gen_findings_and_print(graph_obj, parsed_args.format)
 
 
