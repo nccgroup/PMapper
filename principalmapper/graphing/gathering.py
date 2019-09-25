@@ -127,6 +127,9 @@ def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False)
         if arns.get_resource(node.arn).startswith('user/'):
             # Grab access-key count and update node
             user_name = arns.get_resource(node.arn)[5:]
+            if '/' in user_name:
+                user_name = user_name.split('/')[-1]
+                dprint(debug, 'removed path from username {}'.format(user_name))
             access_keys_data = iamclient.list_access_keys(UserName=user_name)
             node.access_keys = len(access_keys_data['AccessKeyMetadata'])
             dprint(debug, 'Access Key Count for {}: {}'.format(user_name, len(access_keys_data['AccessKeyMetadata'])))
@@ -162,6 +165,9 @@ def get_unfilled_groups(iamclient, nodes: List[Node], output: io.StringIO = os.d
             continue  # skip when not an IAM user
         dprint(debug, 'finding groups for user {}'.format(node.arn))
         user_name = arns.get_resource(node.arn)[5:]
+        if '/' in user_name:
+            user_name = user_name.split('/')[-1]
+            dprint(debug, 'removed path from username {}'.format(user_name))
         group_list = iamclient.list_groups_for_user(UserName=user_name)
         for group in group_list['Groups']:
             for group_obj in result:
