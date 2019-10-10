@@ -115,8 +115,9 @@ class CloudFormationEdgeChecker(EdgeChecker):
 
                 relevant_stacks = []  # we'll reuse this for *ChangeSet
                 for stack in stack_list:
-                    if stack['RoleARN'] == node_destination.arn:
-                        relevant_stacks.append(stack)
+                    if 'RoleArn' in stack:
+                        if stack['RoleARN'] == node_destination.arn:
+                            relevant_stacks.append(stack)
 
                 # See if source can call UpdateStack to use the current role of a stack (setting a new template)
                 for stack in relevant_stacks:

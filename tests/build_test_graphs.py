@@ -18,11 +18,7 @@
 import sys
 
 import principalmapper
-from principalmapper.common.edges import Edge
-from principalmapper.common.graphs import Graph
-from principalmapper.common.groups import Group
-from principalmapper.common.nodes import Node
-from principalmapper.common.policies import Policy
+from principalmapper.common import Graph, Node, Policy
 from principalmapper.graphing.edge_identification import obtain_edges, checker_map
 
 
@@ -66,7 +62,7 @@ def build_playground_graph() -> Graph:
 
     # Regular ec2 role
     nodes.append(Node(common_iam_prefix + 'role/ec2_ssm_role', 'AIDA00000000000000001', [ec2_for_ssm_policy], [],
-                      ec2_trusted_policy_doc, common_iam_prefix + 'instance-profile:/ec2_ssm_role', 0, False, False))
+                      ec2_trusted_policy_doc, common_iam_prefix + 'instance-profile/ec2_ssm_role', 0, False, False))
 
     # ec2 role with admin
     nodes.append(Node(common_iam_prefix + 'role/ec2_admin_role', 'AIDA00000000000000002', [ec2_for_ssm_policy], [], ec2_trusted_policy_doc,
@@ -86,6 +82,14 @@ def build_playground_graph() -> Graph:
 
     # jump user with access to sts:AssumeRole
     nodes.append(Node(common_iam_prefix + 'user/jumpuser', 'AIDA00000000000000006', [jump_policy], [], None, None, 1, True, False))
+
+    # user with S3 access, path in user's ARN
+    nodes.append(Node(common_iam_prefix + 'user/somepath/some_other_jumpuser', 'AIDA00000000000000007', [jump_policy],
+                      [], None, None, 1, True, False))
+
+    # role with S3 access, path in role's ARN
+    nodes.append(Node(common_iam_prefix + 'role/somepath/somerole', 'AIDA00000000000000008', [s3_full_access_policy],
+                      [], alt_root_trusted_policy_doc, None, 0, False, False))
 
     # edges to add
     edges = obtain_edges(None, checker_map.keys(), nodes, sys.stdout, True)
