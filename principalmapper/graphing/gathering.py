@@ -131,8 +131,12 @@ def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False)
                 user_name = user_name.split('/')[-1]
                 dprint(debug, 'removed path from username {}'.format(user_name))
             access_keys_data = iamclient.list_access_keys(UserName=user_name)
-            node.access_keys = len(access_keys_data['AccessKeyMetadata'])
-            dprint(debug, 'Access Key Count for {}: {}'.format(user_name, len(access_keys_data['AccessKeyMetadata'])))
+            num_access_keys = 0
+            for access_key in access_keys_data['AccessKeyMetadata']:
+                if access_key['Status'] == 'Active':
+                    num_access_keys += 1
+            node.access_keys = num_access_keys
+            dprint(debug, 'Access Key Count for {}: {} {}'.format(user_name, len(access_keys_data['AccessKeyMetadata']), num_access_keys))
 
     return result
 

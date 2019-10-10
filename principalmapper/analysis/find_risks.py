@@ -134,7 +134,7 @@ def gen_mfa_actions_findings(graph: Graph) -> List[Finding]:
                                'log in to the AWS Console. However, unless there is a specific IAM policy attached ' \
                                'to the user, they will not need to provide a second factor of authentication when ' \
                                'making API calls.\n\nThe following administrative IAM Users have at least one set of ' \
-                               'access keys, and can call sensitive actions to alter permissions or add users ' \
+                               'active access keys, and can call sensitive actions to alter permissions or add users ' \
                                'without using a second factor of authentication:\n\n'
 
         description_body = ''
