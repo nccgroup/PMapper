@@ -18,6 +18,7 @@ Provides a command-line interface to use the principalmapper library
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 import argparse
+import json
 import os
 import os.path
 from pathlib import Path
@@ -201,7 +202,10 @@ def main() -> int:
 
 def handle_graph(parsed_args) -> int:
     """Processes the arguments for the graph subcommand and executes related tasks"""
-    session = _grab_session(parsed_args)
+    if not parsed_args.list:
+        session = _grab_session(parsed_args)
+    else:
+        session = None
 
     if parsed_args.create:  # --create
         graph = principalmapper.graphing.graph_actions.create_new_graph(session, checker_map.keys(), parsed_args.debug)
@@ -221,7 +225,10 @@ def handle_graph(parsed_args) -> int:
         print("---")
         storage_root = Path(get_storage_root())
         for direct in storage_root.iterdir():
-            print(direct.name)
+            metadata_file = direct.joinpath(Path('metadata.json'))
+            with open(str(metadata_file)) as fd:
+                version = json.load(fd)['pmapper_version']
+            print("{} (PMapper Graph Version {})".format(direct.name, version))
 
     elif parsed_args.update_edges:  # --update-edges
         graph = principalmapper.graphing.graph_actions.get_existing_graph(
