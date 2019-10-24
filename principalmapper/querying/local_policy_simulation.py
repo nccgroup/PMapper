@@ -697,71 +697,6 @@ def _get_null_match(policy_key: str, policy_value: Union[str, List[str]], contex
     return False
 
 
-def resource_policy_has_matching_statement_for_principal(principal: Node, resource_policy: dict, effect_value: str,
-                                                         action_to_check: str, resource_to_check: str,
-                                                         condition_keys_to_check: dict, debug: bool = False) -> bool:
-    """Locally determine if a node is permitted by a resource policy for a given action/resource/condition"""
-    dprint(debug, 'local resource policy check - principal: {}, effect: {}, action: {}, resource: {}, conditions: {}, '
-                  'resource_policy: {}'.format(principal.arn, effect_value, action_to_check, resource_to_check,
-                                               condition_keys_to_check, resource_policy))
-
-    for statement in _listify_dictionary(resource_policy['Statement']):
-        if statement['Effect'] != effect_value:
-            continue
-        matches_principal, matches_action, matches_resource, matches_condition = False, False, False, False
-        if 'Principal' in statement:  # should be a dictionary or string
-            if isinstance(statement['Principal'], str) and statement['Principal'] == '*':
-                matches_principal = True
-            if 'AWS' in statement['Principal']:
-                if _principal_matches_in_statement(principal, _listify_string(statement['Principal']['AWS'])):
-                    matches_principal = True
-        else:  # 'NotPrincipal' in statement:
-            matches_principal = True
-            if 'AWS' in statement['NotPrincipal']:
-                if _principal_matches_in_statement(principal, _listify_string(statement['NotPrincipal']['AWS'])):
-                    matches_principal = False
-
-        if not matches_principal:
-            continue
-
-        # if principal is good, proceed to check the Action
-        if 'Action' in statement:
-            for action in _listify_string(statement['Action']):
-                matches_action = _matches_after_expansion(action_to_check, action, debug=debug)
-                break
-        else:  # 'NotAction' in statement
-            matches_action = True
-            for notaction in _listify_string(statement['NotAction']):
-                if _matches_after_expansion(action_to_check, notaction, debug=debug):
-                    matches_action = False
-                    break  # finish looping
-        if not matches_action:
-            continue
-
-        # if action is good, proceed to check resource
-        if 'Resource' in statement:
-            for resource in _listify_string(statement['Resource']):
-                if _matches_after_expansion(resource_to_check, resource, debug=debug):
-                    matches_resource = True
-                    break
-        elif 'NotResource' in statement:
-            matches_resource = True
-            for notresource in _listify_string(statement['NotResource']):
-                if _matches_after_expansion(resource_to_check, notresource, debug=debug):
-                    matches_resource = False
-                    break
-        else:  # no resource element (seen in IAM role trust policies), treat as a match
-            matches_resource = True
-
-        # if resource is good, check condition
-        matches_condition = True  # TODO: handle this in local evaluation
-
-        if matches_principal and matches_action and matches_resource and matches_condition:
-            return True
-
-    return False
-
-
 def resource_policy_matching_statements(node_or_service: Union[Node, str], resource_policy: dict,
                                         action_to_check: str, resource_to_check: str, condition_keys_to_check: dict,
                                         debug: bool = False) -> list:
@@ -909,6 +844,8 @@ def policies_include_matching_allow_action(principal: Node, action_to_check: str
     """Helper function for online-testing. Does a 'light' scan of a principal's policies to determine if any of
     their statements have an Allow statement with a matching action. Helps reduce unecessary API calls to
     iam:SimulatePrincipalPolicy.
+
+    **NOTE:** Not something being used right now, given that all policy evaluation is local
     """
     dprint(debug, 'optimization check, determine if {} could even possibly call {}'.format(
         principal.arn, action_to_check
@@ -945,7 +882,7 @@ def _statement_matches_action(statement: dict, action: str, condition_keys: Opti
 
 
 def _statement_matches_resource(statement: dict, resource: str, condition_keys: Optional[dict] = None) -> bool:
-    """Helper function, returns True if the given action is in the given policy statement"""
+    """Helper function, returns True if the given resource is in the given policy statement"""
     if 'Resource' in statement:
         for item in _listify_string(statement['Resource']):
             if _matches_after_expansion(resource, item, condition_keys):
