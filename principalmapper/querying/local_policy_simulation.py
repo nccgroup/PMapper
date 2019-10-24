@@ -709,7 +709,9 @@ def resource_policy_has_matching_statement_for_principal(principal: Node, resour
         if statement['Effect'] != effect_value:
             continue
         matches_principal, matches_action, matches_resource, matches_condition = False, False, False, False
-        if 'Principal' in statement:  # should be a dictionary
+        if 'Principal' in statement:  # should be a dictionary or string
+            if isinstance(statement['Principal'], str) and statement['Principal'] == '*':
+                matches_principal = True
             if 'AWS' in statement['Principal']:
                 if _principal_matches_in_statement(principal, _listify_string(statement['Principal']['AWS'])):
                     matches_principal = True
@@ -774,6 +776,8 @@ def resource_policy_matching_statements(node_or_service: Union[Node, str], resou
     for statement in _listify_dictionary(resource_policy['Statement']):
         matches_principal, matches_action, matches_resource, matches_condition = False, False, False, False
         if 'Principal' in statement:  # should be a dictionary
+            if statement['Principal'] == '*':
+                matches_principal = True
             if isinstance(node_or_service, Node):
                 if 'AWS' in statement['Principal']:
                     if _principal_matches_in_statement(node_or_service, _listify_string(statement['Principal']['AWS'])):
@@ -797,36 +801,20 @@ def resource_policy_matching_statements(node_or_service: Union[Node, str], resou
             continue
 
         # if principal is good, proceed to check the Action
-        if 'Action' in statement:
-            for action in _listify_string(statement['Action']):
-                matches_action = _matches_after_expansion(action_to_check, action, debug=debug)
-                break
-        else:  # 'NotAction' in statement
-            matches_action = True
-            for notaction in _listify_string(statement['NotAction']):
-                if _matches_after_expansion(action_to_check, notaction, debug=debug):
-                    matches_action = False
-                    break  # finish looping
+        matches_action = _statement_matches_action(statement, action_to_check, condition_keys_to_check)
         if not matches_action:
             continue
 
         # if action is good, proceed to check resource
-        if 'Resource' in statement:
-            for resource in _listify_string(statement['Resource']):
-                if _matches_after_expansion(resource_to_check, resource, debug=debug):
-                    matches_resource = True
-                    break
-        elif 'NotResource' in statement:
-            matches_resource = True
-            for notresource in _listify_string(statement['NotResource']):
-                if _matches_after_expansion(resource_to_check, notresource, debug=debug):
-                    matches_resource = False
-                    break
-        else:  # no resource element (seen in IAM role trust policies), treat as a match
-            matches_resource = True
+        matches_resource = _statement_matches_resource(statement, resource_to_check, condition_keys_to_check)
+        if not matches_resource:
+            continue
 
         # if resource is good, check condition
-        matches_condition = True  # TODO: implement local condition check in policy/statement loop
+        if 'Condition' in statement:
+            matches_condition = _get_condition_match(statement['Condition'], condition_keys_to_check, debug)
+        else:
+            matches_condition = True
 
         if matches_principal and matches_action and matches_resource and matches_condition:
             results.append(statement)
@@ -865,33 +853,32 @@ def resource_policy_authorization(node_or_service: Union[Node, str], resource_ow
     if len(matching_statements) == 0:
         return ResourcePolicyEvalResult.NO_MATCH
 
+    # handle denies outright
+    for statement in matching_statements:
+        if statement['Effect'] == 'Deny':
+            return ResourcePolicyEvalResult.DENY_MATCH
+
     # handle nodes (IAM Users or Roles)
     if isinstance(node_or_service, Node):
         # if in a different account, check for denies and wrap it up
         if arns.get_account_id(node_or_service.arn) != resource_owner:
-            for statement in matching_statements:
-                if statement['Effect'] == 'Deny':
-                    return ResourcePolicyEvalResult.DENY_MATCH
             return ResourcePolicyEvalResult.DIFF_ACCOUNT_MATCH
 
         else:
-            # messy part: find denies, then determine if we send back ROOT or NODE match
-            for statement in matching_statements:
-                if statement['Effect'] == 'Deny':
-                    return ResourcePolicyEvalResult.DENY_MATCH
-
             node_match = False
             for statement in matching_statements:
                 if 'NotPrincipal' in statement:
                     # NotPrincipal means a node match (tested with S3)
                     node_match = True
+                elif isinstance(statement['Principal'], str) and statement['Principal'] == '*':
+                    # Case: "Principal": "*"
+                    node_match = True
                 else:
-                    for principal in _listify_string(statement['Principal']):
-                        if node_or_service.arn == principal:
-                            node_match = True
-                        if node_or_service.id_value == principal:
-                            node_match = True  # 'AIDA.*' and co. can match here
-
+                    # dig through 'AWS' element of Principal for node-matching
+                    if 'AWS' in statement['Principal']:
+                        for aws_principal in _listify_string(statement['Principal']['AWS']):
+                            if node_or_service.arn == aws_principal:
+                                node_match = True
             if node_match:
                 return ResourcePolicyEvalResult.NODE_MATCH
             else:
@@ -937,6 +924,42 @@ def policies_include_matching_allow_action(principal: Node, action_to_check: str
             else:  # 'NotAction' in statement
                 return True  # so broad that we'd need to simulate to make sure
     return False
+
+
+def _statement_matches_action(statement: dict, action: str, condition_keys: Optional[dict] = None) -> bool:
+    """Helper function, returns True if the given action is in the given policy statement"""
+    if 'Action' in statement:
+        for item in _listify_string(statement['Action']):
+            if _matches_after_expansion(action, item, condition_keys):
+                return True
+        return False
+    elif 'NotAction' in statement:
+        result = True
+        for item in _listify_string(statement['NotAction']):
+            if _matches_after_expansion(action, item, condition_keys):
+                result = False
+                break
+        return result
+    else:
+        return True
+
+
+def _statement_matches_resource(statement: dict, resource: str, condition_keys: Optional[dict] = None) -> bool:
+    """Helper function, returns True if the given action is in the given policy statement"""
+    if 'Resource' in statement:
+        for item in _listify_string(statement['Resource']):
+            if _matches_after_expansion(resource, item, condition_keys):
+                return True
+        return False
+    elif 'NotResource' in statement:
+        result = True
+        for item in _listify_string(statement['NotResource']):
+            if _matches_after_expansion(resource, item, condition_keys):
+                result = False
+                break
+        return result
+    else:
+        return True
 
 
 def _matches_after_expansion(string_to_check: str, string_to_check_against: str,

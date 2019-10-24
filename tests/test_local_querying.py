@@ -368,7 +368,7 @@ class LocalQueryingTests(unittest.TestCase):
         self.assertTrue(local_check_authorization(test_node_date_equals, 'iam:CreateUser', '*',
                                                   {'aws:CurrentTime': '1533859200'}, True))
         self.assertFalse(local_check_authorization(test_node_date_equals, 'iam:CreateUser', '*',
-                                                  {'aws:CurrentTime': '1533859201'}, True))
+                                                   {'aws:CurrentTime': '1533859201'}, True))
         self.assertFalse(local_check_authorization(test_node_date_equals, 'iam:CreateUser', '*',
                                                    {'aws:CurrentTime': '2018-08-10T00:00:01Z'}, True))
 
@@ -723,7 +723,7 @@ class LocalQueryingTests(unittest.TestCase):
                 'dynamodb:GetItem',
                 'arn:aws:dynamodb:us-west-2:000000000000:table/Thread',
                 {
-                    'dynamodb:Attributes': ['ID', 'Message', 'Tags',]
+                    'dynamodb:Attributes': ['ID', 'Message', 'Tags']
                 },
                 True
             )

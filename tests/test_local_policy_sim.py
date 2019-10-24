@@ -17,10 +17,67 @@
 
 import unittest
 
-from principalmapper.querying.local_policy_simulation import _matches_after_expansion
+from principalmapper.querying.local_policy_simulation import _matches_after_expansion, _statement_matches_action, _statement_matches_resource
 
 
-class TestLocalPolicySimulation(unittest.TestCase):
+class TestLocalPolicyStatementMatching(unittest.TestCase):
+    def test_action_matching(self):
+        statement_1 = {
+            'Effect': 'Allow',
+            'Action': ['ec2:RunInstances', 's3:*', 'iam:Get*'],
+            'Resource': '*'
+        }
+        self.assertTrue(_statement_matches_action(statement_1, 'ec2:RunInstances'))
+        self.assertTrue(_statement_matches_action(statement_1, 's3:GetObject'))
+        self.assertTrue(_statement_matches_action(statement_1, 'iam:GetRole'))
+        self.assertFalse(_statement_matches_action(statement_1, 'ec2:DescribeInstances'))
+        self.assertFalse(_statement_matches_action(statement_1, 'iam:PutRolePolicy'))
+
+        statement_2 = {
+            'Effect': 'Allow',
+            'Action': '*',
+            'Resource': '*'
+        }
+        self.assertTrue(_statement_matches_action(statement_2, 'iam:GetRole'))
+
+        statement_3 = {
+            'Effect': 'Allow',
+            'NotAction': '*',
+            'Resource': '*'
+        }
+        self.assertFalse(_statement_matches_action(statement_3, 'iam:GetRole'))
+
+        statement_4 = {
+            'Effect': 'Allow',
+            'NotAction': ['iam:*', 's3:Put*'],
+            'Resource': '*'
+        }
+        self.assertFalse(_statement_matches_action(statement_4, 'iam:GetRole'))
+        self.assertFalse(_statement_matches_action(statement_4, 's3:PutObject'))
+        self.assertTrue(_statement_matches_action(statement_4, 'ec2:RunInstances'))
+
+    def test_resource_matching(self):
+        statement_1 = {
+            'Effect': 'Allow',
+            'Action': '*',
+            'Resource': ['arn:aws:s3:::bucket/*', 'arn:aws:s3:::*/object', 'arn:aws:s3:::${aws:SourceAccount}/win']
+        }
+        self.assertTrue(_statement_matches_resource(statement_1, 'arn:aws:s3:::bucket/anything'))
+        self.assertTrue(_statement_matches_resource(statement_1, 'arn:aws:s3:::anything/object'))
+        self.assertTrue(_statement_matches_resource(statement_1, 'arn:aws:s3:::000000000000/win', {'aws:SourceAccount': '000000000000'}))
+
+        statement_2 = {
+            'Effect': 'Allow',
+            'Action': '*',
+            'NotResource': ['arn:aws:s3:::bucket/*', 'arn:aws:s3:::*/object', 'arn:aws:s3:::${aws:SourceAccount}/win']
+        }
+        self.assertFalse(_statement_matches_resource(statement_2, 'arn:aws:s3:::bucket/anything'))
+        self.assertFalse(_statement_matches_resource(statement_2, 'arn:aws:s3:::anything/object'))
+        self.assertFalse(_statement_matches_resource(statement_2, 'arn:aws:s3:::000000000000/win',
+                                                     {'aws:SourceAccount': '000000000000'}))
+
+
+class TestLocalPolicyVariableExpansions(unittest.TestCase):
     def test_var_expansion(self):
         self.assertTrue(_matches_after_expansion(
             'arn:aws:iam::000000000000:user/test',
