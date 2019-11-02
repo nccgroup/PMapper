@@ -83,7 +83,19 @@ class LocalResourcePolicyEvalTests(unittest.TestCase):
             {},
             True
         )
-        print(rpa_result)
         self.assertTrue(
             rpa_result == ResourcePolicyEvalResult.NODE_MATCH
+        )
+
+        rpa_result = resource_policy_authorization(
+            iam_user_1,
+            '000000000000',
+            bucket_policy_1,
+            's3:PutObject',
+            'arn:aws:s3:::bucket/object',
+            {},
+            True
+        )
+        self.assertTrue(
+            rpa_result == ResourcePolicyEvalResult.NO_MATCH
         )

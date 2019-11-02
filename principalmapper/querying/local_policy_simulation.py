@@ -702,7 +702,7 @@ def resource_policy_matching_statements(node_or_service: Union[Node, str], resou
                                         debug: bool = False) -> list:
     """Returns if a resource policy has a matching statement for a given service (ec2.amazonaws.com for example)."""
 
-    dprint(debug, 'local resource policy check - service: {}, action: {}, resource: {}, conditions: {}, '
+    dprint(debug, 'local resource policy statement search: {}, action: {}, resource: {}, conditions: {}, '
                   'resource_policy: {}'.format(node_or_service, action_to_check, resource_to_check,
                                                condition_keys_to_check, resource_policy))
 
