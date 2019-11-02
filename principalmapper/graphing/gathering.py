@@ -242,7 +242,7 @@ def get_policies_and_fill_out(iamclient, nodes: List[Node], groups: List[Group],
 
     output.write("Obtaining policies used by IAM groups\n")
     for group in groups:
-        group_name = arns.get_resource(group.arn).split('/', 1)[-1]  # split by slashes and take the final item
+        group_name = arns.get_resource(group.arn).split('/')[-1]  # split by slashes and take the final item
         dprint(debug, 'Getting policies for: {}'.format(group.arn))
         # get inline policies
         inline_policies = iamclient.list_group_policies(GroupName=group_name)
