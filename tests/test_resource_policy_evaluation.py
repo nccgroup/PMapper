@@ -21,9 +21,114 @@ from tests.build_test_graphs import *
 from tests.build_test_graphs import _build_user_with_policy
 
 from principalmapper.querying.local_policy_simulation import resource_policy_authorization, ResourcePolicyEvalResult
+from principalmapper.querying.query_interface import local_check_authorization_with_resource_policy
 
 
 class LocalResourcePolicyEvalTests(unittest.TestCase):
+    def test_iam_assume_role(self):
+        """Test that we are correctly validating policies for calls to `sts:AssumeRole`"""
+        trust_doc_1 = {
+            'Version': '2012-10-17',
+            'Statement': [{
+                'Effect': 'Allow',
+                'Principal': {
+                    'AWS': 'arn:aws:iam::000000000000:root'
+                },
+                'Action': 'sts:AssumeRole'
+            }]
+        }
+
+        trust_doc_2 = {
+            'Version': '2012-10-17',
+            'Statement': [{
+                'Effect': 'Allow',
+                'Principal': {
+                    'AWS': 'arn:aws:iam::999999999999:root'
+                },
+                'Action': 'sts:AssumeRole'
+            }]
+        }
+
+        iam_user_1 = _build_user_with_policy(
+            {
+                'Version': '2012-10-17',
+                'Statement': [{
+                    'Effect': 'Allow',
+                    'Action': 'sts:AssumeRole',
+                    'Resource': '*'
+                }]
+            },
+            'single_user_policy',
+            'asdf1',
+            '1'
+        )
+
+        iam_user_2 = _build_user_with_policy(
+            {
+                'Version': '2012-10-17',
+                'Statement': [{
+                    'Effect': 'Allow',
+                    'Action': 's3:GetObject',
+                    'Resource': '*'
+                }]
+            },
+            'single_user_policy',
+            'asdf2',
+            '2'
+        )
+
+        # account root + iam policy => authorized
+        self.assertTrue(
+            local_check_authorization_with_resource_policy(
+                iam_user_1,
+                'sts:AssumeRole',
+                'arn:aws:iam::000000000000:role/test1',
+                {},
+                trust_doc_1,
+                '000000000000',
+                True
+            )
+        )
+
+        # iam policy only => not authorized
+        self.assertFalse(
+            local_check_authorization_with_resource_policy(
+                iam_user_1,
+                'sts:AssumeRole',
+                'arn:aws:iam::000000000000:role/test1',
+                {},
+                trust_doc_2,
+                '000000000000',
+                True
+            )
+        )
+
+        # account root only => not authorized
+        self.assertFalse(
+            local_check_authorization_with_resource_policy(
+                iam_user_2,
+                'sts:AssumeRole',
+                'arn:aws:iam::000000000000:role/test1',
+                {},
+                trust_doc_1,
+                '000000000000',
+                True
+            )
+        )
+
+        # Neither the account root nor the iam policy => not authorized
+        self.assertFalse(
+            local_check_authorization_with_resource_policy(
+                iam_user_2,
+                'sts:AssumeRole',
+                'arn:aws:iam::000000000000:role/test1',
+                {},
+                trust_doc_2,
+                '000000000000',
+                True
+            )
+        )
+
     def test_match_action_resource_policy_elements(self):
         """Test if we're correctly testing Action/Resource elements in resource policies"""
         bucket_policy_1 = {

@@ -180,7 +180,7 @@ def local_check_authorization_with_resource_policy(principal: Node, action_to_ch
     iam_policy_allow = has_matching_statement(principal, 'Allow', action_to_check, resource_to_check,
                                               condition_keys_to_check, debug)
     iam_policy_deny = has_matching_statement(principal, 'Deny', action_to_check, resource_to_check,
-                                            condition_keys_to_check, debug)
+                                             condition_keys_to_check, debug)
 
     # Knock out deny cases
     if iam_policy_deny or rp_result == ResourcePolicyEvalResult.DENY_MATCH:
@@ -188,9 +188,9 @@ def local_check_authorization_with_resource_policy(principal: Node, action_to_ch
 
     # From here, a tangled web of scenarios based on resource ownership and service
     if arns.get_account_id(principal.arn) == resource_owner:
-        if arns.get_service(resource_to_check) in ('iam', 'kms'):
+        if arns.get_service(resource_to_check) in ('iam', 'kms'):  # TODO: iterating tuple vs list benchmarking?
             # IAM or KMS, the resource policy has to match too
-            if rp_result != ResourcePolicyEvalResult.NO_MATCH:
+            if rp_result != ResourcePolicyEvalResult.NO_MATCH and iam_policy_allow:
                 return True
             return False
         # Otherwise, either the principal's policies or the resource policy need to match
