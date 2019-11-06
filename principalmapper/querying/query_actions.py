@@ -23,11 +23,11 @@ from typing import Optional
 
 from principalmapper.common import Graph
 from principalmapper.querying.presets import privesc, connected
-from principalmapper.querying.query_interface import search_authorization_for
+from principalmapper.querying.query_interface import search_authorization_for, search_authorization_with_resource_policy_for
 
 
-def query_response(graph: Graph, query: str, skip_admins: bool = False, output: io.StringIO = os.devnull,
-                   debug: bool = False) -> None:
+def query_response(graph: Graph, query: str, skip_admins: bool = False, resource_policy: dict = None,
+                   resource_owner: str = None, output: io.StringIO = os.devnull, debug: bool = False) -> None:
     """Interprets, executes, and outputs the results to a query."""
     result = []
 
@@ -117,16 +117,23 @@ def query_response(graph: Graph, query: str, skip_admins: bool = False, output: 
     # Execute
     for node in nodes:
         if not skip_admins or not node.is_admin:
-            result.append((
-                search_authorization_for(
-                    graph,
-                    node,
-                    action,
-                    resource,
-                    condition,
-                    debug
-                ), action, resource)
-            )
+            if resource_policy is None:
+                result.append((
+                    search_authorization_for(
+                        graph,
+                        node,
+                        action,
+                        resource,
+                        condition,
+                        debug
+                    ), action, resource)
+                )
+            else:
+                result.append((
+                    search_authorization_with_resource_policy_for(
+                        graph, node, action, resource, condition, resource_policy, resource_owner, debug
+                    ), action, resource
+                ))
 
     # Print
     for query_result, action, resource in result:
@@ -162,7 +169,8 @@ def _write_query_help(output: io.StringIO) -> None:
 
 def argquery(graph: Graph, principal_param: Optional[str], action_param: Optional[str], resource_param: Optional[str],
              condition_param: Optional[dict], preset_param: Optional[str], skip_admins: bool = False,
-             output: io.StringIO = os.devnull, debug: bool = False) -> None:
+             resource_policy: dict = None, resource_owner: str = None, output: io.StringIO = os.devnull,
+             debug: bool = False) -> None:
     """Splits between running a normal argquery and the presets."""
     if preset_param is not None:
         if preset_param == 'privesc':
@@ -201,14 +209,14 @@ def argquery(graph: Graph, principal_param: Optional[str], action_param: Optiona
             raise ValueError('Parameter for "preset" is not valid. Expected values: "privesc" and "connected".')
 
     else:
-        argquery_response(graph, principal_param, action_param, resource_param, condition_param, skip_admins, output,
-                          debug)
+        argquery_response(graph, principal_param, action_param, resource_param, condition_param, skip_admins,
+                          resource_policy, resource_owner, output, debug)
 
 
 def argquery_response(graph: Graph, principal_param: Optional[str], action_param: str, resource_param: Optional[str],
-                      condition_param: Optional[dict], skip_admins: bool = False,  output: io.StringIO = os.devnull,
-                      debug: bool = False) -> None:
-    """Writes the output of an argquery to output."""
+                      condition_param: Optional[dict], skip_admins: bool = False, resource_policy: dict = None,
+                      resource_owner: str = None, output: io.StringIO = os.devnull, debug: bool = False) -> None:
+    """Writes the output of a non-preset argquery"""
     result = []
 
     if resource_param is None:
@@ -217,24 +225,31 @@ def argquery_response(graph: Graph, principal_param: Optional[str], action_param
     if condition_param is None:
         condition_param = {}
 
+    # Collect together nodes
     if principal_param is None or principal_param == '*':
-        for node in graph.nodes:
-            if skip_admins:
-                if not node.is_admin:
-                    result.append(
-                        search_authorization_for(graph, node, action_param, resource_param, condition_param, debug))
-            else:
-                result.append(
-                    search_authorization_for(graph, node, action_param, resource_param, condition_param, debug))
-
-    else:
-        node = graph.get_node_by_searchable_name(principal_param)
         if skip_admins:
-            if not node.is_admin:
-                result.append(
-                    search_authorization_for(graph, node, action_param, resource_param, condition_param, debug))
+            nodes = [x for x in graph.nodes if not x.is_admin]
         else:
-            result.append(search_authorization_for(graph, node, action_param, resource_param, condition_param, debug))
+            nodes = graph.nodes
+    else:
+        target_node = graph.get_node_by_searchable_name(principal_param)
+        if skip_admins and target_node.is_admin:
+            return
+        else:
+            nodes = [target_node]
+
+    # go through all nodes
+    for node in nodes:
+        if resource_policy is None:
+            result.append(
+                search_authorization_for(graph, node, action_param, resource_param, condition_param, debug)
+            )
+        else:
+            result.append(
+                search_authorization_with_resource_policy_for(
+                    graph, node, action_param, resource_param, condition_param, resource_policy, resource_owner, debug
+                )
+            )
 
     for query_result in result:
         query_result.write_result(action_param, resource_param, output)

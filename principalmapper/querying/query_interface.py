@@ -44,10 +44,10 @@ def search_authorization_for(graph: Graph, principal: Node, action_to_check: str
     return QueryResult(False, [], principal)
 
 
-def search_authorization_handling_resource_policy_for(graph: Graph, principal: Node, action_to_check: str,
-                                                      resource_to_check: str, condition_keys_to_check: dict,
-                                                      resource_policy: dict, resource_owner: str,
-                                                      debug: bool = False) -> QueryResult:
+def search_authorization_with_resource_policy_for(graph: Graph, principal: Node, action_to_check: str,
+                                                  resource_to_check: str, condition_keys_to_check: dict,
+                                                  resource_policy: dict, resource_owner: str,
+                                                  debug: bool = False) -> QueryResult:
     """Determines if the passed principal, or any principals it can access, can perform a given action for a
     given resource/condition while accounting for the passed resource policy."""
     # we return true if the passed Node is an admin, assuming that they could pivot even if specifically denied

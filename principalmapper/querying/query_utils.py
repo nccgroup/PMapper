@@ -15,9 +15,13 @@
 #      You should have received a copy of the GNU Affero General Public License
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
+import json
 from typing import List
 
+import botocore.session
+
 from principalmapper.common import Edge, Graph, Node
+from principalmapper.util import arns
 
 
 def get_search_list(graph: Graph, node: Node) -> List[List[Edge]]:
@@ -65,3 +69,24 @@ def is_connected(graph: Graph, source: Node, destination: Node) -> bool:
             return True
 
     return False
+
+
+def pull_resource_policy_by_arn(session: botocore.session.Session, arn: str) -> dict:
+    """helper function for pulling the resource policy for a resource at the denoted ARN.
+
+    raises ValueError if it cannot be retrieved.
+    """
+    service = arns.get_service(arn)
+    if service == 'iam':
+        client = session.create_client('iam')
+        role_name = arns.get_region(arn).split('/')[-1]
+        trust_doc = client.get_role(RoleName=role_name)['Role']['AssumeRolePolicyDocument']
+        return json.loads(trust_doc)
+    elif service == 's3':
+        raise NotImplementedError('Need to implement S3 bucket policy grabbing')
+    elif service == 'sns':
+        raise NotImplementedError('Need to implement topic policy grabbing')
+    elif service == 'sqs':
+        raise NotImplementedError('Need to implement queue policy grabbing')
+    elif service == 'kms':
+        raise NotImplementedError('Need to implement KMS key policy grabbing')
