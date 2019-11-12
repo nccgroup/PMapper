@@ -22,6 +22,7 @@ import json
 import os
 import os.path
 from pathlib import Path
+import re
 import sys
 from typing import Optional
 
@@ -30,8 +31,7 @@ import botocore.session
 from principalmapper.analysis.find_risks import gen_findings_and_print
 import principalmapper.graphing.graph_actions
 from principalmapper.graphing.edge_identification import checker_map
-from principalmapper.querying import query_actions
-from principalmapper.querying import repl
+from principalmapper.querying import query_actions, query_utils, repl
 from principalmapper.util import botocore_tools
 from principalmapper.util.debug_print import dprint
 from principalmapper.util.storage import get_storage_root
@@ -103,6 +103,21 @@ def main() -> int:
         action='store_true',
         help='Ignores "admin" level principals when querying about multiple principals in an account'
     )
+    query_rpolicy_args = queryparser.add_mutually_exclusive_group()
+    query_rpolicy_args.add_argument(
+        '--grab-resource-policy',
+        action='store_true',
+        help='Retrieves the resource policy for resource in the query. Handles S3, IAM, SNS, SQS, and KMS. Requires an '
+             'active session from botocore (cannot use --account param).'
+    )
+    query_rpolicy_args.add_argument(
+        '--resource-policy-text',
+        help='The full text of a resource policy to consider during authorization evaluation.'
+    )
+    queryparser.add_argument(
+        '--resource-owner',
+        help='The account ID of the owner of the resource. Required for S3 objects (which do not have it in the ARN).'
+    )
     queryparser.add_argument(
         'query',
         help='The query to execute.'
@@ -142,6 +157,21 @@ def main() -> int:
     argqueryparser.add_argument(
         '--preset',
         help='A preset query to run'
+    )
+    argquery_rpolicy_args = argqueryparser.add_mutually_exclusive_group()
+    argquery_rpolicy_args.add_argument(
+        '--grab-resource-policy',
+        action='store_true',
+        help='Retrieves the resource policy for the resource given by the --resource parameter. Handles S3, IAM, SNS, '
+             'SQS, and KMS. Requires an active session from botocore (cannot use --account param).'
+    )
+    argquery_rpolicy_args.add_argument(
+        '--resource-policy-text',
+        help='The full text of a resource policy to consider during authorization evaluation.'
+    )
+    argqueryparser.add_argument(
+        '--resource-owner',
+        help='The account ID of the owner of the resource. Required for S3 objects (which do not have it in the ARN).'
     )
 
     # REPL subcommand
@@ -250,7 +280,19 @@ def handle_query(parsed_args) -> int:
     session = _grab_session(parsed_args)
     graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account, parsed_args.debug)
 
-    query_actions.query_response(graph, parsed_args.query, parsed_args.skip_admin, sys.stdout, parsed_args.debug)
+    if parsed_args.grab_resource_policy:
+        if session is None:
+            raise ValueError('Resource policy retrieval requires an active session (missing --profile argument?)')
+        resource_policy = query_utils.pull_resource_policy_by_arn(session, arn=None, query=parsed_args.query)
+    elif parsed_args.resource_policy_text:
+        resource_policy = json.loads(parsed_args.resource_policy_text)
+    else:
+        resource_policy = None
+
+    resource_owner = parsed_args.resource_owner
+
+    query_actions.query_response(graph, parsed_args.query, parsed_args.skip_admin, resource_policy, resource_owner,
+                                 sys.stdout, parsed_args.debug)
 
     return 0
 
@@ -273,8 +315,18 @@ def handle_argquery(parsed_args) -> int:
             value = '='.join(components[1:])
             conditions.update({key: value})
 
+    if parsed_args.grab_resource_policy:
+        if session is None:
+            raise ValueError('Resource policy retrieval requires an active session (missing --profile argument?)')
+        resource_policy = query_utils.pull_resource_policy_by_arn(session, parsed_args.resource)
+    elif parsed_args.resource_policy_text:
+        resource_policy = json.loads(parsed_args.resource_policy_text)
+    else:
+        resource_policy = None
+
     query_actions.argquery(graph, parsed_args.principal, parsed_args.action, parsed_args.resource, conditions,
-                           parsed_args.preset, parsed_args.skip_admin, sys.stdout, parsed_args.debug)
+                           parsed_args.preset, parsed_args.skip_admin, sys.stdout, resource_policy,
+                           parsed_args.resource_owner, parsed_args.debug)
 
     return 0
 

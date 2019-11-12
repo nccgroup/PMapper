@@ -24,10 +24,11 @@ from typing import Optional
 from principalmapper.common import Graph
 from principalmapper.querying.presets import privesc, connected
 from principalmapper.querying.query_interface import search_authorization_for, search_authorization_with_resource_policy_for
+from principalmapper.util import arns
 
 
-def query_response(graph: Graph, query: str, skip_admins: bool = False, resource_policy: dict = None,
-                   resource_owner: str = None, output: io.StringIO = os.devnull, debug: bool = False) -> None:
+def query_response(graph: Graph, query: str, skip_admins: bool = False, output: io.StringIO = os.devnull,
+                   resource_policy: dict = None, resource_owner: str = None, debug: bool = False) -> None:
     """Interprets, executes, and outputs the results to a query."""
     result = []
 
@@ -114,6 +115,17 @@ def query_response(graph: Graph, query: str, skip_admins: bool = False, resource
         _write_query_help(output)
         return
 
+    # pull resource owner from arg or ARN
+    if resource_policy is not None:
+        if resource_owner is None:
+            arn_owner = arns.get_account_id(resource)
+            if '*' in arn_owner or '?' in arn_owner:
+                raise ValueError('Resource arg in query cannot have wildcards (? and *) unless setting '
+                                 '--resource-owner')
+            if arn_owner == '':
+                raise ValueError('Param --resource-owner must be set if resource param does not include the '
+                                 'account ID.')
+
     # Execute
     for node in nodes:
         if not skip_admins or not node.is_admin:
@@ -169,7 +181,7 @@ def _write_query_help(output: io.StringIO) -> None:
 
 def argquery(graph: Graph, principal_param: Optional[str], action_param: Optional[str], resource_param: Optional[str],
              condition_param: Optional[dict], preset_param: Optional[str], skip_admins: bool = False,
-             resource_policy: dict = None, resource_owner: str = None, output: io.StringIO = os.devnull,
+             output: io.StringIO = os.devnull, resource_policy: dict = None, resource_owner: str = None,
              debug: bool = False) -> None:
     """Splits between running a normal argquery and the presets."""
     if preset_param is not None:

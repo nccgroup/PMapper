@@ -16,7 +16,8 @@
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 import json
-from typing import List
+from typing import List, Optional
+import re
 
 import botocore.session
 
@@ -71,18 +72,30 @@ def is_connected(graph: Graph, source: Node, destination: Node) -> bool:
     return False
 
 
-def pull_resource_policy_by_arn(session: botocore.session.Session, arn: str) -> dict:
+def pull_resource_policy_by_arn(session: botocore.session.Session, arn: Optional[str], query: str = None) -> dict:
     """helper function for pulling the resource policy for a resource at the denoted ARN.
 
     raises ValueError if it cannot be retrieved.
     """
+    if query is not None:
+        if arn is not None:
+            raise ValueError('Must specify either arn or query, not both.')
+        pattern = re.compile(r'.*(arn:[^:]*:[^:]*:[^:]*:[^:]*:\S+).*')
+        matches = pattern.match(query)
+        if matches is None:
+            raise ValueError('Resource policy retrieval error: could not extract resource ARN from query')
+        arn = matches.group(1)
+        if '?' in arn or '*' in arn:
+            raise ValueError('Resource component from query must not have wildcard (? or *) when evaluating '
+                             'resource policies.')
+
     service = arns.get_service(arn)
     if service == 'iam':
         client = session.create_client('iam')
-        role_name = arns.get_region(arn).split('/')[-1]
+        role_name = arns.get_resource(arn).split('/')[-1]
         trust_doc = client.get_role(RoleName=role_name)['Role']['AssumeRolePolicyDocument']
-        return json.loads(trust_doc)
-    elif service == 's3':
+        return trust_doc
+    elif service == 's3':  # TODO: finish out resource policy grabbing for S3, SNS, SQS, and KMS
         raise NotImplementedError('Need to implement S3 bucket policy grabbing')
     elif service == 'sns':
         raise NotImplementedError('Need to implement topic policy grabbing')
