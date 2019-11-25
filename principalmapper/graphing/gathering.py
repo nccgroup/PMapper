@@ -65,7 +65,7 @@ def create_graph(session: botocore.session.Session, service_list: list, output: 
 def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False) -> List[Node]:
     """Using an IAM.Client object, return a list of Node object for each IAM user and role in an account.
 
-    Does not set Group or Policy objects. Those have to be filled in later.
+    Does not set Group or Policy objects, does not set permissions boundary attr. Those have to be filled in later.
 
     Writes high-level information on progress to the output file
     """
@@ -76,6 +76,14 @@ def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False)
     for page in user_paginator.paginate(PaginationConfig={'PageSize': 25}):
         dprint(debug, 'list_users page: {}'.format(page))
         for user in page['Users']:
+            # grab permission boundary ARN if applicable
+            if 'PermissionsBoundary' in user and 'PermissionsBoundaryArn' in user['PermissionsBoundary']:
+                if user['PermissionsBoundary']['PermissionsBoundaryArn'] is not None and user['PermissionsBoundary']['PermissionsBoundaryArn'] != '':
+                    _pb = user['PermissionsBoundary']['PermissionsBoundaryArn']
+                else:
+                    _pb = None
+            else:
+                _pb = None
             result.append(Node(
                 arn=user['Arn'],
                 id_value=user['UserId'],
@@ -85,7 +93,8 @@ def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False)
                 instance_profile=None,
                 num_access_keys=0,
                 active_password='PasswordLastUsed' in user,
-                is_admin=False
+                is_admin=False,
+                permissions_boundary=_pb
             ))
             dprint(debug, 'Adding Node for user ' + user['Arn'])
 
@@ -95,6 +104,14 @@ def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False)
     for page in role_paginator.paginate(PaginationConfig={'PageSize': 25}):
         dprint(debug, 'list_roles page: {}'.format(page))
         for role in page['Roles']:
+            # grab permission boundary ARN if applicable
+            if 'PermissionsBoundary' in role and 'PermissionsBoundaryArn' in role['PermissionsBoundary']:
+                if role['PermissionsBoundary']['PermissionsBoundaryArn'] is not None and role['PermissionsBoundary']['PermissionsBoundaryArn'] != '':
+                    _pb = role['PermissionsBoundary']['PermissionsBoundaryArn']
+                else:
+                    _pb = None
+            else:
+                _pb = None
             result.append(Node(
                 arn=role['Arn'],
                 id_value=role['RoleId'],
@@ -104,7 +121,8 @@ def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False)
                 instance_profile=None,
                 num_access_keys=0,
                 active_password=False,
-                is_admin=False
+                is_admin=False,
+                permissions_boundary=_pb
             ))
 
     # Get instance profiles, paginating results, and attach to roles as appropriate
@@ -180,9 +198,9 @@ def get_unfilled_groups(iamclient, nodes: List[Node], output: io.StringIO = os.d
 def get_policies_and_fill_out(iamclient, nodes: List[Node], groups: List[Group],
                               output: io.StringIO = os.devnull, debug=False) -> List[Policy]:
     """Using an IAM.Client object, return a list of Policy objects. Adds references to each passed Node and
-    Group object where applicable.
+    Group object where applicable. Updates boundary policies.
 
-    Writes high-level progress information to parameter output
+    Writes high-level progress information to parameter output.
     """
     result = []
 
@@ -239,6 +257,27 @@ def get_policies_and_fill_out(iamclient, nodes: List[Node], groups: List[Group],
                 )
                 result.append(policy_object)
             node.attached_policies.append(policy_object)
+
+        # get permission boundaries for users/roles
+        if node.permissions_boundary is not None and isinstance(node.permissions_boundary, str):
+            # reduce API calls, search existing policies for matching ARNs
+            policy_object = _get_policy_by_arn(node.permissions_boundary)
+            if policy_object is None:
+                # Retrieve the policy's current default version
+                dprint(debug, '      Policy cache miss, calling API')
+                policy_response = iamclient.get_policy(PolicyArn=node.permissions_boundary)
+                dprint(debug, '      Policy version: {}'.format(policy_response['Policy']['DefaultVersionId']))
+                policy_version_response = iamclient.get_policy_version(
+                    PolicyArn=node.permissions_boundary,
+                    VersionId=policy_response['Policy']['DefaultVersionId']
+                )
+                policy_object = Policy(
+                    arn=node.permissions_boundary,
+                    name=policy_response['Policy']['PolicyName'],
+                    policy_doc=policy_version_response['PolicyVersion']['Document']
+                )
+                result.append(policy_object)
+                node.permissions_boundary = policy_object
 
     output.write("Obtaining policies used by IAM groups\n")
     for group in groups:

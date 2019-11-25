@@ -105,6 +105,8 @@ def local_check_authorization_handling_mfa(principal: Node, action_to_check: str
     required for the authorization.
     """
 
+    # TODO: Add permissions boundary-handling (1)
+
     if ':role/' in principal.arn:  # TODO: aws:MultiFactorAuthPresent pass-through?
         return local_check_authorization(principal, action_to_check, resource_to_check, condition_keys_to_check,
                                          debug), False
@@ -132,6 +134,8 @@ def local_check_authorization(principal: Node, action_to_check: str, resource_to
     NOTE: this will add condition keys that it can infer, assuming they're not set already, such as aws:username or
     aws:userid.
     """
+
+    # TODO: Add permissions boundary-handling (2)
 
     condition_keys_to_check.update(_infer_condition_keys(principal, condition_keys_to_check))
 
@@ -161,6 +165,8 @@ def local_check_authorization_with_resource_policy(principal: Node, action_to_ch
     NOTE: This will add condition keys that may be inferred, assuming they are not already set, such as the
     aws:username or aws:userid keys.
     """
+
+    # TODO: Add permissions boundary-handling (3)
 
     condition_keys_to_check.update(_infer_condition_keys(principal, condition_keys_to_check))
 

@@ -176,6 +176,14 @@ class Graph(object):
                     if policy_ref['arn'] == policy.arn and policy_ref['name'] == policy.name:
                         node_policies.append(policy)
                         break
+            # match permission boundaries
+            node_permission_boundary = node['permissions_boundary']
+            if node_permission_boundary is not None:
+                # find policy by arn/name and load
+                for policy in policies:
+                    if policy.name == node_permission_boundary['name'] and policy.arn == node_permission_boundary['arn']:
+                        node_permission_boundary = policy
+                        break
             for group in groups:
                 if group.arn in node['group_memberships']:
                     group_memberships.append(group)
@@ -183,7 +191,8 @@ class Graph(object):
             nodes.append(Node(arn=node['arn'], id_value=node['id_value'], attached_policies=node_policies,
                               group_memberships=group_memberships, trust_policy=node['trust_policy'],
                               instance_profile=node['instance_profile'], num_access_keys=node['access_keys'],
-                              active_password=node['active_password'], is_admin=node['is_admin']))
+                              active_password=node['active_password'], is_admin=node['is_admin'],
+                              permissions_boundary=node_permission_boundary))
 
         with open(edgesfilepath) as f:
             unresolved_edges = json.load(f)
