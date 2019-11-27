@@ -210,16 +210,16 @@ def local_check_authorization_with_resource_policy(principal: Node, action_to_ch
     if arns.get_account_id(principal.arn) == resource_owner:
         if arns.get_service(resource_to_check) in ('iam', 'kms'):  # TODO: tuple or list?
             # IAM or KMS, the resource policy has to match too
-            if rp_result != ResourcePolicyEvalResult.NO_MATCH and ((iam_policy_allow and pb_allow) or rp_result == ResourcePolicyEvalResult.NODE_MATCH):
+            if rp_result != ResourcePolicyEvalResult.NO_MATCH and ((iam_policy_allow and (pb_allow is None or pb_allow)) or rp_result == ResourcePolicyEvalResult.NODE_MATCH):
                 return True
             return False
         # Otherwise, either the principal's policies or the resource policy need to match
-        if (iam_policy_allow and pb_allow) or rp_result == ResourcePolicyEvalResult.NODE_MATCH:
+        if (iam_policy_allow and (pb_allow is None or pb_allow)) or rp_result == ResourcePolicyEvalResult.NODE_MATCH:
             return True
         return False
     else:
         # Separate accounts, the principal policies and the resource policy must allow it
-        if (iam_policy_allow and pb_allow) and rp_result != ResourcePolicyEvalResult.NO_MATCH:
+        if (iam_policy_allow and (pb_allow is None or pb_allow)) and rp_result != ResourcePolicyEvalResult.NO_MATCH:
             return True
         return False
 
@@ -231,4 +231,5 @@ def simulation_api_check_authorization(iamclient, principal: Node, action_to_che
     """
     dprint(debug, 'calling iam:SimulatePrincipalPolicy with principal: {}, action: {}, resource: {}, conditions: {}'
            .format(principal.arn, action_to_check, resource_to_check, condition_keys_to_check))
-    raise NotImplementedError('Testing using the Simulation API is not available yet.')
+    raise NotImplementedError('Principal Mapper only supports local authorization checks, and will continue to only '
+                              'perform local authorization checks for the forseeable future.')
