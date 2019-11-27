@@ -105,8 +105,6 @@ def local_check_authorization_handling_mfa(principal: Node, action_to_check: str
     required for the authorization.
     """
 
-    # TODO: Add permissions boundary-handling (1)
-
     if ':role/' in principal.arn:  # TODO: aws:MultiFactorAuthPresent pass-through?
         return local_check_authorization(principal, action_to_check, resource_to_check, condition_keys_to_check,
                                          debug), False
@@ -135,8 +133,6 @@ def local_check_authorization(principal: Node, action_to_check: str, resource_to
     aws:userid.
     """
 
-    # TODO: Add permissions boundary-handling (2)
-
     condition_keys_to_check.update(_infer_condition_keys(principal, condition_keys_to_check))
 
     dprint(debug, 'Testing authorization for: principal: {}, action: {}, resource: {}, conditions: {}'.format(
@@ -145,6 +141,15 @@ def local_check_authorization(principal: Node, action_to_check: str, resource_to
         resource_to_check,
         condition_keys_to_check
     ))
+
+    # Handle permission boundaries if applicable
+    if principal.permissions_boundary is not None:
+        if policy_has_matching_statement(principal.permissions_boundary, 'Deny', action_to_check, resource_to_check,
+                                         condition_keys_to_check, debug):
+            return False
+        if not policy_has_matching_statement(principal.permissions_boundary, 'Allow', action_to_check, resource_to_check,
+                                             condition_keys_to_check, debug):
+            return False
 
     # must have a matching Allow statement, otherwise it's an implicit deny
     if not has_matching_statement(principal, 'Allow', action_to_check, resource_to_check,
@@ -166,8 +171,6 @@ def local_check_authorization_with_resource_policy(principal: Node, action_to_ch
     aws:username or aws:userid keys.
     """
 
-    # TODO: Add permissions boundary-handling (3)
-
     condition_keys_to_check.update(_infer_condition_keys(principal, condition_keys_to_check))
 
     dprint(debug, 'Testing authorization for: principal: {}, action: {}, resource: {}, conditions: {}, RP: {}'.format(
@@ -177,6 +180,15 @@ def local_check_authorization_with_resource_policy(principal: Node, action_to_ch
         condition_keys_to_check,
         resource_policy
     ))
+
+    # Pull permissions boundary data
+    if principal.permissions_boundary is not None:
+        pb_deny = policy_has_matching_statement(principal.permissions_boundary, 'Deny', action_to_check,
+                                                resource_to_check, condition_keys_to_check, debug)
+        pb_allow = policy_has_matching_statement(principal.permissions_boundary, 'Allow', action_to_check,
+                                                 resource_to_check, condition_keys_to_check, debug)
+    else:
+        pb_deny, pb_allow = None, None
 
     # Pull resource policy authorization data
     rp_result = resource_policy_authorization(principal, resource_owner, resource_policy, action_to_check,
@@ -191,21 +203,23 @@ def local_check_authorization_with_resource_policy(principal: Node, action_to_ch
     # Knock out deny cases
     if iam_policy_deny or rp_result == ResourcePolicyEvalResult.DENY_MATCH:
         return False
+    if pb_deny is not None and pb_deny:
+        return False
 
     # From here, a tangled web of scenarios based on resource ownership and service
     if arns.get_account_id(principal.arn) == resource_owner:
-        if arns.get_service(resource_to_check) in ('iam', 'kms'):  # TODO: iterating tuple vs list benchmarking?
+        if arns.get_service(resource_to_check) in ('iam', 'kms'):  # TODO: tuple or list?
             # IAM or KMS, the resource policy has to match too
-            if rp_result != ResourcePolicyEvalResult.NO_MATCH and iam_policy_allow:
+            if rp_result != ResourcePolicyEvalResult.NO_MATCH and ((iam_policy_allow and pb_allow) or rp_result == ResourcePolicyEvalResult.NODE_MATCH):
                 return True
             return False
         # Otherwise, either the principal's policies or the resource policy need to match
-        if iam_policy_allow or rp_result == ResourcePolicyEvalResult.NODE_MATCH:
+        if (iam_policy_allow and pb_allow) or rp_result == ResourcePolicyEvalResult.NODE_MATCH:
             return True
         return False
     else:
         # Separate accounts, the principal policies and the resource policy must allow it
-        if iam_policy_allow and rp_result != ResourcePolicyEvalResult.NO_MATCH:
+        if (iam_policy_allow and pb_allow) and rp_result != ResourcePolicyEvalResult.NO_MATCH:
             return True
         return False
 

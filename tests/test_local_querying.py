@@ -823,7 +823,8 @@ class LocalQueryingTests(unittest.TestCase):
             None,
             1,
             False,
-            False
+            False,
+            None
         )
 
         print(mfa_policy.to_dictionary())

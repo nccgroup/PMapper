@@ -77,11 +77,9 @@ def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False)
         dprint(debug, 'list_users page: {}'.format(page))
         for user in page['Users']:
             # grab permission boundary ARN if applicable
-            if 'PermissionsBoundary' in user and 'PermissionsBoundaryArn' in user['PermissionsBoundary']:
-                if user['PermissionsBoundary']['PermissionsBoundaryArn'] is not None and user['PermissionsBoundary']['PermissionsBoundaryArn'] != '':
-                    _pb = user['PermissionsBoundary']['PermissionsBoundaryArn']
-                else:
-                    _pb = None
+            # TODO: iam:ListUsers does not return boundary information. may need to wait for a fix.
+            if 'PermissionsBoundary' in user:
+                _pb = user['PermissionsBoundary']['PermissionsBoundaryArn']
             else:
                 _pb = None
             result.append(Node(
@@ -105,11 +103,8 @@ def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False)
         dprint(debug, 'list_roles page: {}'.format(page))
         for role in page['Roles']:
             # grab permission boundary ARN if applicable
-            if 'PermissionsBoundary' in role and 'PermissionsBoundaryArn' in role['PermissionsBoundary']:
-                if role['PermissionsBoundary']['PermissionsBoundaryArn'] is not None and role['PermissionsBoundary']['PermissionsBoundaryArn'] != '':
-                    _pb = role['PermissionsBoundary']['PermissionsBoundaryArn']
-                else:
-                    _pb = None
+            if 'PermissionsBoundary' in role:
+                _pb = role['PermissionsBoundary']['PermissionsBoundaryArn']
             else:
                 _pb = None
             result.append(Node(
@@ -259,9 +254,11 @@ def get_policies_and_fill_out(iamclient, nodes: List[Node], groups: List[Group],
             node.attached_policies.append(policy_object)
 
         # get permission boundaries for users/roles
+        dprint(debug,   "perm boundary of {}: {}".format(node.searchable_name(), node.permissions_boundary))
         if node.permissions_boundary is not None and isinstance(node.permissions_boundary, str):
+            dprint(debug, '      Getting boundary policy: {}'.format(node.permissions_boundary))
             # reduce API calls, search existing policies for matching ARNs
-            policy_object = _get_policy_by_arn(node.permissions_boundary)
+            policy_object = _get_policy_by_arn(node.permissions_boundary, result)
             if policy_object is None:
                 # Retrieve the policy's current default version
                 dprint(debug, '      Policy cache miss, calling API')
