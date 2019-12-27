@@ -291,8 +291,8 @@ def handle_query(parsed_args) -> int:
 
     resource_owner = parsed_args.resource_owner
 
-    query_actions.query_response(graph, parsed_args.query, parsed_args.skip_admin, resource_policy, resource_owner,
-                                 sys.stdout, parsed_args.debug)
+    query_actions.query_response(graph, parsed_args.query, parsed_args.skip_admin, sys.stdout, resource_policy,
+                                 resource_owner, parsed_args.debug)
 
     return 0
 
