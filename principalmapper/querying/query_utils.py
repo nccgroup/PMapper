@@ -91,15 +91,29 @@ def pull_resource_policy_by_arn(session: botocore.session.Session, arn: Optional
 
     service = arns.get_service(arn)
     if service == 'iam':
+        # arn:aws:iam::<account_id>:role/<role_name>
         client = session.create_client('iam')
         role_name = arns.get_resource(arn).split('/')[-1]
         trust_doc = client.get_role(RoleName=role_name)['Role']['AssumeRolePolicyDocument']
         return trust_doc
-    elif service == 's3':  # TODO: finish out resource policy grabbing for S3, SNS, SQS, and KMS
-        raise NotImplementedError('Need to implement S3 bucket policy grabbing')
+    elif service == 's3':
+        # arn:aws:s3:::<bucket>/<path_to_object_with_potential_colons>
+        client = session.create_client('s3')
+        bucket_name = arns.get_resource(arn).split('arn:aws:s3:::')[-1].split('/')[0]
+        bucket_policy = json.loads(client.get_bucket_policy(Bucket=bucket_name)['Policy'])
+        return bucket_policy
     elif service == 'sns':
+        region = arns.get_region(arn)
+        client = session.create_client('sns', region_name=region)
+        # policy = ...
         raise NotImplementedError('Need to implement topic policy grabbing')
     elif service == 'sqs':
+        region = arns.get_region(arn)
+        client = session.create_client('sqs', region_name=region)
+        # policy = ...
         raise NotImplementedError('Need to implement queue policy grabbing')
     elif service == 'kms':
+        region = arns.get_region(arn)
+        client = session.create_client('kms', region_name=region)
+        # policy = ...
         raise NotImplementedError('Need to implement KMS key policy grabbing')

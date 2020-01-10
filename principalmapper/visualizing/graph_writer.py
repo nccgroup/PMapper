@@ -52,3 +52,8 @@ def handle_request(graph: Graph, path: str, file_format: str) -> None:
 
     # and draw
     pydg.write(path, format=file_format)
+
+
+def draw_shortest_privesc_paths(graph: Graph, path: str, file_format: str) -> None:
+    """Draws privilege escalation vectors and the shortest paths to get them."""
+    raise NotImplementedError()

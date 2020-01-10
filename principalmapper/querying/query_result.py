@@ -38,12 +38,12 @@ class QueryResult(object):
         if self.allowed:
             if len(self.edge_list) == 0:
                 # node itself is auth'd
-                output.write('{} is authorized to call action {} for resource {}\n'.format(
+                output.write('{} IS authorized to call action {} for resource {}\n'.format(
                     self.node.searchable_name(), action_param, resource_param))
 
             else:
                 # node is auth'd through other nodes
-                output.write('{} is authorized to call action {} for resource {} via {}\n'.format(
+                output.write('{} CAN call action {} for resource {} thru {}\n'.format(
                     self.node.searchable_name(), action_param, resource_param,
                     self.edge_list[-1].destination.searchable_name()
                 ))
@@ -53,7 +53,7 @@ class QueryResult(object):
                     output.write('   {}\n'.format(edge.describe_edge()))
 
                 # print that the end-edge is authorized to make the call
-                output.write('   {} is authorized to call action {} for resource {}\n'.format(
+                output.write('   {} IS authorized to call action {} for resource {}\n'.format(
                     self.edge_list[-1].destination.searchable_name(),
                     action_param,
                     resource_param

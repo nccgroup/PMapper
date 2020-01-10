@@ -351,6 +351,7 @@ def handle_visualization(parsed_args):
     # create file
     filepath = './{}.{}'.format(graph.metadata['account_id'], parsed_args.filetype)
     graph_writer.handle_request(graph, filepath, parsed_args.filetype)
+    print('Created file {}'.format(filepath))
 
     return 0
 
