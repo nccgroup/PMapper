@@ -31,8 +31,8 @@ class Node(object):
 
     def __init__(self, arn: str, id_value: str, attached_policies: Optional[List[Policy]],
                  group_memberships: Optional[List[Group]], trust_policy: Optional[dict],
-                 instance_profile: Optional[str], num_access_keys: int, active_password: bool, is_admin: bool,
-                 permissions_boundary: Optional[Union[str, Policy]]):
+                 instance_profile: Optional[List[str]], num_access_keys: int, active_password: bool, is_admin: bool,
+                 permissions_boundary: Optional[Union[str, Policy]], has_mfa: bool):
         """Constructor. Expects an ARN and ID value. Validates parameters based on the type of Node (User/Role),
         and rejects contradictory arguments like an IAM User with a trust policy.
         """
@@ -79,6 +79,8 @@ class Node(object):
 
         self.permissions_boundary = permissions_boundary  # None denotes no permissions boundary, str denotes need to fill in
 
+        self.has_mfa = has_mfa
+
         self.cache = {}
 
     def searchable_name(self):
@@ -106,5 +108,6 @@ class Node(object):
             "active_password": self.active_password,
             "access_keys": self.access_keys,
             "is_admin": self.is_admin,
-            "permissions_boundary": _pb
+            "permissions_boundary": _pb,
+            "has_mfa": self.has_mfa
         }

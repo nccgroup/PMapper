@@ -92,8 +92,8 @@ class EC2EdgeChecker(EdgeChecker):
                         mfa_needed = True
 
                 # check if source can run an instance with the instance profile condition, add edge if so and continue
-                if node_destination.instance_profile is not None:
-                    iprofile = node_destination.instance_profile
+                if node_destination.instance_profile is not None and len(node_destination.instance_profile) > 0:
+                    iprofile = node_destination.instance_profile[0]
                     condition_keys = {'ec2:InstanceProfile': iprofile}
                 else:
                     iprofile = '*'

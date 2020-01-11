@@ -44,14 +44,19 @@ def create_graph(session: botocore.session.Session, service_list: list, output: 
 
     iamclient = session.create_client('iam')
 
+    results = get_nodes_groups_and_policies(iamclient, output, debug)
+    nodes_result = results['nodes']
+    groups_result = results['groups']
+    policies_result = results['policies']
+
     # Gather users and roles, generating a Node per user and per role
-    nodes_result = get_unfilled_nodes(iamclient, output, debug)
+    # nodes_result = get_unfilled_nodes(iamclient, output, debug)
 
     # Gather groups from current list of nodes (users), generate Group objects, attach to nodes in-flight
-    groups_result = get_unfilled_groups(iamclient, nodes_result, output, debug)
+    # groups_result = get_unfilled_groups(iamclient, nodes_result, output, debug)
 
     # Resolve all policies, generate Policy objects, attach to all groups and nodes
-    policies_result = get_policies_and_fill_out(iamclient, nodes_result, groups_result, output, debug)
+    # policies_result = get_policies_and_fill_out(iamclient, nodes_result, groups_result, output, debug)
 
     # Determine which nodes are admins and update node objects
     update_admin_status(nodes_result, output, debug)
@@ -60,6 +65,157 @@ def create_graph(session: botocore.session.Session, service_list: list, output: 
     edges_result = edge_identification.obtain_edges(session, service_list, nodes_result, output, debug)
 
     return Graph(nodes_result, edges_result, policies_result, groups_result, metadata)
+
+
+def get_nodes_groups_and_policies(iamclient, output: io.StringIO = os.devnull, debug=False) -> dict:
+    """Using an IAM.Client object, return a dictionary containing nodes, groups, and policies to be
+    added to a Graph object. Admin status for the nodes are not updated.
+
+    Writes high-level information on progress to the output stream.
+    """
+    output.write('Obtaining IAM Users/Roles/Groups/Policies in the account.\n')
+    result_paginator = iamclient.get_paginator('get_account_authorization_details')
+    user_results = []
+    group_results = []
+    role_results = []
+    policy_results = []
+    for page in result_paginator.paginate():
+        if debug:
+            output.write('{}\n'.format(page))
+        user_results += page['UserDetailList']
+        group_results += page['GroupDetailList']
+        role_results += page['RoleDetailList']
+        policy_results += page['Policies']
+
+    output.write('Sorting users, roles, groups, policies, and their relationships.\n')
+
+    # this is the result we return: dictionary with nodes/groups/users all filled out
+    result = {
+        'nodes': [],
+        'groups': [],
+        'policies': []
+    }
+
+    for p in policy_results:
+        # go through each policy and update policy_results
+        doc = [x['Document'] for x in p['PolicyVersionList'] if x['IsDefaultVersion']][0]
+        result['policies'].append(
+            Policy(
+                p['Arn'],
+                p['PolicyName'],
+                doc
+            )
+        )
+
+    for g in group_results:
+        # go through all inline policies and update policy_results
+        group_policies = []
+        if 'GroupPolicyList' in g:  # have to key-check these
+            for p in g['GroupPolicyList']:
+                group_policies.append(
+                    Policy(
+                        g['Arn'],  # inline policies get the same Arn as their principal
+                        p['PolicyName'],
+                        p['PolicyDocument']
+                    )
+                )
+            result['policies'] += group_policies  # this is just adding the inline policies for the group
+
+        for p in g['AttachedManagedPolicies']:
+            group_policies.append(_get_policy_by_arn_or_raise(p['PolicyArn'], result['policies']))
+
+        result['groups'].append(
+            Group(
+                g['Arn'],
+                group_policies
+            )
+        )
+
+    for u in user_results:
+        # go through all inline policies and update policy_results
+        user_policies = []
+        if 'UserPolicyList' in u:  # have to key-check these
+            for p in u['UserPolicyList']:
+                user_policies.append(
+                    Policy(
+                        u['Arn'],  # inline policies inherit the Arn of their principal for the purposes of tracking
+                        p['PolicyName'],
+                        p['PolicyDocument']
+                    )
+                )
+            result['policies'] += user_policies
+
+        for p in u['AttachedManagedPolicies']:
+            user_policies.append(_get_policy_by_arn_or_raise(p['PolicyArn'], result['policies']))
+
+        if 'PermissionsBoundary' in u:
+            boundary_policy = _get_policy_by_arn_or_raise(u['PermissionsBoundary']['PermissionsBoundaryArn'],
+                                                          result['policies'])
+        else:
+            boundary_policy = None
+
+        group_list = []
+        for group_name in u['GroupList']:
+            for group in result['groups']:
+                if arns.get_resource(group.arn).split('/')[-1] == group_name:
+                    group_list.append(group)
+                    break
+
+        # still need to figure out access keys
+        result['nodes'].append(
+            Node(
+                u['Arn'], u['UserId'], user_policies, group_list, None, None, 0, 'PasswordLastUsed' in u, False,
+                boundary_policy, False
+            )
+        )
+
+    for r in role_results:
+        # go through all inline policies and update policy_results
+        role_policies = []
+        for p in r['RolePolicyList']:
+            role_policies.append(
+                Policy(
+                    r['Arn'],  # inline policies inherit the Arn of their principal for the purposes of tracking
+                    p['PolicyName'],
+                    p['PolicyDocument']
+                )
+            )
+        result['policies'] += role_policies
+
+        for p in r['AttachedManagedPolicies']:
+            role_policies.append(_get_policy_by_arn_or_raise(p['PolicyArn'], result['policies']))
+
+        result['nodes'].append(
+            Node(
+                r['Arn'], r['RoleId'], role_policies, None, r['AssumeRolePolicyDocument'],
+                [x['Arn'] for x in r['InstanceProfileList']], 0, False, False,
+                None, False
+            )
+        )
+
+    output.write("Obtaining Access Keys data for IAM users\n")
+    for node in result['nodes']:
+        if arns.get_resource(node.arn).startswith('user/'):
+            # Grab access-key count and update node
+            user_name = arns.get_resource(node.arn)[5:]
+            if '/' in user_name:
+                user_name = user_name.split('/')[-1]
+                dprint(debug, 'removed path from username {}'.format(user_name))
+            access_keys_data = iamclient.list_access_keys(UserName=user_name)
+            node.access_keys = len(access_keys_data['AccessKeyMetadata'])
+            dprint(debug, 'Access Key Count for {}: {}'.format(user_name, len(access_keys_data['AccessKeyMetadata'])))
+
+    output.write('Gathering MFA virtual device information\n')
+    mfa_paginator = iamclient.get_paginator('list_virtual_mfa_devices')
+    for page in mfa_paginator.paginate(AssignmentStatus='Assigned'):
+        for device in page['VirtualMFADevices']:
+            user_arn = device['User']['Arn']
+            for node in result['nodes']:
+                if node.arn == user_arn:
+                    node.has_mfa = True
+                    break
+
+    return result
 
 
 def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False) -> List[Node]:
@@ -388,3 +544,9 @@ def _get_policy_by_arn(arn: str, policies: List[Policy]) -> Optional[Policy]:
         if arn == policy.arn:
             return policy
     return None
+
+def _get_policy_by_arn_or_raise(arn: str, policies: List[Policy]) -> Policy:
+    for policy in policies:
+        if arn == policy.arn:
+            return policy
+    raise ValueError('Could not locate policy {}.'.format(arn))

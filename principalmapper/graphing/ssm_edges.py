@@ -22,6 +22,8 @@ from typing import List
 from principalmapper.common import Edge, Node
 from principalmapper.graphing.edge_checker import EdgeChecker
 from principalmapper.querying import query_interface
+from principalmapper.querying.local_policy_simulation import resource_policy_authorization, ResourcePolicyEvalResult
+from principalmapper.util import arns
 
 
 class SSMEdgeChecker(EdgeChecker):
@@ -43,6 +45,20 @@ class SSMEdgeChecker(EdgeChecker):
                 # check if destination is a role with an instance profile
                 if ':role/' not in node_destination.arn or node_destination.instance_profile is None:
                     continue
+
+                # check if the destination can be assumed by EC2
+                sim_result = resource_policy_authorization(
+                    'ec2.amazonaws.com',
+                    arns.get_account_id(node_source.arn),
+                    node_destination.trust_policy,
+                    'sts:AssumeRole',
+                    node_destination.arn,
+                    {},
+                    debug
+                )
+
+                if sim_result != ResourcePolicyEvalResult.SERVICE_MATCH:
+                    continue  # EC2 wasn't auth'd to assume the role
 
                 # at this point, we make an assumption that some instance is operating with the given instance profile
                 # we assume if the role can call ssmmessages:CreateControlChannel, anyone with ssm perms can access it
