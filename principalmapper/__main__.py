@@ -193,6 +193,11 @@ def main() -> int:
         choices=['svg', 'png', 'dot'],
         help='The (lowercase) filetype to output the image as.'
     )
+    visualizationparser.add_argument(
+        '--only-privesc',
+        help='Generates an image file representing an AWS account.',
+        action='store_true'
+    )
 
     # Analysis subcommand
     analysisparser = subparser.add_parser(
@@ -348,9 +353,14 @@ def handle_visualization(parsed_args):
     session = _grab_session(parsed_args)
     graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account, parsed_args.debug)
 
-    # create file
-    filepath = './{}.{}'.format(graph.metadata['account_id'], parsed_args.filetype)
-    graph_writer.handle_request(graph, filepath, parsed_args.filetype)
+    if parsed_args.only_privesc:
+        filepath = './{}-privesc-risks.{}'.format(graph.metadata['account_id'], parsed_args.filetype)
+        graph_writer.draw_privesc_paths(graph, filepath, parsed_args.filetype)
+    else:
+        # create file
+        filepath = './{}.{}'.format(graph.metadata['account_id'], parsed_args.filetype)
+        graph_writer.handle_request(graph, filepath, parsed_args.filetype)
+
     print('Created file {}'.format(filepath))
 
     return 0

@@ -111,7 +111,8 @@ class LambdaEdgeChecker(EdgeChecker):
                         new_edge = Edge(
                             node_source,
                             node_destination,
-                            reason
+                            reason,
+                            'Lambda'
                         )
                         output.write('Found new edge: {}\n'.format(new_edge.describe_edge()))
                         result.append(new_edge)
@@ -150,7 +151,8 @@ class LambdaEdgeChecker(EdgeChecker):
                             new_edge = Edge(
                                 node_source,
                                 node_destination,
-                                reason
+                                reason,
+                                'Lambda'
                             )
                             output.write('Found new edge: {}\n'.format(new_edge.describe_edge()))
                             break
@@ -169,7 +171,8 @@ class LambdaEdgeChecker(EdgeChecker):
                         new_edge = Edge(
                             node_source,
                             node_destination,
-                            reason
+                            reason,
+                            'Lambda'
                         )
                         output.write('Found new edge: {}\n'.format(new_edge.describe_edge()))
                         break

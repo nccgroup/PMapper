@@ -77,7 +77,7 @@ class IAMEdgeChecker(EdgeChecker):
 
                         result.append(
                             Edge(
-                                node_source, node_destination, reason
+                                node_source, node_destination, reason, 'IAM'
                             )
                         )
 
@@ -102,7 +102,7 @@ class IAMEdgeChecker(EdgeChecker):
                         reason = 'can set the password to authenticate as'
                         if mfa_res:
                             reason = '(MFA required) ' + reason
-                        result.append(Edge(node_source, node_destination, reason))
+                        result.append(Edge(node_source, node_destination, reason, 'IAM'))
 
                 if ':role/' in node_destination.arn:
                     # Change the role's trust doc
@@ -117,7 +117,7 @@ class IAMEdgeChecker(EdgeChecker):
                         reason = 'can update the trust document to access'
                         if mfa_res:
                             reason = '(MFA required) ' + reason
-                        result.append(Edge(node_source, node_destination, reason))
+                        result.append(Edge(node_source, node_destination, reason, 'IAM'))
 
         for edge in result:
             output.write("Found new edge: {}\n".format(edge.describe_edge()))

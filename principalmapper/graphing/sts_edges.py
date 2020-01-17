@@ -92,7 +92,8 @@ class STSEdgeChecker(EdgeChecker):
                         new_edge = Edge(
                             node_source,
                             node_destination,
-                            reason
+                            reason,
+                            'AssumeRole'
                         )
                         output.write('Found new edge: {}\n'.format(new_edge.describe_edge()))
                         result.append(new_edge)
@@ -101,7 +102,8 @@ class STSEdgeChecker(EdgeChecker):
                         new_edge = Edge(
                             node_source,
                             node_destination,
-                            'can access via sts:AssumeRole'
+                            'can access via sts:AssumeRole',
+                            'AssumeRole'
                         )
                         output.write('Found new edge: {}\n'.format(new_edge.describe_edge()))
                         result.append(new_edge)

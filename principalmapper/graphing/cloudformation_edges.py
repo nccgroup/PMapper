@@ -111,7 +111,7 @@ class CloudFormationEdgeChecker(EdgeChecker):
                         if need_mfa_passrole or need_mfa_create:
                             reason = '(MFA required) ' + reason
 
-                        result.append(Edge(node_source, node_destination, reason))
+                        result.append(Edge(node_source, node_destination, reason, 'Cloudformation'))
 
                 relevant_stacks = []  # we'll reuse this for *ChangeSet
                 for stack in stack_list:
@@ -135,7 +135,7 @@ class CloudFormationEdgeChecker(EdgeChecker):
                         if need_mfa_update:
                             reason = '(MFA required) ' + reason
 
-                        result.append(Edge(node_source, node_destination, reason))
+                        result.append(Edge(node_source, node_destination, reason, 'Cloudformation'))
                         break  # let's save ourselves having to dig into every CF stack edge possible
 
                 # See if source can call UpdateStack to pass a new role to a stack and use it
@@ -156,7 +156,7 @@ class CloudFormationEdgeChecker(EdgeChecker):
                             if need_mfa_update or need_mfa_passrole:
                                 reason = '(MFA required) ' + reason
 
-                            result.append(Edge(node_source, node_destination, reason))
+                            result.append(Edge(node_source, node_destination, reason, 'Cloudformation'))
                             break  # save ourselves from digging into all CF stack edges possible
 
                 # See if source can call CreateChangeSet and ExecuteChangeSet to alter a stack with a given role
@@ -186,7 +186,7 @@ class CloudFormationEdgeChecker(EdgeChecker):
                         if need_mfa_make or need_mfa_exe:
                             reason = '(MFA required) ' + reason
 
-                        result.append(Edge(node_source, node_destination, reason))
+                        result.append(Edge(node_source, node_destination, reason, 'Cloudformation'))
                         break  # save ourselves from digging into all CF stack edges possible
 
         for edge in result:

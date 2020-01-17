@@ -248,7 +248,8 @@ def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False)
                 num_access_keys=0,
                 active_password='PasswordLastUsed' in user,
                 is_admin=False,
-                permissions_boundary=_pb
+                permissions_boundary=_pb,
+                has_mfa=False
             ))
             dprint(debug, 'Adding Node for user ' + user['Arn'])
 
@@ -273,7 +274,8 @@ def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False)
                 num_access_keys=0,
                 active_password=False,
                 is_admin=False,
-                permissions_boundary=_pb
+                permissions_boundary=_pb,
+                has_mfa=False
             ))
 
     # Get instance profiles, paginating results, and attach to roles as appropriate
@@ -545,7 +547,9 @@ def _get_policy_by_arn(arn: str, policies: List[Policy]) -> Optional[Policy]:
             return policy
     return None
 
+
 def _get_policy_by_arn_or_raise(arn: str, policies: List[Policy]) -> Policy:
+    """Helper function: pull a Policy object with the same ARN from a List, or raise a ValueError"""
     for policy in policies:
         if arn == policy.arn:
             return policy

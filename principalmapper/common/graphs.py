@@ -209,6 +209,7 @@ class Graph(object):
                     destination = node
                 if source is not None and destination is not None:
                     break
-            edges.append(Edge(source=source, destination=destination, reason=edge['reason']))
+            edges.append(Edge(source=source, destination=destination, reason=edge['reason'],
+                              short_reason=edge['short_reason']))
 
         return Graph(nodes=nodes, edges=edges, policies=policies, groups=groups, metadata=metadata)
