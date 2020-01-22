@@ -103,6 +103,12 @@ def main() -> int:
         action='store_true',
         help='Ignores "admin" level principals when querying about multiple principals in an account'
     )
+    queryparser.add_argument(
+        '-u',
+        '--include-unauthorized',
+        action='store_true',
+        help='Includes output to say if a given principal is not able to call an action.'
+    )
     query_rpolicy_args = queryparser.add_mutually_exclusive_group()
     query_rpolicy_args.add_argument(
         '--grab-resource-policy',
@@ -134,6 +140,12 @@ def main() -> int:
         '--skip-admin',
         action='store_true',
         help='Ignores administrative principals when querying about multiple principals in an account'
+    )
+    argqueryparser.add_argument(
+        '-u',
+        '--include-unauthorized',
+        action='store_true',
+        help='Includes output to say if a given principal is not able to call an action.'
     )
     argqueryparser.add_argument(
         '--principal',
@@ -297,7 +309,7 @@ def handle_query(parsed_args) -> int:
     resource_owner = parsed_args.resource_owner
 
     query_actions.query_response(graph, parsed_args.query, parsed_args.skip_admin, sys.stdout, resource_policy,
-                                 resource_owner, parsed_args.debug)
+                                 resource_owner, parsed_args.include_unauthorized, parsed_args.debug)
 
     return 0
 
@@ -331,7 +343,7 @@ def handle_argquery(parsed_args) -> int:
 
     query_actions.argquery(graph, parsed_args.principal, parsed_args.action, parsed_args.resource, conditions,
                            parsed_args.preset, parsed_args.skip_admin, sys.stdout, resource_policy,
-                           parsed_args.resource_owner, parsed_args.debug)
+                           parsed_args.resource_owner, parsed_args.include_unauthorized, parsed_args.debug)
 
     return 0
 

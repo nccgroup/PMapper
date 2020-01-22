@@ -17,7 +17,7 @@
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 import copy
-import datetime as dt
+import hashlib
 
 from principalmapper.common import Graph
 from principalmapper.querying import query_utils
@@ -30,11 +30,13 @@ def search_authorization_for(graph: Graph, principal: Node, action_to_check: str
                              condition_keys_to_check: dict, debug: bool = False) -> QueryResult:
     """Determines if the passed principal, or any principals it can access, can perform a given action for a
     given resource/condition."""
-    if principal.is_admin:
-        return QueryResult(True, [], principal)
 
     if local_check_authorization(principal, action_to_check, resource_to_check, condition_keys_to_check, debug):
         return QueryResult(True, [], principal)
+
+    # Invoke special-case if admin node is not directly authorized to call the given action for the given resource
+    if principal.is_admin:
+        return QueryResult(True, principal, principal)
 
     for edge_list in query_utils.get_search_list(graph, principal):
         if local_check_authorization(edge_list[-1].destination, action_to_check, resource_to_check,
@@ -50,15 +52,13 @@ def search_authorization_with_resource_policy_for(graph: Graph, principal: Node,
                                                   debug: bool = False) -> QueryResult:
     """Determines if the passed principal, or any principals it can access, can perform a given action for a
     given resource/condition while accounting for the passed resource policy."""
-    # we return true if the passed Node is an admin, assuming that they could pivot even if specifically denied
-    # by the resource policy in question, otherwise the resource would likely be unusable except by root.
-    if principal.is_admin:
-        return QueryResult(True, [], principal)
 
     if local_check_authorization_with_resource_policy(principal, action_to_check, resource_to_check,
                                                       condition_keys_to_check, resource_policy, resource_owner, debug):
         return QueryResult(True, [], principal)
 
+    # We do NOT assume admins have access due to cross-account scenarios, but we're gonna be looking through a LOT
+    # of generated admin edges otherwise
     for edge_list in query_utils.get_search_list(graph, principal):
         if local_check_authorization_with_resource_policy(principal, action_to_check, resource_owner,
                                                           condition_keys_to_check, resource_policy, resource_owner,

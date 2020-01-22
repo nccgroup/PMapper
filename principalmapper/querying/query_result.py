@@ -18,7 +18,7 @@
 
 import io
 import os
-from typing import List
+from typing import List, Union
 
 from principalmapper.common import Edge, Node
 
@@ -27,8 +27,12 @@ class QueryResult(object):
     """Query result object returned by querying methods. The allowed field specifies if the passed Node is authorized
     to make the API call. The edge_list field, if not an empty list, specifies which edges the Node must traverse
     to make the API call.
+
+    **Change, v1.1.x:** If the edge_list param contains the same node as the node param, it's the special case where
+    node is an admin, but could not directly call the API with its perms and had to "use" its admin perms to gain the
+    necessary access to call the API.
     """
-    def __init__(self, allowed: bool, edge_list: List[Edge], node: Node):
+    def __init__(self, allowed: bool, edge_list: Union[List[Edge], Node], node: Node):
         self.allowed = allowed
         self.edge_list = edge_list
         self.node = node
@@ -58,3 +62,7 @@ class QueryResult(object):
                     action_param,
                     resource_param
                 ))
+        else:
+            output.write('{} CANNOT call action {} for resource {}\n'.format(
+                self.node.searchable_name(), action_param, resource_param
+            ))

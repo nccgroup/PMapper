@@ -28,7 +28,8 @@ from principalmapper.util import arns
 
 
 def query_response(graph: Graph, query: str, skip_admins: bool = False, output: io.StringIO = os.devnull,
-                   resource_policy: dict = None, resource_owner: str = None, debug: bool = False) -> None:
+                   resource_policy: dict = None, resource_owner: str = None, include_unauthorized: bool = False,
+                   debug: bool = False) -> None:
     """Interprets, executes, and outputs the results to a query."""
     result = []
 
@@ -149,7 +150,8 @@ def query_response(graph: Graph, query: str, skip_admins: bool = False, output: 
 
     # Print
     for query_result, action, resource in result:
-        query_result.write_result(action, resource, output)
+        if query_result.allowed or include_unauthorized:
+            query_result.write_result(action, resource, output)
 
 
 def handle_preset(graph: Graph, query: str, skip_admins: bool = False, output: io.StringIO = os.devnull,
@@ -182,7 +184,7 @@ def _write_query_help(output: io.StringIO) -> None:
 def argquery(graph: Graph, principal_param: Optional[str], action_param: Optional[str], resource_param: Optional[str],
              condition_param: Optional[dict], preset_param: Optional[str], skip_admins: bool = False,
              output: io.StringIO = os.devnull, resource_policy: dict = None, resource_owner: str = None,
-             debug: bool = False) -> None:
+             include_unauthorized: bool = False, debug: bool = False) -> None:
     """Splits between running a normal argquery and the presets."""
     if preset_param is not None:
         if preset_param == 'privesc':
@@ -222,12 +224,13 @@ def argquery(graph: Graph, principal_param: Optional[str], action_param: Optiona
 
     else:
         argquery_response(graph, principal_param, action_param, resource_param, condition_param, skip_admins,
-                          resource_policy, resource_owner, output, debug)
+                          resource_policy, resource_owner, output, include_unauthorized, debug)
 
 
 def argquery_response(graph: Graph, principal_param: Optional[str], action_param: str, resource_param: Optional[str],
                       condition_param: Optional[dict], skip_admins: bool = False, resource_policy: dict = None,
-                      resource_owner: str = None, output: io.StringIO = os.devnull, debug: bool = False) -> None:
+                      resource_owner: str = None, output: io.StringIO = os.devnull, include_unauthorized: bool = False,
+                      debug: bool = False) -> None:
     """Writes the output of a non-preset argquery"""
     result = []
 
@@ -264,4 +267,5 @@ def argquery_response(graph: Graph, principal_param: Optional[str], action_param
             )
 
     for query_result in result:
-        query_result.write_result(action_param, resource_param, output)
+        if query_result.allowed or include_unauthorized:
+            query_result.write_result(action_param, resource_param, output)

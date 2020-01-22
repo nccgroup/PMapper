@@ -32,6 +32,14 @@ def get_search_list(graph: Graph, node: Node) -> List[List[Edge]]:
     result = []
     explored_nodes = []
 
+    # Special-case: node is an "admin", so we make up admin edges and return them all
+    if node.is_admin:
+        for other_node in graph.nodes:
+            if node == other_node:
+                continue
+            result.append([Edge(node, other_node, 'can access through administrative actions', 'Admin')])
+        return result
+
     # run through initial edges
     for edge in get_edges_with_node_source(graph, node, explored_nodes):
         result.append([edge])

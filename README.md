@@ -139,6 +139,15 @@ pmapper visualize --filetype png
 
 ![](example-viz.png)
 
+**New in v1.1.x:** You can visualize just the admins and principals that can escalate privileges using a new parameter, 
+like so:
+
+~~~bash
+pmapper visualize --only-privesc
+~~~
+
+![](example-privesc-only-viz.svg)
+
 ## Analysis
 
 PMapper provides analysis to identify risks with the configuration in an account. It provides details on the risk, what 
@@ -219,6 +228,7 @@ of your production code. `dprint` is gonna be replaced too.
 
 * `principalmapper.visualizing.graph_writer`:
    * function `handle_request`: creates an image file (PNG/SVG) or graph file (DOT)
+   * function `draw_privesc_paths`: creates an image file (PNG/SVG) or graph file (DOT) that only highlights privilege escalations and admins
    
 ### Analysis
 
