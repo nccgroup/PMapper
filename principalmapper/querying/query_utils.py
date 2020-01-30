@@ -21,7 +21,7 @@ import re
 
 import botocore.session
 
-from principalmapper.common import Edge, Graph, Node
+from principalmapper.common import Edge, Graph, Node, Policy
 from principalmapper.util import arns
 
 
@@ -78,6 +78,47 @@ def is_connected(graph: Graph, source: Node, destination: Node) -> bool:
             return True
 
     return False
+
+
+def pull_cached_resource_policy_by_arn(policies: List[Policy], arn: Optional[str], query: str = None) -> dict:
+    """Function that pulls a resource policy that's cached on-disk.
+
+    Raises ValueError if it is not able to be retrieved.
+    Returns the dict, not the Policy object.
+    """
+    if query is not None:
+        if arn is not None:
+            raise ValueError('Must specify either arn or query, not both.')
+        pattern = re.compile(r'.*(arn:[^:]*:[^:]*:[^:]*:[^:]*:\S+).*')
+        matches = pattern.match(query)
+        if matches is None:
+            raise ValueError('Resource policy retrieval error: could not extract resource ARN from query')
+        arn = matches.group(1)
+    if '?' in arn or '*' in arn:
+        raise ValueError('Resource component from query must not have wildcard (? or *) when evaluating '
+                         'resource policies.')
+
+    # manipulate the ARN as needed
+    service = arns.get_service(arn)
+    if service == 's3':
+        # we only need the ARN of the bucket
+        search_arn = 'arn:{}:s3:::{}'.format(arns.get_partition(arn), arns.get_resource(arn).split('/')[0])
+    elif service == 'iam':
+        search_arn = arn
+    elif service == 'sns':
+        search_arn = arn
+    elif service == 'sqs':
+        search_arn = arn
+    elif service == 'kms':
+        search_arn = arn
+    else:
+        raise NotImplementedError('Service policies for {} are not cached.'.format(service))
+
+    for policy in policies:
+        if search_arn == policy.arn:
+            return policy.policy_doc
+
+    raise ValueError('Unable to locate a cached policy for resource {}'.format(arn))
 
 
 def pull_resource_policy_by_arn(session: botocore.session.Session, arn: Optional[str], query: str = None) -> dict:

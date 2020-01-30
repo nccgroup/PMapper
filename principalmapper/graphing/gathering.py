@@ -16,9 +16,11 @@
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 import io
+import json
 import os
 
 import botocore.session
+import botocore.exceptions
 import principalmapper
 from principalmapper.common import Node, Group, Policy, Graph
 from principalmapper.graphing import edge_identification
@@ -63,6 +65,9 @@ def create_graph(session: botocore.session.Session, service_list: list, output: 
 
     # Generate edges, generate Edge objects
     edges_result = edge_identification.obtain_edges(session, service_list, nodes_result, output, debug)
+
+    # Pull S3, SNS, SQS, and KMS resource policies
+    policies_result.extend(get_s3_bucket_policies(session, output, debug))
 
     return Graph(nodes_result, edges_result, policies_result, groups_result, metadata)
 
@@ -214,6 +219,44 @@ def get_nodes_groups_and_policies(iamclient, output: io.StringIO = os.devnull, d
                 if node.arn == user_arn:
                     node.has_mfa = True
                     break
+
+    return result
+
+
+def get_s3_bucket_policies(session: botocore.session.Session, output: io.StringIO = os.devnull, debug=False) -> List[Policy]:
+    """Using a botocore Session object, return a list of Policy objects representing the bucket policies of each
+    S3 bucket in this account.
+    """
+    result = []
+    s3client = session.create_client('s3')
+    buckets = [x['Name'] for x in s3client.list_buckets()['Buckets']]
+    for bucket in buckets:
+        bucket_arn = 'arn:aws:s3:::{}'.format(bucket)  # TODO: allow different partition
+        try:
+            bucket_policy = json.loads(s3client.get_bucket_policy(Bucket=bucket)['Policy'])
+            result.append(Policy(
+                bucket_arn,
+                bucket,
+                bucket_policy
+            ))
+        except botocore.exceptions.ClientError as ex:
+            if debug:
+                print(ex)
+            if 'NoSuchBucketPolicy' in str(ex):
+                output.write('Bucket {} does not have a bucket policy, adding a "stub" policy instead.\n'.format(
+                    bucket
+                ))
+                result.append(Policy(
+                    bucket_arn,
+                    bucket,
+                    {
+                        "Statement": [],
+                        "Version": "2012-10-17"
+                    }
+                ))
+            else:
+                output.write('Unable to retrieve bucket policy for {}. You may need to add this later. '
+                             'Continuing.\n'.format(bucket))
 
     return result
 

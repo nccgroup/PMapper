@@ -60,7 +60,7 @@ def search_authorization_with_resource_policy_for(graph: Graph, principal: Node,
     # We do NOT assume admins have access due to cross-account scenarios, but we're gonna be looking through a LOT
     # of generated admin edges otherwise
     for edge_list in query_utils.get_search_list(graph, principal):
-        if local_check_authorization_with_resource_policy(principal, action_to_check, resource_owner,
+        if local_check_authorization_with_resource_policy(principal, action_to_check, resource_to_check,
                                                           condition_keys_to_check, resource_policy, resource_owner,
                                                           debug):
             return QueryResult(True, edge_list, principal)
@@ -133,32 +133,33 @@ def local_check_authorization(principal: Node, action_to_check: str, resource_to
     aws:userid.
     """
 
-    condition_keys_to_check.update(_infer_condition_keys(principal, condition_keys_to_check))
+    conditions_keys_copy = copy.deepcopy(condition_keys_to_check)
+    conditions_keys_copy.update(_infer_condition_keys(principal, conditions_keys_copy))
 
     dprint(debug, 'Testing authorization for: principal: {}, action: {}, resource: {}, conditions: {}'.format(
         principal.arn,
         action_to_check,
         resource_to_check,
-        condition_keys_to_check
+        conditions_keys_copy
     ))
 
     # Handle permission boundaries if applicable
     if principal.permissions_boundary is not None:
         if policy_has_matching_statement(principal.permissions_boundary, 'Deny', action_to_check, resource_to_check,
-                                         condition_keys_to_check, debug):
+                                         conditions_keys_copy, debug):
             return False
         if not policy_has_matching_statement(principal.permissions_boundary, 'Allow', action_to_check, resource_to_check,
-                                             condition_keys_to_check, debug):
+                                             conditions_keys_copy, debug):
             return False
 
     # must have a matching Allow statement, otherwise it's an implicit deny
     if not has_matching_statement(principal, 'Allow', action_to_check, resource_to_check,
-                                  condition_keys_to_check, debug):
+                                  conditions_keys_copy, debug):
         return False
 
     # must not have a matching Deny statement, otherwise it's an explicit deny
     return not has_matching_statement(principal, 'Deny', action_to_check, resource_to_check,
-                                      condition_keys_to_check, debug)
+                                      conditions_keys_copy, debug)
 
 
 def local_check_authorization_with_resource_policy(principal: Node, action_to_check: str, resource_to_check: str,
@@ -171,34 +172,35 @@ def local_check_authorization_with_resource_policy(principal: Node, action_to_ch
     aws:username or aws:userid keys.
     """
 
-    condition_keys_to_check.update(_infer_condition_keys(principal, condition_keys_to_check))
+    conditions_keys_copy = copy.deepcopy(condition_keys_to_check)
+    conditions_keys_copy.update(_infer_condition_keys(principal, conditions_keys_copy))
 
     dprint(debug, 'Testing authorization for: principal: {}, action: {}, resource: {}, conditions: {}, RP: {}'.format(
         principal.arn,
         action_to_check,
         resource_to_check,
-        condition_keys_to_check,
+        conditions_keys_copy,
         resource_policy
     ))
 
     # Pull permissions boundary data
     if principal.permissions_boundary is not None:
         pb_deny = policy_has_matching_statement(principal.permissions_boundary, 'Deny', action_to_check,
-                                                resource_to_check, condition_keys_to_check, debug)
+                                                resource_to_check, conditions_keys_copy, debug)
         pb_allow = policy_has_matching_statement(principal.permissions_boundary, 'Allow', action_to_check,
-                                                 resource_to_check, condition_keys_to_check, debug)
+                                                 resource_to_check, conditions_keys_copy, debug)
     else:
         pb_deny, pb_allow = None, None
 
     # Pull resource policy authorization data
     rp_result = resource_policy_authorization(principal, resource_owner, resource_policy, action_to_check,
-                                              resource_to_check, condition_keys_to_check, debug)
+                                              resource_to_check, conditions_keys_copy, debug)
 
     # Pull IAM policy authorization data
     iam_policy_allow = has_matching_statement(principal, 'Allow', action_to_check, resource_to_check,
-                                              condition_keys_to_check, debug)
+                                              conditions_keys_copy, debug)
     iam_policy_deny = has_matching_statement(principal, 'Deny', action_to_check, resource_to_check,
-                                             condition_keys_to_check, debug)
+                                             conditions_keys_copy, debug)
 
     # Knock out deny cases
     if iam_policy_deny or rp_result == ResourcePolicyEvalResult.DENY_MATCH:
