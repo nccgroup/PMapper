@@ -40,6 +40,11 @@ class QueryResult(object):
     def write_result(self, action_param: str, resource_param: str, output: io.StringIO = os.devnull):
         """Writes information above the QueryResult object to the given IO interface."""
         if self.allowed:
+            if isinstance(self.edge_list, Node) and self.edge_list == self.node:
+                # node is an Admin but can't directly call the action
+                output.write('{} IS authorized to call action {} for resource {} THRU its admin privileges'.format(
+                    self.node.searchable_name(), action_param, resource_param
+                ))
             if len(self.edge_list) == 0:
                 # node itself is auth'd
                 output.write('{} IS authorized to call action {} for resource {}\n'.format(
@@ -47,7 +52,7 @@ class QueryResult(object):
 
             else:
                 # node is auth'd through other nodes
-                output.write('{} CAN call action {} for resource {} thru {}\n'.format(
+                output.write('{} CAN call action {} for resource {} THRU {}\n'.format(
                     self.node.searchable_name(), action_param, resource_param,
                     self.edge_list[-1].destination.searchable_name()
                 ))
