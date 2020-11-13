@@ -166,11 +166,16 @@ def get_nodes_groups_and_policies(iamclient, output: io.StringIO = os.devnull, d
                     group_list.append(group)
                     break
 
+        _tags = {}
+        if 'Tags' in u:
+            for tag in u['Tags']:
+                _tags[tag['Key']] = tag['Value']
+
         # still need to figure out access keys
         result['nodes'].append(
             Node(
                 u['Arn'], u['UserId'], user_policies, group_list, None, None, 0, 'PasswordLastUsed' in u, False,
-                boundary_policy, False
+                boundary_policy, False, _tags
             )
         )
 
@@ -190,11 +195,16 @@ def get_nodes_groups_and_policies(iamclient, output: io.StringIO = os.devnull, d
         for p in r['AttachedManagedPolicies']:
             role_policies.append(_get_policy_by_arn_or_raise(p['PolicyArn'], result['policies']))
 
+        _tags = {}
+        if 'Tags' in r:
+            for tag in r['Tags']:
+                _tags[tag['Key']] = tag['Value']
+
         result['nodes'].append(
             Node(
                 r['Arn'], r['RoleId'], role_policies, None, r['AssumeRolePolicyDocument'],
                 [x['Arn'] for x in r['InstanceProfileList']], 0, False, False,
-                None, False
+                None, False, _tags
             )
         )
 
@@ -292,7 +302,8 @@ def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False)
                 active_password='PasswordLastUsed' in user,
                 is_admin=False,
                 permissions_boundary=_pb,
-                has_mfa=False
+                has_mfa=False,
+                tags=None  # TODO: fix tags for old user-gathering method
             ))
             dprint(debug, 'Adding Node for user ' + user['Arn'])
 
@@ -318,7 +329,8 @@ def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False)
                 active_password=False,
                 is_admin=False,
                 permissions_boundary=_pb,
-                has_mfa=False
+                has_mfa=False,
+                tags=None  # TODO: fix tags for old role-gathering method
             ))
 
     # Get instance profiles, paginating results, and attach to roles as appropriate

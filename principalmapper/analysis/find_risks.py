@@ -174,7 +174,7 @@ def gen_overprivileged_instance_profile_findings(graph: Graph) -> List[Finding]:
     result = []
     affected_roles = []
     for node in graph.nodes:
-        if ':role/' in node.arn and node.is_admin and node.instance_profile is not None:
+        if ':role/' in node.arn and node.is_admin and len(node.instance_profile) > 0:
             affected_roles.append(node)
 
     if len(affected_roles) > 0:

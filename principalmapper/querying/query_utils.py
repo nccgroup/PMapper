@@ -61,11 +61,7 @@ def get_edges_with_node_source(graph: Graph, node: Node, ignored_nodes: List[Nod
     """Returns a list of nodes that are the destination of edges from the given graph where source of the edge is the
     passed node.
     """
-    result = []
-    for edge in graph.edges:
-        if edge.source == node and edge.destination not in ignored_nodes:
-            result.append(edge)
-    return result
+    return [x for x in node.get_outbound_edges(graph) if x.source not in ignored_nodes]
 
 
 def is_connected(graph: Graph, source: Node, destination: Node) -> bool:
@@ -112,7 +108,7 @@ def pull_cached_resource_policy_by_arn(policies: List[Policy], arn: Optional[str
     elif service == 'kms':
         search_arn = arn
     else:
-        raise NotImplementedError('Service policies for {} are not cached.'.format(service))
+        raise NotImplementedError('Service policies for {} are not (currently) cached.'.format(service))
 
     for policy in policies:
         if search_arn == policy.arn:

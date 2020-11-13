@@ -27,17 +27,17 @@ class Node(object):
     """The basic Node object: tracks data about the IAM User/Role this Node represents. Includes the ARN, ID,
     attached policies (inline or attached), group memberships, trust doc (if IAM Role), instance profiles (if IAM Role),
     if a password is active (if IAM User), if there are active access keys (if IAM User), and if the IAM User/Role has
-    administrative permissions for the account."""
+    administrative permissions for the account.
+
+    * (1.1.0) Added permissions_boundary support, has_mfa support, tags support"""
 
     def __init__(self, arn: str, id_value: str, attached_policies: Optional[List[Policy]],
                  group_memberships: Optional[List[Group]], trust_policy: Optional[dict],
                  instance_profile: Optional[List[str]], num_access_keys: int, active_password: bool, is_admin: bool,
-                 permissions_boundary: Optional[Union[str, Policy]], has_mfa: bool):
+                 permissions_boundary: Optional[Union[str, Policy]], has_mfa: bool, tags: Optional[dict]):
         """Constructor. Expects an ARN and ID value. Validates parameters based on the type of Node (User/Role),
         and rejects contradictory arguments like an IAM User with a trust policy.
         """
-
-        # TODO: Add permissions boundary
 
         resource_value = arns.get_resource(arn)
         if arn is None or not (resource_value.startswith('user/') or resource_value.startswith('role/')):
@@ -81,6 +81,11 @@ class Node(object):
 
         self.has_mfa = has_mfa
 
+        if tags is None:
+            self.tags = {}
+        else:
+            self.tags = tags
+
         self.cache = {}
 
     def searchable_name(self):
@@ -92,6 +97,15 @@ class Node(object):
             components = arns.get_resource(self.arn).split('/')
             self.cache['searchable_name'] = "{}/{}".format(components[0], components[-1])
         return self.cache['searchable_name']
+
+    def get_outbound_edges(self, graph):  # -> List[Edge], can't import Edge/Graph in this module
+        """Creates and caches a collection of edges where this (self) Node is the source."""
+        if 'outbound_edges' not in self.cache:
+            self.cache['outbound_edges'] = []
+            for edge in graph.edges:
+                if edge.source == self:
+                    self.cache['outbound_edges'].append(edge)
+        return self.cache['outbound_edges']
 
     def to_dictionary(self):
         """Creates a dictionary representation of this Node for storage."""
@@ -109,5 +123,6 @@ class Node(object):
             "access_keys": self.access_keys,
             "is_admin": self.is_admin,
             "permissions_boundary": _pb,
-            "has_mfa": self.has_mfa
+            "has_mfa": self.has_mfa,
+            "tags": self.tags
         }

@@ -192,7 +192,7 @@ class Graph(object):
                               group_memberships=group_memberships, trust_policy=node['trust_policy'],
                               instance_profile=node['instance_profile'], num_access_keys=node['access_keys'],
                               active_password=node['active_password'], is_admin=node['is_admin'],
-                              permissions_boundary=node_permission_boundary, has_mfa=node['has_mfa']))
+                              permissions_boundary=node_permission_boundary, has_mfa=node['has_mfa'], tags=node['tags']))
 
         with open(edgesfilepath) as f:
             unresolved_edges = json.load(f)

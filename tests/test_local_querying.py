@@ -824,6 +824,8 @@ class LocalQueryingTests(unittest.TestCase):
             1,
             False,
             False,
+            None,
+            True,
             None
         )
 

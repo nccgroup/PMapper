@@ -17,6 +17,7 @@
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 import io
+import json
 import os
 from typing import List, Union
 
@@ -71,3 +72,23 @@ class QueryResult(object):
             output.write('{} CANNOT call action {} for resource {}\n'.format(
                 self.node.searchable_name(), action_param, resource_param
             ))
+
+    def as_json(self):
+        """Produces a JSON representation of this query's result."""
+        if isinstance(self.edge_list, Node):
+            edge_rep = [{
+                'src': self.edge_list.arn,
+                'dst': self.edge_list.arn
+            }]
+        else:
+            edge_rep = []
+            for edge in self.edge_list:
+                edge_rep.append({
+                    'src': edge.source.arn,
+                    'dst': edge.destination.arn
+                })
+        return json.dumps({
+            'allowed': self.allowed,
+            'node': self.node.arn,
+            'edge_list': edge_rep
+        })
