@@ -391,9 +391,9 @@ class LocalQueryingTests(unittest.TestCase):
             }
         )
         self.assertFalse(local_check_authorization(test_node_date_not_equals, 'iam:CreateUser', '*',
-                                                  {'aws:CurrentTime': '2018-08-10T00:00:00Z'}, True))
+                                                   {'aws:CurrentTime': '2018-08-10T00:00:00Z'}, True))
         self.assertTrue(local_check_authorization(test_node_date_not_equals, 'iam:CreateUser', '*',
-                                                   {'aws:CurrentTime': '2018-08-10T00:00:01Z'}, True))
+                                                  {'aws:CurrentTime': '2018-08-10T00:00:01Z'}, True))
 
         # DateGreaterThan
         test_node_date_greater_than = _build_user_with_policy(
@@ -437,9 +437,9 @@ class LocalQueryingTests(unittest.TestCase):
             }
         )
         self.assertFalse(local_check_authorization(test_node_date_greater_than_equals, 'iam:CreateUser', '*',
-                                                  {'aws:CurrentTime': '2018-08-09T23:59:59Z'}, True))
+                                                   {'aws:CurrentTime': '2018-08-09T23:59:59Z'}, True))
         self.assertTrue(local_check_authorization(test_node_date_greater_than_equals, 'iam:CreateUser', '*',
-                                                   {'aws:CurrentTime': '2018-08-10T00:00:00Z'}, True))
+                                                  {'aws:CurrentTime': '2018-08-10T00:00:00Z'}, True))
         self.assertTrue(local_check_authorization(test_node_date_greater_than_equals, 'iam:CreateUser', '*',
                                                   {'aws:CurrentTime': '2018-08-10T00:00:01Z'}, True))
 
@@ -462,9 +462,9 @@ class LocalQueryingTests(unittest.TestCase):
             }
         )
         self.assertTrue(local_check_authorization(test_node_date_less_than, 'iam:CreateUser', '*',
-                                                   {'aws:CurrentTime': '2018-08-09T23:59:59Z'}, True))
+                                                  {'aws:CurrentTime': '2018-08-09T23:59:59Z'}, True))
         self.assertFalse(local_check_authorization(test_node_date_less_than, 'iam:CreateUser', '*',
-                                                  {'aws:CurrentTime': '2018-08-10T00:00:01Z'}, True))
+                                                   {'aws:CurrentTime': '2018-08-10T00:00:01Z'}, True))
 
         # DateLessThanEquals
         test_node_date_less_than_equals = _build_user_with_policy(
@@ -485,11 +485,11 @@ class LocalQueryingTests(unittest.TestCase):
             }
         )
         self.assertTrue(local_check_authorization(test_node_date_less_than_equals, 'iam:CreateUser', '*',
-                                                   {'aws:CurrentTime': '2018-08-09T23:59:59Z'}, True))
+                                                  {'aws:CurrentTime': '2018-08-09T23:59:59Z'}, True))
         self.assertTrue(local_check_authorization(test_node_date_less_than_equals, 'iam:CreateUser', '*',
                                                   {'aws:CurrentTime': '2018-08-10T00:00:00Z'}, True))
         self.assertFalse(local_check_authorization(test_node_date_less_than_equals, 'iam:CreateUser', '*',
-                                                  {'aws:CurrentTime': '2018-08-10T00:00:01Z'}, True))
+                                                   {'aws:CurrentTime': '2018-08-10T00:00:01Z'}, True))
 
     def test_ipaddress_condition_handling(self):
         """ Validate the following conditions are handled:
@@ -519,7 +519,7 @@ class LocalQueryingTests(unittest.TestCase):
         self.assertTrue(local_check_authorization(test_node_ipaddress, 'iam:CreateUser', '*',
                                                   {'aws:SourceIp': '10.0.0.1'}, True))
         self.assertFalse(local_check_authorization(test_node_ipaddress, 'iam:CreateUser', '*',
-                                                  {'aws:SourceIp': '10.0.0.2'}, True))
+                                                   {'aws:SourceIp': '10.0.0.2'}, True))
 
         # IpAddress: IP range
         test_node_ipaddress = _build_user_with_policy(
@@ -565,9 +565,9 @@ class LocalQueryingTests(unittest.TestCase):
         self.assertTrue(local_check_authorization(test_node_ipaddress, 'iam:CreateUser', '*',
                                                   {'aws:SourceIp': '10.0.0.1'}, True))
         self.assertTrue(local_check_authorization(test_node_ipaddress, 'iam:CreateUser', '*',
-                                                   {'aws:SourceIp': '127.0.0.1'}, True))
+                                                  {'aws:SourceIp': '127.0.0.1'}, True))
         self.assertFalse(local_check_authorization(test_node_ipaddress, 'iam:CreateUser', '*',
-                                                  {'aws:SourceIp': '192.168.0.1'}, True))
+                                                   {'aws:SourceIp': '192.168.0.1'}, True))
 
     def test_bool_condition_handling(self):
         """ Validate the following conditions are handled:
@@ -598,7 +598,7 @@ class LocalQueryingTests(unittest.TestCase):
         self.assertTrue(local_check_authorization(test_node_true, 'iam:CreateUser', '*',
                                                   {'aws:SecureTransport': 'True'}, True))
         self.assertFalse(local_check_authorization(test_node_true, 'iam:CreateUser', '*',
-                                                  {'aws:SecureTransport': 'tru'}, True))
+                                                   {'aws:SecureTransport': 'tru'}, True))
         self.assertFalse(local_check_authorization(test_node_true, 'iam:CreateUser', '*',
                                                    {'aws:SecureTransport': ''}, True))
         self.assertFalse(local_check_authorization(test_node_true, 'iam:CreateUser', '*',
@@ -627,7 +627,7 @@ class LocalQueryingTests(unittest.TestCase):
         self.assertFalse(local_check_authorization(test_node_false, 'iam:CreateUser', '*',
                                                    {'aws:SecureTransport': 'true'}, True))
         self.assertTrue(local_check_authorization(test_node_false, 'iam:CreateUser', '*',
-                                                   {'aws:SecureTransport': 'asdf'}, True))  # policy sim behavior
+                                                  {'aws:SecureTransport': 'asdf'}, True))  # policy sim behavior
         self.assertTrue(local_check_authorization(test_node_false, 'iam:CreateUser', '*',
                                                   {'aws:SecureTransport': 't'}, True))
 
