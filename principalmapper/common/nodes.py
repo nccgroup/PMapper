@@ -18,6 +18,7 @@
 
 from typing import List, Optional, Union
 
+import principalmapper.common.edges
 from principalmapper.common.groups import Group
 from principalmapper.common.policies import Policy
 from principalmapper.util import arns
@@ -102,9 +103,20 @@ class Node(object):
         """Creates and caches a collection of edges where this (self) Node is the source."""
         if 'outbound_edges' not in self.cache:
             self.cache['outbound_edges'] = []
-            for edge in graph.edges:
-                if edge.source == self:
-                    self.cache['outbound_edges'].append(edge)
+            if self.is_admin:
+                for node in graph.nodes:
+                    if node == self:
+                        continue
+                    else:
+                        self.cache['outbound_edges'].append(
+                            principalmapper.common.edges.Edge(
+                                self, node, 'can access through administrative actions', 'Admin'
+                            )
+                        )
+            else:
+                for edge in graph.edges:
+                    if edge.source == self:
+                        self.cache['outbound_edges'].append(edge)
         return self.cache['outbound_edges']
 
     def to_dictionary(self):

@@ -16,7 +16,6 @@
 #      You should have received a copy of the GNU Affero General Public License
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
-from principalmapper.common.nodes import Node
 from principalmapper.util import arns
 
 
@@ -25,7 +24,7 @@ class Edge(object):
     the source Node is able to access the destination Node.
     """
 
-    def __init__(self, source: Node, destination: Node, reason: str, short_reason: str):
+    def __init__(self, source, destination, reason: str, short_reason: str):
         """Constructor"""
         if source is None:
             raise ValueError('Edges must have a source Node object')
