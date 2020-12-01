@@ -28,6 +28,16 @@ def handle_preset_query(graph: Graph, tokens: List[str], skip_admins: bool = Fal
     tag_name_target = tokens[2]
     clusters = generate_clusters(graph, tag_name_target, output, debug)
 
+    print('# Clusters identified on key {}'.format(tag_name_target))
+    for k in clusters.keys():
+        if k is None:
+            continue
+        print('{}:'.format(k))
+        for n in clusters[k]:
+            print('   {}'.format(n.searchable_name()))
+
+    print()
+    print('# Boundaries crossed on key {}'.format(tag_name_target))
     for source in clusters.keys():
         if source is None:
             continue
@@ -38,10 +48,13 @@ def handle_preset_query(graph: Graph, tokens: List[str], skip_admins: bool = Fal
 
             for src_node in clusters[source]:
                 for dst_node in clusters[destination]:
-                    if is_connected(graph, src_node, dst_node, debug):
+                    connected, path = is_connected(graph, src_node, dst_node, debug)
+                    if connected:
                         print('{} can cross boundaries and access {}'.format(
                             src_node.searchable_name(), dst_node.searchable_name()
                         ))
+                        for edge in path:
+                            print('   {}'.format(edge.describe_edge()))
 
 
 def generate_clusters(graph: Graph, tag_name_target: str, output: io.StringIO = os.devnull,

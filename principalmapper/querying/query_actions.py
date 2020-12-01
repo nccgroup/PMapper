@@ -22,7 +22,7 @@ import re
 from typing import Optional
 
 from principalmapper.common import Graph
-from principalmapper.querying.presets import privesc, connected
+from principalmapper.querying.presets import privesc, connected, clusters
 from principalmapper.querying.query_interface import search_authorization_for, search_authorization_with_resource_policy_for
 from principalmapper.util import arns
 
@@ -162,6 +162,8 @@ def handle_preset(graph: Graph, query: str, skip_admins: bool = False, output: i
         privesc.handle_preset_query(graph, tokens, skip_admins, output, debug)
     elif tokens[1] == 'connected':
         connected.handle_preset_query(graph, tokens, skip_admins, output, debug)
+    elif tokens[1] == 'clusters':
+        clusters.handle_preset_query(graph, tokens, skip_admins, output, debug)
     else:
         _write_query_help(output)
         return
@@ -219,8 +221,17 @@ def argquery(graph: Graph, principal_param: Optional[str], action_param: Optiona
                 dest_nodes.append(graph.get_node_by_searchable_name(resource_param))
 
             connected.write_connected_results(graph, source_nodes, dest_nodes, skip_admins, output, debug)
+        elif preset_param == 'clusters':
+            # validate params
+            if action_param is not None:
+                raise ValueError('For the clusters preset query, the --action parameter should not be set.')
+
+            if resource_param is None:
+                raise ValueError('For the clusters preset query, the --resource parameter must be set.')
+
+            clusters.handle_preset_query(graph, ['', '', resource_param], skip_admins, output, debug)
         else:
-            raise ValueError('Parameter for "preset" is not valid. Expected values: "privesc" and "connected".')
+            raise ValueError('Parameter for "preset" is not valid. Expected values: "privesc", "connected", or "clusters".')
 
     else:
         argquery_response(graph, principal_param, action_param, resource_param, condition_param, skip_admins,

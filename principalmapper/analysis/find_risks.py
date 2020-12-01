@@ -384,7 +384,7 @@ def gen_circular_access_finding(graph: Graph) -> List[Finding]:
 
         description_body = ''
         for cycle in cycles:
-            description_body += '* {}\n'.format(' -> '.join([x.searchable_name() for x in cycle]))
+            description_body += '* {}\n'.format(' -> '.join([x.searchable_name() for x in cycle] + [cycle[0].searchable_name()]))
 
         result.append(Finding(
             'IAM Principals with Circular Access',
