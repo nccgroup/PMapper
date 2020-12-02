@@ -181,6 +181,7 @@ def _write_query_help(output: io.StringIO) -> None:
     output.write('Available presets:\n')
     output.write('* connected (principal|"*") (principal|"*")\n')
     output.write('* privesc (principal|"*")\n')
+    output.write('* clusters (tag key)\n')
 
 
 def argquery(graph: Graph, principal_param: Optional[str], action_param: Optional[str], resource_param: Optional[str],

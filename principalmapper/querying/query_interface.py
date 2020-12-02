@@ -228,9 +228,7 @@ def local_check_authorization_with_resource_policy(principal: Node, action_to_ch
 
 def simulation_api_check_authorization(iamclient, principal: Node, action_to_check: str, resource_to_check: str,
                                        condition_keys_to_check: dict, debug: bool = False) -> bool:
-    """Determine if a node is authorized for an API call via iam:SimulatePrincipalPolicy. DO NOT USE THIS FUNCTION,
-    IT WILL ONLY THROW A NotImplementedError.
-    """
+    """DO NOT USE THIS FUNCTION, IT WILL ONLY THROW A NotImplementedError."""
     dprint(debug, 'calling iam:SimulatePrincipalPolicy with principal: {}, action: {}, resource: {}, conditions: {}'
            .format(principal.arn, action_to_check, resource_to_check, condition_keys_to_check))
     raise NotImplementedError('Principal Mapper only supports local authorization checks, and will continue to only '

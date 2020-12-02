@@ -62,8 +62,9 @@ def draw_privesc_paths(graph: Graph, path: str, file_format: str) -> None:
         graph_type='digraph',
         overlap='scale',
         layout='dot',
-        splines='true',
-        rankdir='LR'
+        splines='ortho',
+        rankdir='LR',
+        forcelabels='true'
     )
 
     pydot_nodes = {}
@@ -97,7 +98,7 @@ def draw_privesc_paths(graph: Graph, path: str, file_format: str) -> None:
                 pydot_nodes[node] = pydot_node
                 s.add_node(pydot_node)
 
-                edge_to_add = pydot.Edge(node.searchable_name(), edge_list[0].destination.searchable_name(), label=edge_list[0].short_reason)
+                edge_to_add = pydot.Edge(node.searchable_name(), edge_list[0].destination.searchable_name(), xlabel=edge_list[0].short_reason)
                 pydg.add_edge(edge_to_add)
 
         pydg.add_subgraph(s)

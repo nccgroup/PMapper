@@ -68,6 +68,9 @@ def create_graph(session: botocore.session.Session, service_list: list, output: 
 
     # Pull S3, SNS, SQS, and KMS resource policies
     policies_result.extend(get_s3_bucket_policies(session, output, debug))
+    policies_result.extend(get_sns_topic_policies(session, output, debug))
+    policies_result.extend(get_sqs_queue_policies(session, caller_identity['Account'], output, debug))
+    policies_result.extend(get_kms_key_policies(session, output, debug))
 
     return Graph(nodes_result, edges_result, policies_result, groups_result, metadata)
 
@@ -265,8 +268,102 @@ def get_s3_bucket_policies(session: botocore.session.Session, output: io.StringI
                     }
                 ))
             else:
-                output.write('Unable to retrieve bucket policy for {}. You may need to add this later. '
+                output.write('Unable to retrieve bucket policy for {}. You should add this manually. '
                              'Continuing.\n'.format(bucket))
+
+    return result
+
+
+def get_kms_key_policies(session: botocore.session.Session, output: io.StringIO = os.devnull, debug=False) -> List[Policy]:
+    """Using a botocore Session object, return a list of Policy objects representing the key policies of each
+    KMS key in this account.
+    """
+    result = []
+
+    # Iterate through all regions of KMS where possible
+    for kms_region in session.get_available_regions('kms'):
+        try:
+            # Grab the keys
+            cmks = []
+            kmsclient = session.create_client('kms', region_name=kms_region)
+            kms_paginator = kmsclient.get_paginator('list_keys')
+            for page in kms_paginator.paginate():
+                cmks.extend([x['KeyArn'] for x in page['Keys']])
+
+            # Grab the key policies
+            for cmk in cmks:
+                policy_str = kmsclient.get_key_policy(KeyId=cmk, PolicyName='default')['Policy']
+                result.append(Policy(
+                    cmk,
+                    cmk.split('/')[-1],  # CMK ARN Format: arn:<partition>:kms:<region>:<account>:key/<Key ID>
+                    json.loads(policy_str)
+                ))
+        except botocore.exceptions.ClientError:
+            output.write('Unable to search KMS in region {} for key policies\n'.format(kms_region))
+            continue
+
+    return result
+
+
+def get_sns_topic_policies(session: botocore.session.Session, output: io.StringIO = os.devnull, debug=False) -> List[Policy]:
+    """Using a botocore Session object, return a list of Policy objects representing the key policies of each
+    KMS key in this account.
+    """
+    result = []
+
+    # Iterate through all regions of SNS where possible
+    for sns_region in session.get_available_regions('sns'):
+        try:
+            # Grab the topics
+            topics = []
+            snsclient = session.create_client('sns', region_name=sns_region)
+            sns_paginator = snsclient.get_paginator('list_topics')
+            for page in sns_paginator.paginate():
+                topics.extend([x['TopicArn'] for x in page['Topics']])
+
+            # Grab the topic policies
+            for topic in topics:
+                policy_str = snsclient.get_topic_attributes(TopicArn=topic)['Attributes']['Policy']
+                result.append(Policy(
+                    topic,
+                    topic.split(':')[-1],  # SNS Topic ARN Format: arn:<partition>:sns:<region>:<account>:<Topic Name>
+                    json.loads(policy_str)
+                ))
+        except botocore.exceptions.ClientError:
+            output.write('Unable to search SNS in region {} for topic policies\n'.format(sns_region))
+
+    return result
+
+
+def get_sqs_queue_policies(session: botocore.session.Session, account_id: str, output: io.StringIO = os.devnull, debug=False) -> List[Policy]:
+    """Using a botocore Session object, return a list of Policy objects representing the key policies of each
+    KMS key in this account.
+    """
+    result = []
+
+    # Iterate through all regions of SQS where possible
+    for sqs_region in session.get_available_regions('sqs'):
+        try:
+            # Grab the queue names
+            queue_urls = []
+            sqsclient = session.create_client('sqs', region_name=sqs_region)
+            response = sqsclient.list_queues()
+            if 'QueueUrls' in response:
+                queue_urls.extend(response['QueueUrls'])
+            else:
+                continue
+
+            # Grab the queue policies
+            for queue_url in queue_urls:
+                queue_name = queue_url.split('/')[-1]
+                policy_str = sqsclient.get_queue_attributes(QueueUrl=queue_url, AttributeNames=['Policy'])['Policy']
+                result.append(Policy(
+                    'arn:aws:sqs:{}:{}:{}'.format(sqs_region, account_id, queue_name),
+                    queue_name,
+                    json.loads(policy_str)
+                ))
+        except botocore.exceptions.ClientError:
+            output.write('Unable to search SQS in region {} for queues.\n'.format(sqs_region))
 
     return result
 

@@ -395,7 +395,7 @@ def gen_circular_access_finding(graph: Graph) -> List[Finding]:
             'Break the cycle of access by altering/removing permissions assigned to one of the noted principals.'
         ))
 
-    return result  # TODO: finish circular access finding
+    return result
 
 
 def print_report(report: Report) -> None:
