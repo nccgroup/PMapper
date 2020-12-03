@@ -120,7 +120,7 @@ def pull_cached_resource_policy_by_arn(policies: List[Policy], arn: Optional[str
 def pull_resource_policy_by_arn(session: botocore.session.Session, arn: Optional[str], query: str = None) -> dict:
     """helper function for pulling the resource policy for a resource at the denoted ARN.
 
-    raises ValueError if it cannot be retrieved.
+    raises ValueError if it cannot be retrieved, or a botocore ClientError if another issue arises
     """
     if query is not None:
         if arn is not None:
@@ -150,15 +150,20 @@ def pull_resource_policy_by_arn(session: botocore.session.Session, arn: Optional
     elif service == 'sns':
         region = arns.get_region(arn)
         client = session.create_client('sns', region_name=region)
-        # policy = ...
-        raise NotImplementedError('Need to implement topic policy grabbing')
+        policy_str = client.get_topic_attributes(TopicArn=arn)['Attributes']['Policy']
+        return json.loads(policy_str)
     elif service == 'sqs':
         region = arns.get_region(arn)
         client = session.create_client('sqs', region_name=region)
-        # policy = ...
-        raise NotImplementedError('Need to implement queue policy grabbing')
+        queue_url = 'https://sqs.{}.amazonaws.com/{}/{}'.format(
+            arns.get_region(arn),
+            arns.get_account_id(arn),
+            arns.get_resource(arn)
+        )  # TODO: future proof queue URL creation? this still work with FIFO queues?
+        policy_str = client.get_queue_attributes(QueueUrl=queue_url, AttributeNames=['Policy'])['Policy']
+        return json.loads(policy_str)
     elif service == 'kms':
         region = arns.get_region(arn)
         client = session.create_client('kms', region_name=region)
-        # policy = ...
-        raise NotImplementedError('Need to implement KMS key policy grabbing')
+        key_policy = json.loads(client.get_key_policy(KeyId=arn, PolicyName='default')['Policy'])
+        return key_policy
