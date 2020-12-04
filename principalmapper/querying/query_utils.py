@@ -16,6 +16,7 @@
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 import json
+import logging
 from typing import List, Optional
 import re
 
@@ -23,6 +24,9 @@ import botocore.session
 
 from principalmapper.common import Edge, Graph, Node, Policy
 from principalmapper.util import arns
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_search_list(graph: Graph, node: Node) -> List[List[Edge]]:
@@ -139,22 +143,26 @@ def pull_resource_policy_by_arn(session: botocore.session.Session, arn: Optional
         # arn:aws:iam::<account_id>:role/<role_name>
         client = session.create_client('iam')
         role_name = arns.get_resource(arn).split('/')[-1]
+        logger.debug('Calling IAM API to retrieve AssumeRolePolicyDocument of {}'.format(role_name))
         trust_doc = client.get_role(RoleName=role_name)['Role']['AssumeRolePolicyDocument']
         return trust_doc
     elif service == 's3':
         # arn:aws:s3:::<bucket>/<path_to_object_with_potential_colons>
         client = session.create_client('s3')
         bucket_name = arns.get_resource(arn).split('arn:aws:s3:::')[-1].split('/')[0]
+        logger.debug('Calling S3 API to retrieve bucket policy of {}'.format(bucket_name))
         bucket_policy = json.loads(client.get_bucket_policy(Bucket=bucket_name)['Policy'])
         return bucket_policy
     elif service == 'sns':
         region = arns.get_region(arn)
         client = session.create_client('sns', region_name=region)
+        logger.debug('Calling SNS API to retrieve topic policy of {}'.format(arn))
         policy_str = client.get_topic_attributes(TopicArn=arn)['Attributes']['Policy']
         return json.loads(policy_str)
     elif service == 'sqs':
         region = arns.get_region(arn)
         client = session.create_client('sqs', region_name=region)
+        logger.debug('Calling SQS API to retrieve queue policy of {}'.format(arn))
         queue_url = 'https://sqs.{}.amazonaws.com/{}/{}'.format(
             arns.get_region(arn),
             arns.get_account_id(arn),
@@ -165,5 +173,6 @@ def pull_resource_policy_by_arn(session: botocore.session.Session, arn: Optional
     elif service == 'kms':
         region = arns.get_region(arn)
         client = session.create_client('kms', region_name=region)
+        logger.debug('Calling KMS API to retrieve key policy of {}'.format(arn))
         key_policy = json.loads(client.get_key_policy(KeyId=arn, PolicyName='default')['Policy'])
         return key_policy

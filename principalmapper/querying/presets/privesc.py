@@ -23,7 +23,6 @@ from typing import List
 
 from principalmapper.common import Edge, Node, Graph
 from principalmapper.querying.query_utils import get_search_list
-from principalmapper.util.debug_print import dprint
 
 
 def handle_preset_query(graph: Graph, tokens: List[str], skip_admins: bool = False, output: io.StringIO = os.devnull,
@@ -43,7 +42,6 @@ def write_privesc_results(graph: Graph, nodes: List[Node], skip_admins: bool = F
                           debug: bool = False) -> None:
     """Handles a privesc query and writes the result to output."""
     for node in nodes:
-        dprint(debug, 'Looking at principal {}'.format(node.searchable_name()))
         if skip_admins and node.is_admin:
             continue  # skip admins
 

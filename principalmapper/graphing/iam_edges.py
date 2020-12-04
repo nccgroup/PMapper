@@ -17,6 +17,7 @@
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 import io
+import logging
 import os
 from typing import List
 
@@ -25,12 +26,18 @@ from principalmapper.graphing.edge_checker import EdgeChecker
 from principalmapper.querying import query_interface
 
 
+logger = logging.getLogger(__name__)
+
+
 class IAMEdgeChecker(EdgeChecker):
     """Class for identifying if IAM can be used by IAM principals to gain access to other IAM principals."""
 
     def return_edges(self, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
         """Fulfills expected method return_edges."""
+
         result = []
+        logger.info('Searching IAM for edges')
+
         for node_source in nodes:
             for node_destination in nodes:
                 # skip self-access checks
@@ -120,5 +127,5 @@ class IAMEdgeChecker(EdgeChecker):
                         result.append(Edge(node_source, node_destination, reason, 'IAM'))
 
         for edge in result:
-            output.write("Found new edge: {}\n".format(edge.describe_edge()))
+            logger.info("Found new edge: {}\n".format(edge.describe_edge()))
         return result

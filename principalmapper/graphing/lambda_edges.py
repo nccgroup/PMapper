@@ -16,6 +16,7 @@
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 import io
+import logging
 import os
 from typing import List
 
@@ -28,16 +29,19 @@ from principalmapper.querying import query_interface
 from principalmapper.util import arns
 
 
+logger = logging.getLogger(__name__)
+
+
 class LambdaEdgeChecker(EdgeChecker):
     """Class for identifying if Lambda can be used by IAM principals to gain access to other IAM principals."""
 
     def return_edges(self, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
         """Fulfills expected method return_edges. If session object is None, runs checks in offline mode."""
         result = []
+        logger.info('Searching Lambda for edges')
 
         lambda_clients = []
         if self.session is not None:
-            print('Searching through Lambda-supported regions for existing functions.')
             lambda_regions = self.session.get_available_regions('lambda')
             for region in lambda_regions:
                 lambda_clients.append(self.session.create_client('lambda', region_name=region))
@@ -50,9 +54,10 @@ class LambdaEdgeChecker(EdgeChecker):
                 for page in paginator.paginate(PaginationConfig={'PageSize': 25}):
                     for func in page['Functions']:
                         function_list.append(func)
-            except ClientError:
-                output.write('Encountered an exception when listing functions in the region {}\n'.format(
-                    lambda_client.meta.region_name))
+            except ClientError as ex:
+                logger.warning('Unable to search region {} for stacks. The region may be disabled, or the error may '
+                               'be caused by an authorization issue. Continuing.'.format(lambda_client.meta.region_name))
+                logger.debug('Exception details: {}'.format(ex))
 
         for node_source in nodes:
             for node_destination in nodes:
@@ -114,7 +119,7 @@ class LambdaEdgeChecker(EdgeChecker):
                             reason,
                             'Lambda'
                         )
-                        output.write('Found new edge: {}\n'.format(new_edge.describe_edge()))
+                        logger.info('Found new edge: {}'.format(new_edge.describe_edge()))
                         result.append(new_edge)
 
                 # List of (<function>, bool, bool, bool)
@@ -154,7 +159,7 @@ class LambdaEdgeChecker(EdgeChecker):
                                 reason,
                                 'Lambda'
                             )
-                            output.write('Found new edge: {}\n'.format(new_edge.describe_edge()))
+                            logger.info('Found new edge: {}'.format(new_edge.describe_edge()))
                             break
 
                 # check that source can modify a Lambda function and pass it another execution role
@@ -174,7 +179,7 @@ class LambdaEdgeChecker(EdgeChecker):
                             reason,
                             'Lambda'
                         )
-                        output.write('Found new edge: {}\n'.format(new_edge.describe_edge()))
+                        logger.info('Found new edge: {}'.format(new_edge.describe_edge()))
                         break
 
         return result

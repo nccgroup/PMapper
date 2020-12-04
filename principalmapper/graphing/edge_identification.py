@@ -16,6 +16,7 @@
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 import io
+import logging
 import os
 from typing import List, Optional
 
@@ -28,7 +29,9 @@ from principalmapper.graphing.iam_edges import IAMEdgeChecker
 from principalmapper.graphing.lambda_edges import LambdaEdgeChecker
 from principalmapper.graphing.ssm_edges import SSMEdgeChecker
 from principalmapper.graphing.sts_edges import STSEdgeChecker
-from principalmapper.util.debug_print import dprint
+
+
+logger = logging.getLogger(__name__)
 
 
 # Externally referable dictionary with all the supported edge-checking types
@@ -47,12 +50,10 @@ def obtain_edges(session: Optional[botocore.session.Session], checker_list: List
     """Given a list of nodes and a botocore Session, return a list of edges between those nodes. Only checks
     against services passed in the checker_list param. """
     result = []
-    output.write('Initiating edge checks.\n')
-    dprint(debug, 'Checker map:  {}'.format(checker_map))
-    dprint(debug, 'Checker list: {}'.format(checker_list))
+    logger.info('Initiating edge checks.')
+    logger.debug('Services being checked for edges: {}'.format(checker_list))
     for check in checker_list:
         if check in checker_map:
-            output.write('running edge check for service: {}\n'.format(check))
             checker_obj = checker_map[check](session)
             result.extend(checker_obj.return_edges(nodes, output, debug))
     return result

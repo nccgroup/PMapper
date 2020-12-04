@@ -17,6 +17,7 @@
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 import io
+import logging
 import os
 from typing import List
 
@@ -27,12 +28,17 @@ from principalmapper.querying.local_policy_simulation import resource_policy_aut
 from principalmapper.util import arns
 
 
+logger = logging.getLogger(__name__)
+
+
 class EC2EdgeChecker(EdgeChecker):
     """Class for identifying if EC2 can be used by IAM principals to gain access to other IAM principals."""
 
     def return_edges(self, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
         """Fulfills expected method return_edges."""
+
         result = []
+        logger.info('Searching EC2 for edges')
 
         for node_source in nodes:
             for node_destination in nodes:
@@ -124,7 +130,7 @@ class EC2EdgeChecker(EdgeChecker):
                         reason,
                         'EC2'
                     )
-                    output.write('Found new edge: {}\n'.format(new_edge.describe_edge()))
+                    logger.info('Found new edge: {}'.format(new_edge.describe_edge()))
                     result.append(new_edge)
 
                 # check if source can run an instance without an instance profile then add the profile, add edge if so
@@ -165,7 +171,7 @@ class EC2EdgeChecker(EdgeChecker):
                             reason,
                             'EC2'
                         )
-                        output.write('Found new edge: {}\n'.format(new_edge.describe_edge()))
+                        logger.info('Found new edge: {}'.format(new_edge.describe_edge()))
                         result.append(new_edge)
 
         return result

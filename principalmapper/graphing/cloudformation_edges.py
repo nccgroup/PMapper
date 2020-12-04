@@ -16,6 +16,7 @@
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 import io
+import logging
 import os
 from typing import List
 
@@ -28,17 +29,21 @@ from principalmapper.querying.local_policy_simulation import resource_policy_aut
 from principalmapper.util import arns
 
 
+logger = logging.getLogger(__name__)
+
+
 class CloudFormationEdgeChecker(EdgeChecker):
     """Class for identifying if CloudFormation can be used by IAM principals to gain access to other IAM principals."""
 
     def return_edges(self, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
         """Fulfills expected method return_edges."""
+
         result = []
+        logger.info('Searching CloudFormation for edges')
 
         # Grab existing stacks in each region
         cloudformation_clients = []
         if self.session is not None:
-            print('Searching through CloudFormation-supported regions for existing functions.')
             cf_regions = self.session.get_available_regions('cloudformation')
             for region in cf_regions:
                 cloudformation_clients.append(self.session.create_client('cloudformation', region_name=region))
@@ -46,6 +51,7 @@ class CloudFormationEdgeChecker(EdgeChecker):
         # grab existing cloudformation stacks
         stack_list = []
         for cf_client in cloudformation_clients:
+            logger.debug('Looking at region {}'.format(cf_client.meta.region_name))
             try:
                 paginator = cf_client.get_paginator('describe_stacks')
                 for page in paginator.paginate():
@@ -53,11 +59,12 @@ class CloudFormationEdgeChecker(EdgeChecker):
                         if stack['StackStatus'] not in ['CREATE_FAILED', 'DELETE_COMPLETE', 'DELETE_FAILED',
                                                         'DELETE_IN_PROGRESS']:  # ignore unusable stacks
                             stack_list.append(stack)
-            except ClientError:
-                output.write('Encountered an exception when listing stacks in the region {}\n'.format(
-                    cf_client.meta.region_name))
+            except ClientError as ex:
+                logger.warning('Unable to search region {} for stacks. The region may be disabled, or the error may '
+                               'be caused by an authorization issue. Continuing.'.format(cf_client.meta.region_name))
+                logger.debug('Exception details: {}'.format(ex))
 
-        # For each node...
+        logger.debug('Searching nodes for CloudFormation access')
         for node_source in nodes:
             for node_destination in nodes:
                 # skip self-access checks
@@ -190,5 +197,5 @@ class CloudFormationEdgeChecker(EdgeChecker):
                         break  # save ourselves from digging into all CF stack edges possible
 
         for edge in result:
-            output.write("Found new edge: {}\n".format(edge.describe_edge()))
+            logger.info("Found new edge: {}".format(edge.describe_edge()))
         return result

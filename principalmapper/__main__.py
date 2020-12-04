@@ -19,6 +19,7 @@ Provides a command-line interface to use the principalmapper library
 
 import argparse
 import json
+import logging
 import os
 import os.path
 from pathlib import Path
@@ -33,9 +34,11 @@ import principalmapper.graphing.graph_actions
 from principalmapper.graphing.edge_identification import checker_map
 from principalmapper.querying import query_actions, query_utils, repl
 from principalmapper.util import botocore_tools
-from principalmapper.util.debug_print import dprint
 from principalmapper.util.storage import get_storage_root
 from principalmapper.visualizing import graph_writer
+
+
+logger = logging.getLogger(__name__)
 
 
 def main() -> int:
@@ -228,9 +231,19 @@ def main() -> int:
 
     parsed_args = argument_parser.parse_args()
 
-    dprint(parsed_args.debug, 'Debugging mode enabled.')
-    dprint(parsed_args.debug, 'Parsed Args: ' + str(parsed_args))
+    logging.basicConfig(
+        format='%(asctime)s|%(levelname)8s|%(name)s|%(message)s',
+        level=logging.DEBUG if parsed_args.debug else logging.INFO,
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+    botocore_logger = logging.getLogger('botocore')
+    botocore_logger.setLevel(logging.WARNING)
+    urllib3_logger = logging.getLogger('urllib3')
+    urllib3_logger.setLevel(logging.WARNING)
 
+    logger.debug('Chosen subcommand: {}'.format(parsed_args.picked_cmd))
     if parsed_args.picked_cmd == 'graph':
         return handle_graph(parsed_args)
     elif parsed_args.picked_cmd == 'query':

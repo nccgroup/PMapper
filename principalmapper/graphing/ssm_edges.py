@@ -16,6 +16,7 @@
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 import io
+import logging
 import os
 from typing import List
 
@@ -26,12 +27,18 @@ from principalmapper.querying.local_policy_simulation import resource_policy_aut
 from principalmapper.util import arns
 
 
+logger = logging.getLogger(__name__)
+
+
 class SSMEdgeChecker(EdgeChecker):
     """Class for identifying if SSM can be used by IAM principals to gain access to other IAM principals."""
 
     def return_edges(self, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
         """Fulfills expected method return_edges. If session object is None, runs checks in offline mode."""
+
         result = []
+        logger.info('Searching SSM for edges')
+
         for node_source in nodes:
             for node_destination in nodes:
                 # skip self-access checks
@@ -96,5 +103,5 @@ class SSMEdgeChecker(EdgeChecker):
                     result.append(Edge(node_source, node_destination, reason, 'SSM'))
 
         for edge in result:
-            output.write("Found new edge: {}\n".format(edge.describe_edge()))
+            logger.info("Found new edge: {}".format(edge.describe_edge()))
         return result

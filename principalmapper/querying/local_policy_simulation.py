@@ -22,12 +22,15 @@ import datetime as dt
 import dateutil.parser as dup
 from enum import Enum
 import ipaddress
+import logging
 from typing import List, Dict, Optional, Union
 import re
 
 from principalmapper.common import Node, Policy
-from principalmapper.util.debug_print import dprint
 from principalmapper.util import arns
+
+
+logger = logging.getLogger(__name__)
 
 
 def has_matching_statement(principal: Node, effect_value: str, action_to_check: str,
@@ -35,15 +38,6 @@ def has_matching_statement(principal: Node, effect_value: str, action_to_check: 
     """Locally determine if a node's attached policies (and group's policies if applicable) has at least one matching
     statement with the given effect. This is the meat of the local policy evaluation.
     """
-    dprint(
-        debug,
-        '   Looking for statement match - effect: {}, action: {}, resource: {}, conditions: {}'.format(
-            effect_value,
-            action_to_check,
-            resource_to_check,
-            condition_keys_to_check
-        )
-    )
 
     for policy in principal.attached_policies:
         if policy_has_matching_statement(policy, effect_value, action_to_check, resource_to_check,
@@ -61,16 +55,12 @@ def has_matching_statement(principal: Node, effect_value: str, action_to_check: 
 
 def policy_has_matching_statement(policy: Policy, effect_value: str, action_to_check: str, resource_to_check: str,
                                   condition_keys_to_check: dict, debug: bool = False) -> bool:
-    """Searches a specific Policy object"""
-
-    dprint(debug, 'looking at policy named: {}\n'.format(policy.name))
+    """Searches a specific Policy object for a statement with a matching Effect/Action/Resource/Condition"""
 
     # go through each policy_doc
     for statement in _listify_dictionary(policy.policy_doc['Statement']):
         if statement['Effect'] != effect_value:
             continue  # skip if effect doesn't match
-
-        dprint(debug, 'Checking statement: {}\n'.format(str(statement)))
 
         matches_action, matches_resource, matches_condition = False, False, False
 
@@ -128,8 +118,6 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
     See: https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_condition_operators.html
     """
     for block in condition.keys():
-        dprint(debug, 'Testing condition field: {}'.format(block))
-
         # String operators
         if 'String' in block:
             # string comparison after expansion
@@ -375,10 +363,6 @@ def _get_str_match(block: str, policy_key: str, policy_value: Union[str, List[st
     Many thanks to https://stackoverflow.com/a/29247821 for helping this code on this journey.
     """
 
-    dprint(debug, 'Checking {} for value {} with context {}, condition element {}'.format(
-        policy_key, policy_value, context, block
-    ))
-
     if_exists_op = 'IfExists' in block
 
     if 'StringEquals' in block:
@@ -448,10 +432,6 @@ def _get_num_match(block: str, policy_key: str, policy_value: Union[str, List[st
     Parses the string inputs into numbers before doing comparisons.
     """
 
-    dprint(debug, 'Checking {} for value {} with context {}, condition element {}'.format(
-        policy_key, policy_value, context, block
-    ))
-
     if_exists_op = 'IfExists' in block
 
     if block == 'NumericEquals':
@@ -502,10 +482,6 @@ def _get_bool_match(block: str, policy_key: str, policy_value: Union[str, List[s
     'false' policy values, returns True if context has value that's not 'true'. Returns False if no context value.
     """
 
-    dprint(debug, 'Checking {} for value {} with context {}, condition element {}'.format(
-        policy_key, policy_value, context, block
-    ))
-
     if_exists_op = 'IfExists' in block
 
     if policy_key not in context:
@@ -527,9 +503,6 @@ def _get_straight_str_match(block: str, policy_key: str, policy_value: Union[str
 
     Does a straight string comparison to search for a match.
     """
-    dprint(debug, 'Checking {} for value {} with context {}, condition element {}'.format(
-        policy_key, policy_value, context, block
-    ))
 
     # can knock this out up here
     if policy_key not in context:
@@ -550,9 +523,6 @@ def _get_ipaddress_match(block: str, policy_key: str, policy_value: Union[str, L
     Parses the policy value as an IPvXNetwork, then the context value as an IPvXAddress, then uses
     the `in` operator to determine a match.
     """
-    dprint(debug, 'Checking {} for value {} with context {}, condition element {}'.format(
-        policy_key, policy_value, context, block
-    ))
 
     if_exists_op = 'IfExists' in block
 
@@ -588,9 +558,6 @@ def _get_date_match(block: str, policy_key: str, policy_value: Union[str, List[s
     Parses values by distinguishing between epoch values and ISO 8601/RFC 3339 datetimestamps. Assumes
     the timezone is UTC when not specified.
     """
-    dprint(debug, 'Checking {} for value {} with context {}, condition element {}'.format(
-        policy_key, policy_value, context, block
-    ))
 
     if_exists_op = 'IfExists' in block
 
@@ -653,9 +620,6 @@ def _convert_timestamp_to_datetime_obj(timestamp: str):
 def _get_arn_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict,
                    debug: bool = False) -> bool:
     """Helper method for dealing with Arn* conditions: ArnEquals, ArnLike, ArnNotEquals, ArnNotLike"""
-    dprint(debug, 'Checking {} for value {} with context {}, condition element {}'.format(
-        policy_key, policy_value, context, block
-    ))
 
     if_exists_op = 'IfExists' in block
 
@@ -686,7 +650,6 @@ def _get_arn_match(block: str, policy_key: str, policy_value: Union[str, List[st
 
 def _get_null_match(policy_key: str, policy_value: Union[str, List[str]], context: Dict, debug: bool = False) -> bool:
     """Helper method for dealing with Null conditions"""
-    dprint(debug, 'Checking {} for value {} with context {}'.format(policy_key, policy_value, context))
     for value in _listify_string(policy_value):
         if value == 'true':  # key is expected not to be in context, or empty
             if policy_key not in context or context[policy_key] == '':
@@ -701,10 +664,6 @@ def resource_policy_matching_statements(node_or_service: Union[Node, str], resou
                                         action_to_check: str, resource_to_check: str, condition_keys_to_check: dict,
                                         debug: bool = False) -> list:
     """Returns if a resource policy has a matching statement for a given service (ec2.amazonaws.com for example)."""
-
-    dprint(debug, 'local resource policy statement search: {}, action: {}, resource: {}, conditions: {}, '
-                  'resource_policy: {}'.format(node_or_service, action_to_check, resource_to_check,
-                                               condition_keys_to_check, resource_policy))
 
     results = []
 
@@ -779,9 +738,6 @@ def resource_policy_authorization(node_or_service: Union[Node, str], resource_ow
                                   action_to_check: str, resource_to_check: str, condition_keys_to_check: dict,
                                   debug: bool) -> ResourcePolicyEvalResult:
     """Returns a ResourcePolicyEvalResult for a given request, based on the resource policy."""
-    dprint(debug, "Local resource policy authorization check: Principal {}, Action {}, Resource {}, Condition Keys {}, "
-                  "Resource Owner {}".format(node_or_service, action_to_check, resource_to_check,
-                                             condition_keys_to_check, resource_owner))
 
     matching_statements = resource_policy_matching_statements(node_or_service, resource_policy, action_to_check,
                                                               resource_to_check, condition_keys_to_check, debug)
@@ -847,9 +803,7 @@ def policies_include_matching_allow_action(principal: Node, action_to_check: str
 
     **NOTE:** Not something being used right now, given that all policy evaluation is local
     """
-    dprint(debug, 'optimization check, determine if {} could even possibly call {}'.format(
-        principal.arn, action_to_check
-    ))
+
     for policy in principal.attached_policies:
         for statement in _listify_dictionary(policy.policy_doc['Statement']):
             if statement['Effect'] != 'Allow':
@@ -905,9 +859,6 @@ def _matches_after_expansion(string_to_check: str, string_to_check_against: str,
 
     Handles matching with respect to wildcards, variables.
     """
-    dprint(debug, 'Checking for post-expansion match.\n   string to check: {}\n   '.format(string_to_check) +
-           'string to check against: {}\n'.format(string_to_check_against) +
-           '   condition_keys: {}'.format(condition_keys))
 
     # regexify string_to_check_against
     # handles use of ${} var substitution, wildcards (*), and periods (.)
@@ -927,7 +878,6 @@ def _matches_after_expansion(string_to_check: str, string_to_check_against: str,
         .replace("$", "\\$") \
         .replace("^", "\\^")
     pattern_string = "^{}$".format(pattern_string)
-    dprint(debug, '   post-processed pattern_string: {}'.format(pattern_string))
 
     # return result of match
     return re.match(pattern_string, string_to_check, flags=re.IGNORECASE) is not None

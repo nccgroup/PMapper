@@ -49,3 +49,8 @@ def get_storage_root():
     if not os.path.exists(result):
         os.makedirs(result, 0o700)
     return result
+
+
+def get_default_graph_path(account_or_org: str):
+    """Returns a path to a given account or organization by the provided string."""
+    return os.path.join(get_storage_root(), account_or_org)

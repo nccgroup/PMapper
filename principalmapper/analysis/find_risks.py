@@ -418,10 +418,11 @@ def print_report(report: Report) -> None:
         print()
     else:
         for finding in report.findings:
-            print("## {}\n\n### Severity\n\n{}\n\n### Impact\n\n{}\n\n### Description\n\n{}\n\n### Recommendation\n\n{}"
-                  "\n\n".format(finding.title, finding.severity, finding.impact, finding.description,
-                                finding.recommendation)
-                  )
+            print(
+                "## {}\n\n### Severity\n\n{}\n\n### Impact\n\n{}\n\n### Description\n\n{}\n\n### Recommendation\n\n{}\n\n".format(
+                    finding.title, finding.severity, finding.impact, finding.description,finding.recommendation
+                )
+            )
 
     # Footer
 

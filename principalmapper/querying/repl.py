@@ -23,6 +23,38 @@ from principalmapper.common import Graph
 from principalmapper.querying import query_actions
 
 
+_repl_help = '''##### How to Use the Principal Mapper REPL #####
+        
+Available Commands:
+   * query
+   * argquery
+   * help
+   * exit
+   
+The query/argquery commands behave the same as calling it from the regular 
+command line. You must include quotation marks or apostrophes around the 
+query for query commands, as the input is parsed like you were on the command 
+line. 
+   
+Simple English(-ish) Querying:
+   repl> query 'who can do s3:GetObject with arn:aws:s3:::<some bucket>/<sensitive object>'
+   repl> query 'can user/PowerUser do iam:CreateUser'
+   repl> query 'can user/PowerUser do sts:AssumeRole with * when aws:MultiFactorAuthPresent=true'
+   
+Using Argquery:
+   repl> argquery --principal user/PowerUser --action ec2:RunInstances
+   repl> argquery --action s3:GetObject --resource '*'
+
+Skipping Results for Admins (-s or --skip-admin both work):
+   repl> query -s 'who can do s3:GetObject with *'
+   repl> argquery --skip-admin --principal '*' --action s3:GetObject --resource '*'
+
+Using Preset Queries:
+   repl> query 'preset privesc *'
+   repl> argquery --principal user/PowerUser --resource role/AssumableRole --preset connected
+'''
+
+
 class PMapperREPL:
     """The Principal Mapper REPL class, handles the state and interactions of the REPL."""
 
@@ -157,33 +189,4 @@ class PMapperREPL:
     @staticmethod
     def _print_help():
         """Prints a helppage for using the REPL."""
-        print('''##### How to Use the Principal Mapper REPL #####
-        
-Available Commands:
-   * query
-   * argquery
-   * help
-   * exit
-   
-The query/argquery commands behave the same as calling it from the regular 
-command line. You must include quotation marks or apostrophes around the 
-query for query commands, as the input is parsed like you were on the command 
-line. 
-   
-Simple English(-ish) Querying:
-   repl> query 'who can do s3:GetObject with arn:aws:s3:::<some bucket>/<sensitive object>'
-   repl> query 'can user/PowerUser do iam:CreateUser'
-   repl> query 'can user/PowerUser do sts:AssumeRole with * when aws:MultiFactorAuthPresent=true'
-   
-Using Argquery:
-   repl> argquery --principal user/PowerUser --action ec2:RunInstances
-   repl> argquery --action s3:GetObject --resource '*'
-
-Skipping Results for Admins (-s or --skip-admin both work):
-   repl> query -s 'who can do s3:GetObject with *'
-   repl> argquery --skip-admin --principal '*' --action s3:GetObject --resource '*'
-
-Using Preset Queries:
-   repl> query 'preset privesc *'
-   repl> argquery --principal user/PowerUser --resource role/AssumableRole --preset connected
-''')
+        print(_repl_help)

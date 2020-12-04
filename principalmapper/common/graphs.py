@@ -17,6 +17,7 @@
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 import json
+import logging
 import os
 import os.path
 from typing import Optional
@@ -31,10 +32,13 @@ from principalmapper.common.nodes import Node
 from principalmapper.common.policies import Policy
 
 
+logger = logging.getLogger(__name__)
+
+
 class Graph(object):
     """The basic Graph object: contains nodes, edges, policies, and groups. Also includes code for saving and loading
     Graph data to/from files stored on-disk. The actual attributes of each graph/node/edge/policy/group object
-    will remain the same across the same major/minor version of Principal Mapper, so a graph generated in v1.0.0
+    will remain the same across the same major+minor version of Principal Mapper, so a graph generated in v1.0.0
     should be loadable in v1.0.1, but not v1.1.0.
     """
 
@@ -122,6 +126,7 @@ class Graph(object):
         Validates, using metadata, that the version of Principal Mapper that created the graph is the same
         major/minor version of the current version of Principal Mapper. Raises a ValueError otherwise.
         """
+        logger.debug('Loading Graph object from {}'.format(root_directory))
         rootpath = root_directory
         if not os.path.exists(rootpath):
             raise ValueError('Did not find file at: {}'.format(rootpath))

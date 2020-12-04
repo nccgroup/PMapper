@@ -15,17 +15,27 @@
 #      You should have received a copy of the GNU Affero General Public License
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
+import logging
 import sys
 
 
+logger = logging.getLogger(__name__)
+
+
 def dprint(debugging: bool, message: str) -> None:
-    """Prints message to console if debugging"""
+    """DEPRECATED AS OF v1.1.0 DURING LOGGING OVERHAUL.
+
+    Prints message to stderr if debugging, newline is automatically appended"""
+    logger.warning('The `dprint` function is deprecated, and should not be used.')
     if debugging:
         sys.stderr.write(message)
         sys.stderr.write("\n")
 
 
 def dwrite(debugging: bool, message: str) -> None:
-    """Writes message to console if debugging (no newline at the end)"""
+    """DEPRECATED AS OF v1.1.0 DURING LOGGING OVERHAUL.
+
+    Writes message to stderr if debugging (no newline at the end)"""
+    logger.warning('The `dwrite` function is deprecated, and should not be used.')
     if debugging:
         sys.stderr.write(message)

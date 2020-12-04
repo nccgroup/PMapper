@@ -17,6 +17,7 @@
 
 import io
 import json
+import logging
 import os
 
 import botocore.session
@@ -26,8 +27,10 @@ from principalmapper.common import Node, Group, Policy, Graph
 from principalmapper.graphing import edge_identification
 from principalmapper.querying import query_interface
 from principalmapper.util import arns
-from principalmapper.util.debug_print import dprint
 from typing import List, Optional
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_graph(session: botocore.session.Session, service_list: list, output: io.StringIO = os.devnull,
@@ -38,7 +41,7 @@ def create_graph(session: botocore.session.Session, service_list: list, output: 
     """
     stsclient = session.create_client('sts')
     caller_identity = stsclient.get_caller_identity()
-    dprint(debug, "Caller Identity: {}".format(caller_identity['Arn']))
+    logger.debug("Caller Identity: {}".format(caller_identity['Arn']))
     metadata = {
         'account_id': caller_identity['Account'],
         'pmapper_version': principalmapper.__version__
@@ -81,21 +84,19 @@ def get_nodes_groups_and_policies(iamclient, output: io.StringIO = os.devnull, d
 
     Writes high-level information on progress to the output stream.
     """
-    output.write('Obtaining IAM Users/Roles/Groups/Policies in the account.\n')
+    logger.info('Obtaining IAM Users/Roles/Groups/Policies in the account.')
     result_paginator = iamclient.get_paginator('get_account_authorization_details')
     user_results = []
     group_results = []
     role_results = []
     policy_results = []
     for page in result_paginator.paginate():
-        if debug:
-            output.write('{}\n'.format(page))
         user_results += page['UserDetailList']
         group_results += page['GroupDetailList']
         role_results += page['RoleDetailList']
         policy_results += page['Policies']
 
-    output.write('Sorting users, roles, groups, policies, and their relationships.\n')
+    logger.info('Sorting users, roles, groups, policies, and their relationships.')
 
     # this is the result we return: dictionary with nodes/groups/users all filled out
     result = {
@@ -211,19 +212,19 @@ def get_nodes_groups_and_policies(iamclient, output: io.StringIO = os.devnull, d
             )
         )
 
-    output.write("Obtaining Access Keys data for IAM users\n")
+    logger.info("Obtaining Access Keys data for IAM users")
     for node in result['nodes']:
         if arns.get_resource(node.arn).startswith('user/'):
             # Grab access-key count and update node
             user_name = arns.get_resource(node.arn)[5:]
             if '/' in user_name:
                 user_name = user_name.split('/')[-1]
-                dprint(debug, 'removed path from username {}'.format(user_name))
+                logger.debug('Removed path from username {}'.format(user_name))
             access_keys_data = iamclient.list_access_keys(UserName=user_name)
             node.access_keys = len(access_keys_data['AccessKeyMetadata'])
-            dprint(debug, 'Access Key Count for {}: {}'.format(user_name, len(access_keys_data['AccessKeyMetadata'])))
+            logger.debug('Access Key Count for {}: {}'.format(user_name, len(access_keys_data['AccessKeyMetadata'])))
 
-    output.write('Gathering MFA virtual device information\n')
+    logger.info('Gathering MFA virtual device information')
     mfa_paginator = iamclient.get_paginator('list_virtual_mfa_devices')
     for page in mfa_paginator.paginate(AssignmentStatus='Assigned'):
         for device in page['VirtualMFADevices']:
@@ -253,10 +254,8 @@ def get_s3_bucket_policies(session: botocore.session.Session, output: io.StringI
                 bucket_policy
             ))
         except botocore.exceptions.ClientError as ex:
-            if debug:
-                print(ex)
             if 'NoSuchBucketPolicy' in str(ex):
-                output.write('Bucket {} does not have a bucket policy, adding a "stub" policy instead.\n'.format(
+                logger.info('Bucket {} does not have a bucket policy, adding a "stub" policy instead.'.format(
                     bucket
                 ))
                 result.append(Policy(
@@ -268,8 +267,9 @@ def get_s3_bucket_policies(session: botocore.session.Session, output: io.StringI
                     }
                 ))
             else:
-                output.write('Unable to retrieve bucket policy for {}. You should add this manually. '
-                             'Continuing.\n'.format(bucket))
+                logger.info('Unable to retrieve bucket policy for {}. You should add this manually. '
+                            'Continuing.\n'.format(bucket))
+            logger.debug('Exception was: {}'.format(ex))
 
     return result
 
@@ -299,7 +299,7 @@ def get_kms_key_policies(session: botocore.session.Session, output: io.StringIO 
                     json.loads(policy_str)
                 ))
         except botocore.exceptions.ClientError:
-            output.write('Unable to search KMS in region {} for key policies\n'.format(kms_region))
+            logger.info('Unable to search KMS in region {} for key policies'.format(kms_region))
             continue
 
     return result
@@ -330,7 +330,7 @@ def get_sns_topic_policies(session: botocore.session.Session, output: io.StringI
                     json.loads(policy_str)
                 ))
         except botocore.exceptions.ClientError:
-            output.write('Unable to search SNS in region {} for topic policies\n'.format(sns_region))
+            logger.info('Unable to search SNS in region {} for topic policies'.format(sns_region))
 
     return result
 
@@ -363,7 +363,7 @@ def get_sqs_queue_policies(session: botocore.session.Session, account_id: str, o
                     json.loads(policy_str)
                 ))
         except botocore.exceptions.ClientError:
-            output.write('Unable to search SQS in region {} for queues.\n'.format(sqs_region))
+            logger.info('Unable to search SQS in region {} for queues.'.format(sqs_region))
 
     return result
 
@@ -377,10 +377,10 @@ def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False)
     """
     result = []
     # Get users, paginating results, still need to handle policies + group memberships + is_admin
-    output.write("Obtaining IAM users in account\n")
+    logger.info("Obtaining IAM users in account")
     user_paginator = iamclient.get_paginator('list_users')
     for page in user_paginator.paginate(PaginationConfig={'PageSize': 25}):
-        dprint(debug, 'list_users page: {}'.format(page))
+        logger.debug('list_users page: {}'.format(page))
         for user in page['Users']:
             # grab permission boundary ARN if applicable
             # TODO: iam:ListUsers does not return boundary information. may need to wait for a fix.
@@ -402,13 +402,13 @@ def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False)
                 has_mfa=False,
                 tags=None  # TODO: fix tags for old user-gathering method
             ))
-            dprint(debug, 'Adding Node for user ' + user['Arn'])
+            logger.debug('Adding Node for user ' + user['Arn'])
 
     # Get roles, paginating results, still need to handle policies + is_admin
-    output.write("Obtaining IAM roles in account\n")
+    logger.info("Obtaining IAM roles in account")
     role_paginator = iamclient.get_paginator('list_roles')
     for page in role_paginator.paginate(PaginationConfig={'PageSize': 25}):
-        dprint(debug, 'list_roles page: {}'.format(page))
+        logger.debug('list_roles page: {}'.format(page))
         for role in page['Roles']:
             # grab permission boundary ARN if applicable
             if 'PermissionsBoundary' in role:
@@ -431,10 +431,10 @@ def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False)
             ))
 
     # Get instance profiles, paginating results, and attach to roles as appropriate
-    output.write("Obtaining EC2 instance profiles in account\n")
+    logger.info("Obtaining EC2 instance profiles in account")
     ip_paginator = iamclient.get_paginator('list_instance_profiles')
     for page in ip_paginator.paginate(PaginationConfig={'PageSize': 25}):
-        dprint(debug, 'list_instance_profiles page: {}'.format(page))
+        logger.debug('list_instance_profiles page: {}'.format(page))
         for iprofile in page['InstanceProfiles']:
             iprofile_arn = iprofile['Arn']
             role_arns = []
@@ -445,17 +445,17 @@ def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False)
                     node.instance_profile = iprofile_arn
 
     # Handle access keys
-    output.write("Obtaining Access Keys data for IAM users\n")
+    logger.info("Obtaining Access Keys data for IAM users")
     for node in result:
         if arns.get_resource(node.arn).startswith('user/'):
             # Grab access-key count and update node
             user_name = arns.get_resource(node.arn)[5:]
             if '/' in user_name:
                 user_name = user_name.split('/')[-1]
-                dprint(debug, 'removed path from username {}'.format(user_name))
+                logger.debug('removed path from username {}'.format(user_name))
             access_keys_data = iamclient.list_access_keys(UserName=user_name)
             node.access_keys = len(access_keys_data['AccessKeyMetadata'])
-            dprint(debug, 'Access Key Count for {}: {}'.format(user_name, len(access_keys_data['AccessKeyMetadata'])))
+            logger.debug('Access Key Count for {}: {}'.format(user_name, len(access_keys_data['AccessKeyMetadata'])))
 
     return result
 
@@ -471,10 +471,10 @@ def get_unfilled_groups(iamclient, nodes: List[Node], output: io.StringIO = os.d
     result = []
 
     # paginate through groups and build result
-    output.write("Obtaining IAM groups in the account.\n")
+    logger.info("Obtaining IAM groups in the account.")
     group_paginator = iamclient.get_paginator('list_groups')
     for page in group_paginator.paginate(PaginationConfig={'PageSize': 25}):
-        dprint(debug, 'list_groups page: {}'.format(page))
+        logger.debug('list_groups page: {}'.format(page))
         for group in page['Groups']:
             result.append(Group(
                 arn=group['Arn'],
@@ -482,15 +482,15 @@ def get_unfilled_groups(iamclient, nodes: List[Node], output: io.StringIO = os.d
             ))
 
     # loop through group memberships
-    output.write("Connecting IAM users to their groups.\n")
+    logger.info("Connecting IAM users to their groups.")
     for node in nodes:
         if not arns.get_resource(node.arn).startswith('user/'):
             continue  # skip when not an IAM user
-        dprint(debug, 'finding groups for user {}'.format(node.arn))
+        logger.debug('finding groups for user {}'.format(node.arn))
         user_name = arns.get_resource(node.arn)[5:]
         if '/' in user_name:
             user_name = user_name.split('/')[-1]
-            dprint(debug, 'removed path from username {}'.format(user_name))
+            logger.debug('removed path from username {}'.format(user_name))
         group_list = iamclient.list_groups_for_user(UserName=user_name)
         for group in group_list['Groups']:
             for group_obj in result:
@@ -510,17 +510,17 @@ def get_policies_and_fill_out(iamclient, nodes: List[Node], groups: List[Group],
     result = []
 
     # navigate through nodes and add policy objects if they do not already exist in result
-    output.write("Obtaining policies used by all IAM users and roles\n")
+    logger.info("Obtaining policies used by all IAM users and roles")
     for node in nodes:
         node_name_components = arns.get_resource(node.arn).split('/')
         node_type, node_name = node_name_components[0], node_name_components[-1]
-        dprint(debug, 'Grabbing inline policies for {}'.format(node.arn))
+        logger.debug('Grabbing inline policies for {}'.format(node.arn))
         # get inline policies
         if node_type == 'user':
             inline_policy_arns = iamclient.list_user_policies(UserName=node_name)
             # get each inline policy, append it to node's policies and result list
             for policy_name in inline_policy_arns['PolicyNames']:
-                dprint(debug, '   Grabbing inline policy: {}'.format(policy_name))
+                logger.debug('Grabbing inline policy: {}'.format(policy_name))
                 inline_policy = iamclient.get_user_policy(UserName=node_name, PolicyName=policy_name)
                 policy_object = Policy(arn=node.arn, name=policy_name, policy_doc=inline_policy['PolicyDocument'])
                 node.attached_policies.append(policy_object)
@@ -530,7 +530,7 @@ def get_policies_and_fill_out(iamclient, nodes: List[Node], groups: List[Group],
             # get each inline policy, append it to the node's policies and result list
             # in hindsight, it's possible this could be folded with the above code, assuming the API doesn't change
             for policy_name in inline_policy_arns['PolicyNames']:
-                dprint(debug, '   Grabbing inline policy: {}'.format(policy_name))
+                logger.debug('Grabbing inline policy: {}'.format(policy_name))
                 inline_policy = iamclient.get_role_policy(RoleName=node_name, PolicyName=policy_name)
                 policy_object = Policy(arn=node.arn, name=policy_name, policy_doc=inline_policy['PolicyDocument'])
                 node.attached_policies.append(policy_object)
@@ -543,14 +543,14 @@ def get_policies_and_fill_out(iamclient, nodes: List[Node], groups: List[Group],
             attached_policies = iamclient.list_attached_role_policies(RoleName=node_name)
         for attached_policy in attached_policies['AttachedPolicies']:
             policy_arn = attached_policy['PolicyArn']
-            dprint(debug, '   Grabbing managed policy: {}'.format(policy_arn))
+            logger.debug('Grabbing managed policy: {}'.format(policy_arn))
             # reduce API calls, search existing policies for matching arns
             policy_object = _get_policy_by_arn(policy_arn, result)
             if policy_object is None:
                 # Gotta retrieve the policy's current default version
-                dprint(debug, '      Policy cache miss, calling API')
+                logger.debug('Policy cache miss, calling API')
                 policy_response = iamclient.get_policy(PolicyArn=policy_arn)
-                dprint(debug, '      Policy version: {}'.format(policy_response['Policy']['DefaultVersionId']))
+                logger.debug('Policy version: {}'.format(policy_response['Policy']['DefaultVersionId']))
                 policy_version_response = iamclient.get_policy_version(
                     PolicyArn=policy_arn,
                     VersionId=policy_response['Policy']['DefaultVersionId']
@@ -564,16 +564,16 @@ def get_policies_and_fill_out(iamclient, nodes: List[Node], groups: List[Group],
             node.attached_policies.append(policy_object)
 
         # get permission boundaries for users/roles
-        dprint(debug,   "perm boundary of {}: {}".format(node.searchable_name(), node.permissions_boundary))
+        logger.debug("perm boundary of {}: {}".format(node.searchable_name(), node.permissions_boundary))
         if node.permissions_boundary is not None and isinstance(node.permissions_boundary, str):
-            dprint(debug, '      Getting boundary policy: {}'.format(node.permissions_boundary))
+            logger.debug('Getting boundary policy: {}'.format(node.permissions_boundary))
             # reduce API calls, search existing policies for matching ARNs
             policy_object = _get_policy_by_arn(node.permissions_boundary, result)
             if policy_object is None:
                 # Retrieve the policy's current default version
-                dprint(debug, '      Policy cache miss, calling API')
+                logger.debug('Policy cache miss, calling API')
                 policy_response = iamclient.get_policy(PolicyArn=node.permissions_boundary)
-                dprint(debug, '      Policy version: {}'.format(policy_response['Policy']['DefaultVersionId']))
+                logger.debug('Policy version: {}'.format(policy_response['Policy']['DefaultVersionId']))
                 policy_version_response = iamclient.get_policy_version(
                     PolicyArn=node.permissions_boundary,
                     VersionId=policy_response['Policy']['DefaultVersionId']
@@ -586,14 +586,14 @@ def get_policies_and_fill_out(iamclient, nodes: List[Node], groups: List[Group],
                 result.append(policy_object)
                 node.permissions_boundary = policy_object
 
-    output.write("Obtaining policies used by IAM groups\n")
+    logger.info("Obtaining policies used by IAM groups")
     for group in groups:
         group_name = arns.get_resource(group.arn).split('/')[-1]  # split by slashes and take the final item
-        dprint(debug, 'Getting policies for: {}'.format(group.arn))
+        logger.debug('Getting policies for: {}'.format(group.arn))
         # get inline policies
         inline_policies = iamclient.list_group_policies(GroupName=group_name)
         for policy_name in inline_policies['PolicyNames']:
-            dprint(debug, '   Grabbing inline policy: {}'.format(policy_name))
+            logger.debug('Grabbing inline policy: {}'.format(policy_name))
             inline_policy = iamclient.get_group_policy(GroupName=group_name, PolicyName=policy_name)
             policy_object = Policy(arn=group.arn, name=policy_name, policy_doc=inline_policy['PolicyDocument'])
             group.attached_policies.append(policy_object)
@@ -603,13 +603,13 @@ def get_policies_and_fill_out(iamclient, nodes: List[Node], groups: List[Group],
         attached_policies = iamclient.list_attached_group_policies(GroupName=group_name)
         for attached_policy in attached_policies['AttachedPolicies']:
             policy_arn = attached_policy['PolicyArn']
-            dprint(debug, '   Grabbing managed policy: {}'.format(policy_arn))
+            logger.debug('Grabbing managed policy: {}'.format(policy_arn))
             # check cached policies first
             policy_object = _get_policy_by_arn(policy_arn, result)
             if policy_object is None:
-                dprint(debug, '      Policy cache miss, calling API')
+                logger.debug('Policy cache miss, calling API')
                 policy_response = iamclient.get_policy(PolicyArn=policy_arn)
-                dprint(debug, '      Policy version: {}'.format(policy_response['Policy']['DefaultVersionId']))
+                logger.debug('Policy version: {}'.format(policy_response['Policy']['DefaultVersionId']))
                 policy_version_response = iamclient.get_policy_version(
                     PolicyArn=policy_arn,
                     VersionId=policy_response['Policy']['DefaultVersionId']
@@ -627,8 +627,9 @@ def get_policies_and_fill_out(iamclient, nodes: List[Node], groups: List[Group],
 
 def update_admin_status(nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> None:
     """Given a list of nodes, goes through and updates each node's is_admin data."""
+    logger.info('Determining which principals have administrative privileges')
     for node in nodes:
-        output.write("checking if {} is an admin\n".format(node.searchable_name()))
+        logger.debug("Checking if {} is an admin".format(node.searchable_name()))
         node_type = arns.get_resource(node.arn).split('/')[0]
 
         # check if node can modify its own inline policies

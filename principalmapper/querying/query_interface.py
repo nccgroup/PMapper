@@ -18,12 +18,16 @@
 
 import copy
 import hashlib
+import logging
 
 from principalmapper.common import Graph
 from principalmapper.querying import query_utils
 from principalmapper.querying.local_policy_simulation import *
 from principalmapper.querying.query_result import QueryResult
 from principalmapper.util import arns
+
+
+logger = logging.getLogger(__name__)
 
 
 def search_authorization_for(graph: Graph, principal: Node, action_to_check: str, resource_to_check: str,
@@ -136,7 +140,7 @@ def local_check_authorization(principal: Node, action_to_check: str, resource_to
     conditions_keys_copy = copy.deepcopy(condition_keys_to_check)
     conditions_keys_copy.update(_infer_condition_keys(principal, conditions_keys_copy))
 
-    dprint(debug, 'Testing authorization for: principal: {}, action: {}, resource: {}, conditions: {}'.format(
+    logger.debug('Testing authorization for Principal: {}, Action: {}, Resource: {}, Conditions: {}'.format(
         principal.arn,
         action_to_check,
         resource_to_check,
@@ -175,7 +179,7 @@ def local_check_authorization_with_resource_policy(principal: Node, action_to_ch
     conditions_keys_copy = copy.deepcopy(condition_keys_to_check)
     conditions_keys_copy.update(_infer_condition_keys(principal, conditions_keys_copy))
 
-    dprint(debug, 'Testing authorization for: principal: {}, action: {}, resource: {}, conditions: {}, RP: {}'.format(
+    logger.debug('Testing authorization for: principal: {}, action: {}, resource: {}, conditions: {}, Resource Policy: {}'.format(
         principal.arn,
         action_to_check,
         resource_to_check,
@@ -229,7 +233,6 @@ def local_check_authorization_with_resource_policy(principal: Node, action_to_ch
 def simulation_api_check_authorization(iamclient, principal: Node, action_to_check: str, resource_to_check: str,
                                        condition_keys_to_check: dict, debug: bool = False) -> bool:
     """DO NOT USE THIS FUNCTION, IT WILL ONLY THROW A NotImplementedError."""
-    dprint(debug, 'calling iam:SimulatePrincipalPolicy with principal: {}, action: {}, resource: {}, conditions: {}'
-           .format(principal.arn, action_to_check, resource_to_check, condition_keys_to_check))
+
     raise NotImplementedError('Principal Mapper only supports local authorization checks, and will continue to only '
                               'perform local authorization checks for the forseeable future.')

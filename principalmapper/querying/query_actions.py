@@ -17,6 +17,7 @@
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 import io
+import logging
 import os
 import re
 from typing import Optional
@@ -27,6 +28,22 @@ from principalmapper.querying.query_interface import search_authorization_for, s
 from principalmapper.util import arns
 
 
+logger = logging.getLogger(__name__)
+
+_query_help_string = """Querying Help:
+First form:
+   can <Principal> do <Action> [with <Resource [when <ConditionA> [and <ConditionB>...]]]
+Second form:
+   who can do <Action> [with <Resource> [when <ConditionA> [and <ConditionB>...]]]
+Third form:
+   preset <preset args>
+Available presets:
+* connected (principal|"*") (principal|"*")
+* privesc (principal|"*")
+* clusters (tag key)
+"""
+
+
 def query_response(graph: Graph, query: str, skip_admins: bool = False, output: io.StringIO = os.devnull,
                    resource_policy: dict = None, resource_owner: str = None, include_unauthorized: bool = False,
                    debug: bool = False) -> None:
@@ -35,6 +52,7 @@ def query_response(graph: Graph, query: str, skip_admins: bool = False, output: 
 
     # Parse
     tokens = re.split(r'\s+', query, flags=re.UNICODE)
+    logger.debug('Query tokens: {}'.format(tokens))
     if len(tokens) < 3:
         _write_query_help(output)
         return
@@ -171,17 +189,12 @@ def handle_preset(graph: Graph, query: str, skip_admins: bool = False, output: i
 
 def _write_query_help(output: io.StringIO) -> None:
     """Writes information about querying"""
-    output.write('Querying Help:\n\n')
-    output.write('First form:\n')
-    output.write('   can <Principal> do <Action> [with <Resource [when <ConditionA> [and <ConditionB>...]]]\n')
-    output.write('Second form:\n')
-    output.write('   who can do <Action> [with <Resource> [when <ConditionA> [and <ConditionB>...]]]\n')
-    output.write('Third form:\n')
-    output.write('   preset <preset args>\n\n')
-    output.write('Available presets:\n')
-    output.write('* connected (principal|"*") (principal|"*")\n')
-    output.write('* privesc (principal|"*")\n')
-    output.write('* clusters (tag key)\n')
+    output.write(_query_help_string)
+
+
+def _print_query_help() -> None:
+    """Prints information about querying"""
+    print(_query_help_string)
 
 
 def argquery(graph: Graph, principal_param: Optional[str], action_param: Optional[str], resource_param: Optional[str],

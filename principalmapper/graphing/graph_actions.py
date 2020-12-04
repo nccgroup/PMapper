@@ -15,6 +15,7 @@
 #      You should have received a copy of the GNU Affero General Public License
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
+import logging
 import os
 import os.path
 import sys
@@ -22,9 +23,11 @@ import sys
 import botocore.session
 from principalmapper.common import Graph
 from principalmapper.graphing import gathering
-from principalmapper.util.debug_print import dprint
-from principalmapper.util.storage import get_storage_root
+from principalmapper.util.storage import get_default_graph_path
 from typing import List, Optional
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_new_graph(session: botocore.session.Session, service_list: List[str], debug=False) -> Graph:
@@ -64,13 +67,13 @@ def get_existing_graph(session: Optional[botocore.session.Session], account: Opt
     standard location.
     """
     if account is not None:
-        dprint(debug, 'Loading account data based on parameter --account')
-        graph = get_graph_from_disk(os.path.join(get_storage_root(), account))
+        logger.debug('Loading graph based on given account id: {}'.format(account))
+        graph = get_graph_from_disk(get_default_graph_path(account))
     elif session is not None:
-        dprint(debug, 'Loading account data using a botocore session object')
         stsclient = session.create_client('sts')
         response = stsclient.get_caller_identity()
-        graph = get_graph_from_disk(os.path.join(get_storage_root(), response['Account']))
+        logger.debug('Loading graph based on sts:GetCallerIdentity result: {}'.format(response['Account']))
+        graph = get_graph_from_disk(os.path.join(get_default_graph_path(response['Account'])))
     else:
         raise ValueError('One of the parameters `account` or `session` must not be None')
     return graph
