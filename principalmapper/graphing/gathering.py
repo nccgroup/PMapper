@@ -33,10 +33,13 @@ from typing import List, Optional
 logger = logging.getLogger(__name__)
 
 
-def create_graph(session: botocore.session.Session, service_list: list) -> Graph:
+def create_graph(session: botocore.session.Session, service_list: list, region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> Graph:
     """Constructs a Graph object.
 
     Information about the graph as it's built will be written to the IO parameter `output`.
+
+    The region allow/deny lists are mutually-exclusive (i.e. at least one of which has the value None) lists of
+    allowed/denied regions to pull data from.
     """
     stsclient = session.create_client('sts')
     caller_identity = stsclient.get_caller_identity()
@@ -54,13 +57,13 @@ def create_graph(session: botocore.session.Session, service_list: list) -> Graph
     policies_result = results['policies']
 
     # Gather users and roles, generating a Node per user and per role
-    # nodes_result = get_unfilled_nodes(iamclient, output, debug)
+    # nodes_result = get_unfilled_nodes(iamclient)
 
     # Gather groups from current list of nodes (users), generate Group objects, attach to nodes in-flight
-    # groups_result = get_unfilled_groups(iamclient, nodes_result, output, debug)
+    # groups_result = get_unfilled_groups(iamclient, nodes_result)
 
     # Resolve all policies, generate Policy objects, attach to all groups and nodes
-    # policies_result = get_policies_and_fill_out(iamclient, nodes_result, groups_result, output, debug)
+    # policies_result = get_policies_and_fill_out(iamclient, nodes_result, groups_result)
 
     # Determine which nodes are admins and update node objects
     update_admin_status(nodes_result)
@@ -70,9 +73,9 @@ def create_graph(session: botocore.session.Session, service_list: list) -> Graph
 
     # Pull S3, SNS, SQS, and KMS resource policies
     policies_result.extend(get_s3_bucket_policies(session))
-    policies_result.extend(get_sns_topic_policies(session))
-    policies_result.extend(get_sqs_queue_policies(session, caller_identity['Account']))
-    policies_result.extend(get_kms_key_policies(session))
+    policies_result.extend(get_sns_topic_policies(session, region_allow_list, region_deny_list))
+    policies_result.extend(get_sqs_queue_policies(session, caller_identity['Account'], region_allow_list, region_deny_list))
+    policies_result.extend(get_kms_key_policies(session, region_allow_list, region_deny_list))
 
     return Graph(nodes_result, edges_result, policies_result, groups_result, metadata)
 
@@ -228,10 +231,20 @@ def get_nodes_groups_and_policies(iamclient) -> dict:
     for page in mfa_paginator.paginate(AssignmentStatus='Assigned'):
         for device in page['VirtualMFADevices']:
             user_arn = device['User']['Arn']
+            logger.debug('Found virtual MFA device for {}'.format(user_arn))
             for node in result['nodes']:
                 if node.arn == user_arn:
                     node.has_mfa = True
                     break
+
+    logger.info('Gathering MFA physical device information')
+    for node in result['nodes']:
+        node_resource_name = arns.get_resource(node.arn)
+        if node_resource_name.startswith('user/'):
+            user_name = node_resource_name.split('/')[-1]
+            mfa_devices_response = iamclient.list_mfa_devices(UserName=user_name)
+            if len(mfa_devices_response['MFADevices']) > 0:
+                node.has_mfa = True
 
     return result
 
@@ -266,21 +279,23 @@ def get_s3_bucket_policies(session: botocore.session.Session) -> List[Policy]:
                     }
                 ))
             else:
-                logger.info('Unable to retrieve bucket policy for {}. You should add this manually. '
-                            'Continuing.\n'.format(bucket))
+                logger.info('Unable to retrieve bucket policy for {}. You should add this manually. Continuing.'.format(bucket))
             logger.debug('Exception was: {}'.format(ex))
 
     return result
 
 
-def get_kms_key_policies(session: botocore.session.Session) -> List[Policy]:
+def get_kms_key_policies(session: botocore.session.Session, region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[Policy]:
     """Using a botocore Session object, return a list of Policy objects representing the key policies of each
     KMS key in this account.
+
+    The region allow/deny lists are mutually-exclusive (i.e. at least one of which has the value None) lists of
+    allowed/denied regions to pull data from.
     """
     result = []
 
     # Iterate through all regions of KMS where possible
-    for kms_region in session.get_available_regions('kms'):
+    for kms_region in _get_regions_to_search(session, 'kms', region_allow_list, region_deny_list):
         try:
             # Grab the keys
             cmks = []
@@ -297,21 +312,25 @@ def get_kms_key_policies(session: botocore.session.Session) -> List[Policy]:
                     cmk.split('/')[-1],  # CMK ARN Format: arn:<partition>:kms:<region>:<account>:key/<Key ID>
                     json.loads(policy_str)
                 ))
-        except botocore.exceptions.ClientError:
-            logger.info('Unable to search KMS in region {} for key policies'.format(kms_region))
+        except botocore.exceptions.ClientError as ex:
+            logger.info('Unable to search KMS in region {} for key policies. The region may be disabled, or the current principal may not be authorized to access the service. Continuing.'.format(kms_region))
+            logger.debug('Exception was: {}'.format(ex))
             continue
 
     return result
 
 
-def get_sns_topic_policies(session: botocore.session.Session) -> List[Policy]:
+def get_sns_topic_policies(session: botocore.session.Session, region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[Policy]:
     """Using a botocore Session object, return a list of Policy objects representing the key policies of each
     KMS key in this account.
+
+    The region allow/deny lists are mutually-exclusive (i.e. at least one of which has the value None) lists of
+    allowed/denied regions to pull data from.
     """
     result = []
 
     # Iterate through all regions of SNS where possible
-    for sns_region in session.get_available_regions('sns'):
+    for sns_region in _get_regions_to_search(session, 'sns', region_allow_list, region_deny_list):
         try:
             # Grab the topics
             topics = []
@@ -328,20 +347,25 @@ def get_sns_topic_policies(session: botocore.session.Session) -> List[Policy]:
                     topic.split(':')[-1],  # SNS Topic ARN Format: arn:<partition>:sns:<region>:<account>:<Topic Name>
                     json.loads(policy_str)
                 ))
-        except botocore.exceptions.ClientError:
-            logger.info('Unable to search SNS in region {} for topic policies'.format(sns_region))
+        except botocore.exceptions.ClientError as ex:
+            logger.info('Unable to search SNS in region {} for topic policies. The region may be disabled, or the current principal may not be authorized to access the service. Continuing.'.format(sns_region))
+            logger.debug('Exception was: {}'.format(ex))
+            continue
 
     return result
 
 
-def get_sqs_queue_policies(session: botocore.session.Session, account_id: str) -> List[Policy]:
+def get_sqs_queue_policies(session: botocore.session.Session, account_id: str, region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[Policy]:
     """Using a botocore Session object, return a list of Policy objects representing the key policies of each
     KMS key in this account.
+
+    The region allow/deny lists are mutually-exclusive (i.e. at least one of which has the value None) lists of
+    allowed/denied regions to pull data from.
     """
     result = []
 
     # Iterate through all regions of SQS where possible
-    for sqs_region in session.get_available_regions('sqs'):
+    for sqs_region in _get_regions_to_search(session, 'sqs', region_allow_list, region_deny_list):
         try:
             # Grab the queue names
             queue_urls = []
@@ -361,8 +385,43 @@ def get_sqs_queue_policies(session: botocore.session.Session, account_id: str) -
                     queue_name,
                     json.loads(policy_str)
                 ))
-        except botocore.exceptions.ClientError:
-            logger.info('Unable to search SQS in region {} for queues.'.format(sqs_region))
+        except botocore.exceptions.ClientError as ex:
+            logger.info('Unable to search SQS in region {} for queues. The region may be disabled, or the current principal may not be authorized to access the service. Continuing.'.format(sqs_region))
+            logger.debug('Exception was: {}'.format(ex))
+
+    return result
+
+
+def _get_regions_to_search(session: botocore.session.Session, service_name: str, region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[str]:
+    """Using a botocore Session object, the name of a service, and either an allow-list or a deny-list (but not both),
+    return a list of regions to be used during the gathering process. This uses the botocore Session object's
+    get_available_regions method as the base list.
+
+    If the allow-list is specified, the returned list is the union of the base list and the allow-list. No error is
+    thrown if a region is specified in the allow-list but not included in the base list.
+
+    If the deny-list is specified, the returned list is the base list minus the elements of the deny-list. No error is
+    thrown if a region is specified inthe deny-list but not included in the base list.
+
+    A ValueError is thrown if the allow-list AND deny-list are both not None.
+    """
+
+    if region_allow_list is not None and region_deny_list is not None:
+        raise ValueError('This function allows only either the allow-list or the deny-list, but NOT both.')
+
+    base_list = session.get_available_regions(service_name)
+    result = []
+
+    if region_allow_list is not None:
+        for element in base_list:
+            if element in region_allow_list:
+                result.append(element)
+    elif region_deny_list is not None:
+        for element in base_list:
+            if element not in region_deny_list:
+                result.append(element)
+    else:
+        result = base_list
 
     return result
 

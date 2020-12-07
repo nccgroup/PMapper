@@ -89,7 +89,7 @@ class Node(object):
 
         self.cache = {}
 
-    def searchable_name(self):
+    def searchable_name(self) -> str:
         """Creates and caches the searchable name of this node. First it splits the user/.../name into its
         parts divided by slashes, then returns the first and last element. The last element is supposed to be unique
         within users and roles (RoleName/--role-name or UserName/--user-name parameter when using the API/CLI).
@@ -119,7 +119,7 @@ class Node(object):
                         self.cache['outbound_edges'].append(edge)
         return self.cache['outbound_edges']
 
-    def to_dictionary(self):
+    def to_dictionary(self) -> dict:
         """Creates a dictionary representation of this Node for storage."""
         _pb = self.permissions_boundary
         if _pb is not None:

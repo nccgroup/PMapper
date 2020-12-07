@@ -66,6 +66,7 @@ def gen_all_findings(graph: Graph) -> List[Finding]:
     """Generates findings of risk, returns a list of finding-dictionary objects."""
     result = []
     result.extend(gen_privesc_findings(graph))
+    result.extend(gen_admin_users_without_mfa_finding(graph))
     result.extend(gen_mfa_actions_findings(graph))
     # TODO: result.extend(gen_mfa_evasion_finding(graph))  # policies that allow attackers to change MFA devices
     result.extend(gen_overprivileged_function_findings(graph))
@@ -393,6 +394,46 @@ def gen_circular_access_finding(graph: Graph) -> List[Finding]:
             'or persist access.',
             description_preamble + description_body,
             'Break the cycle of access by altering/removing permissions assigned to one of the noted principals.'
+        ))
+
+    return result
+
+
+def gen_admin_users_without_mfa_finding(graph: Graph) -> List[Finding]:
+    """Generates findings related to IAM Users that have administrative privileges in an AWS account but no
+    MFA device configured."""
+
+    result = []
+    affected_nodes = []
+
+    for node in graph.nodes:
+        if node.searchable_name().startswith('user/') and node.is_admin and not node.has_mfa:
+            affected_nodes.append(node)
+
+    if len(affected_nodes) > 0:
+        description_preamble = 'In AWS, an IAM User can be assigned a device for Multi-Factor Authentication (MFA). ' \
+                               'When an IAM User is assigned an MFA device, they are required to provide an extra ' \
+                               'factor of authentication when logging in to the AWS Console. It is also possible to ' \
+                               'create IAM Policies that impose extra restrictions on the permissions of IAM Users ' \
+                               'depending on whether or not they have authenticated with MFA when using the AWS API. ' \
+                               'Any IAM User with administrative privileges should be configured to have an MFA ' \
+                               'device. The following IAM Users with administrative privileges do not have an MFA ' \
+                               'device configured:' \
+                               '\n' \
+                               '\n'
+
+        user_list = []
+        for node in affected_nodes:
+            user_list.append('* {}'.format(node.searchable_name()))
+        description_body = '\n'.join(user_list)
+
+        result.append(Finding(
+            'IAM Users With Administrative Permissions But No MFA Device',
+            'Medium',
+            'If an attacker gains access to any of the noted sensitive IAM Users, there is no secondary layer of '
+            'protection in place to prevent the AWS from being compromised.',
+            description_preamble + description_body,
+            'Assign an MFA device to each of the noted IAM Users.'
         ))
 
     return result
