@@ -92,7 +92,7 @@ def build_playground_graph() -> Graph:
                       [], alt_root_trusted_policy_doc, None, 0, False, False, None, False, None))
 
     # edges to add
-    edges = obtain_edges(None, checker_map.keys(), nodes, sys.stdout, True)
+    edges = obtain_edges(None, checker_map.keys(), nodes)
 
     return Graph(nodes, edges, policies, [], _get_default_metadata())
 

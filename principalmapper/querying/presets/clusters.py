@@ -17,16 +17,15 @@ import io
 import os
 from typing import List, Dict
 
-from principalmapper.common import Edge, Node, Graph
+from principalmapper.common import Node, Graph
 from principalmapper.querying.presets.connected import is_connected
 
 
-def handle_preset_query(graph: Graph, tokens: List[str], skip_admins: bool = False, output: io.StringIO = os.devnull,
-                        debug: bool = False) -> None:
-    """Handles a human-readable query that's been chunked into tokens, and writes the result to output."""
+def handle_preset_query(graph: Graph, tokens: List[str], skip_admins: bool = False) -> None:
+    """Handles a human-readable query that's been chunked into tokens, and prints the result."""
 
     tag_name_target = tokens[2]
-    clusters = generate_clusters(graph, tag_name_target, output, debug)
+    clusters = generate_clusters(graph, tag_name_target)
 
     print('# Clusters identified on key {}'.format(tag_name_target))
     for k in clusters.keys():
@@ -48,7 +47,7 @@ def handle_preset_query(graph: Graph, tokens: List[str], skip_admins: bool = Fal
 
             for src_node in clusters[source]:
                 for dst_node in clusters[destination]:
-                    connected, path = is_connected(graph, src_node, dst_node, debug)
+                    connected, path = is_connected(graph, src_node, dst_node)
                     if connected:
                         print('{} can cross boundaries and access {}'.format(
                             src_node.searchable_name(), dst_node.searchable_name()
@@ -57,8 +56,7 @@ def handle_preset_query(graph: Graph, tokens: List[str], skip_admins: bool = Fal
                             print('   {}'.format(edge.describe_edge()))
 
 
-def generate_clusters(graph: Graph, tag_name_target: str, output: io.StringIO = os.devnull,
-                      debug: bool = False) -> Dict[str, List[Node]]:
+def generate_clusters(graph: Graph, tag_name_target: str) -> Dict[str, List[Node]]:
     """Given a graph, and a key of a tag to work from, group up all the nodes using those tags."""
 
     result = {}

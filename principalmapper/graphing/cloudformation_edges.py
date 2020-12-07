@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 class CloudFormationEdgeChecker(EdgeChecker):
     """Class for identifying if CloudFormation can be used by IAM principals to gain access to other IAM principals."""
 
-    def return_edges(self, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
+    def return_edges(self, nodes: List[Node]) -> List[Edge]:
         """Fulfills expected method return_edges."""
 
         result = []
@@ -87,7 +87,6 @@ class CloudFormationEdgeChecker(EdgeChecker):
                     'sts:AssumeRole',
                     node_destination.arn,
                     {},
-                    debug
                 )
 
                 if sim_result != ResourcePolicyEvalResult.SERVICE_MATCH:
@@ -101,7 +100,6 @@ class CloudFormationEdgeChecker(EdgeChecker):
                     {
                         'iam:PassedToService': 'cloudformation.amazonaws.com'
                     },
-                    debug
                 )
 
                 # See if source can make a new stack and pass the destination role
@@ -111,7 +109,6 @@ class CloudFormationEdgeChecker(EdgeChecker):
                         'cloudformation:CreateStack',
                         '*',
                         {'cloudformation:RoleArn': node_destination.arn},
-                        debug
                     )
                     if can_create:
                         reason = 'can create a stack in CloudFormation to access'
@@ -133,7 +130,6 @@ class CloudFormationEdgeChecker(EdgeChecker):
                         'cloudformation:UpdateStack',
                         stack['StackId'],
                         {'cloudformation:RoleArn': node_destination.arn},
-                        debug
                     )
                     if can_update:
                         reason = 'can update the CloudFormation stack {} to access'.format(
@@ -153,7 +149,6 @@ class CloudFormationEdgeChecker(EdgeChecker):
                             'cloudformation:UpdateStack',
                             stack['StackId'],
                             {'cloudformation:RoleArn': node_destination.arn},
-                            debug
                         )
 
                         if can_update:
@@ -173,7 +168,6 @@ class CloudFormationEdgeChecker(EdgeChecker):
                         'cloudformation:CreateChangeSet',
                         stack['StackId'],
                         {'cloudformation:RoleArn': node_destination.arn},
-                        debug
                     )
                     if not can_make_cs:
                         continue
@@ -183,7 +177,6 @@ class CloudFormationEdgeChecker(EdgeChecker):
                         'cloudformation:ExecuteChangeSet',
                         stack['StackId'],
                         {},  # docs say no RoleArn context here
-                        debug
                     )
 
                     if can_exe_cs:

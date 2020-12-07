@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 class LambdaEdgeChecker(EdgeChecker):
     """Class for identifying if Lambda can be used by IAM principals to gain access to other IAM principals."""
 
-    def return_edges(self, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
+    def return_edges(self, nodes: List[Node]) -> List[Edge]:
         """Fulfills expected method return_edges. If session object is None, runs checks in offline mode."""
         result = []
         logger.info('Searching Lambda for edges')
@@ -81,7 +81,6 @@ class LambdaEdgeChecker(EdgeChecker):
                     'sts:AssumeRole',
                     node_destination.arn,
                     {},
-                    debug
                 )
 
                 if sim_result != ResourcePolicyEvalResult.SERVICE_MATCH:
@@ -95,7 +94,6 @@ class LambdaEdgeChecker(EdgeChecker):
                     {
                         'iam:PassedToService': 'lambda.amazonaws.com'
                     },
-                    debug
                 )
 
                 # check that source can create a Lambda function and pass it an execution role
@@ -105,7 +103,6 @@ class LambdaEdgeChecker(EdgeChecker):
                         'lambda:CreateFunction',
                         '*',
                         {},
-                        debug
                     )
                     if can_create_function:
                         if need_mfa_0 or need_mfa_passrole:
@@ -130,14 +127,12 @@ class LambdaEdgeChecker(EdgeChecker):
                         'lambda:UpdateFunctionCode',
                         func['FunctionArn'],
                         {},
-                        debug
                     )
                     can_change_config, need_mfa_2 = query_interface.local_check_authorization_handling_mfa(
                         node_source,
                         'lambda:UpdateFunctionConfiguration',
                         func['FunctionArn'],
                         {},
-                        debug
                     )
                     func_data.append((func, can_change_code, can_change_config, need_mfa_passrole or need_mfa_1 or need_mfa_2))
 

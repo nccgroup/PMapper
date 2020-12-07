@@ -31,11 +31,11 @@ logger = logging.getLogger(__name__)
 
 
 def search_authorization_for(graph: Graph, principal: Node, action_to_check: str, resource_to_check: str,
-                             condition_keys_to_check: dict, debug: bool = False) -> QueryResult:
+                             condition_keys_to_check: dict) -> QueryResult:
     """Determines if the passed principal, or any principals it can access, can perform a given action for a
     given resource/condition."""
 
-    if local_check_authorization(principal, action_to_check, resource_to_check, condition_keys_to_check, debug):
+    if local_check_authorization(principal, action_to_check, resource_to_check, condition_keys_to_check):
         return QueryResult(True, [], principal)
 
     # Invoke special-case if admin node is not directly authorized to call the given action for the given resource
@@ -44,7 +44,7 @@ def search_authorization_for(graph: Graph, principal: Node, action_to_check: str
 
     for edge_list in query_utils.get_search_list(graph, principal):
         if local_check_authorization(edge_list[-1].destination, action_to_check, resource_to_check,
-                                     condition_keys_to_check, debug):
+                                     condition_keys_to_check):
             return QueryResult(True, edge_list, principal)
 
     return QueryResult(False, [], principal)
@@ -52,21 +52,19 @@ def search_authorization_for(graph: Graph, principal: Node, action_to_check: str
 
 def search_authorization_with_resource_policy_for(graph: Graph, principal: Node, action_to_check: str,
                                                   resource_to_check: str, condition_keys_to_check: dict,
-                                                  resource_policy: dict, resource_owner: str,
-                                                  debug: bool = False) -> QueryResult:
+                                                  resource_policy: dict, resource_owner: str) -> QueryResult:
     """Determines if the passed principal, or any principals it can access, can perform a given action for a
     given resource/condition while accounting for the passed resource policy."""
 
     if local_check_authorization_with_resource_policy(principal, action_to_check, resource_to_check,
-                                                      condition_keys_to_check, resource_policy, resource_owner, debug):
+                                                      condition_keys_to_check, resource_policy, resource_owner):
         return QueryResult(True, [], principal)
 
     # We do NOT assume admins have access due to cross-account scenarios, but we're gonna be looking through a LOT
     # of generated admin edges otherwise
     for edge_list in query_utils.get_search_list(graph, principal):
         if local_check_authorization_with_resource_policy(principal, action_to_check, resource_to_check,
-                                                          condition_keys_to_check, resource_policy, resource_owner,
-                                                          debug):
+                                                          condition_keys_to_check, resource_policy, resource_owner):
             return QueryResult(True, edge_list, principal)
 
     return QueryResult(False, [], principal)
@@ -103,17 +101,16 @@ def _infer_condition_keys(principal: Node, current_keys: dict) -> dict:
 
 
 def local_check_authorization_handling_mfa(principal: Node, action_to_check: str, resource_to_check: str,
-                                           condition_keys_to_check: dict, debug: bool = False) -> (bool, bool):
+                                           condition_keys_to_check: dict) -> (bool, bool):
     """Determine if a node is authorized to make an API call. If the node is an IAM User, it will perform authorization
     checks with and without MFA enabled. It returns a (bool, bool) tuple: if the user was authorized and if MFA was
     required for the authorization.
     """
 
     if ':role/' in principal.arn:  # TODO: aws:MultiFactorAuthPresent pass-through?
-        return local_check_authorization(principal, action_to_check, resource_to_check, condition_keys_to_check,
-                                         debug), False
+        return local_check_authorization(principal, action_to_check, resource_to_check, condition_keys_to_check), False
 
-    if local_check_authorization(principal, action_to_check, resource_to_check, condition_keys_to_check, debug):
+    if local_check_authorization(principal, action_to_check, resource_to_check, condition_keys_to_check):
         return True, False
 
     new_condition_keys = copy.deepcopy(condition_keys_to_check)
@@ -122,14 +119,14 @@ def local_check_authorization_handling_mfa(principal: Node, action_to_check: str
     if 'aws:MultiFactorAuthPresent' not in new_condition_keys:
         new_condition_keys.update({'aws:MultiFactorAuthPresent': 'true'})
 
-    if local_check_authorization(principal, action_to_check, resource_to_check, new_condition_keys, debug):
+    if local_check_authorization(principal, action_to_check, resource_to_check, new_condition_keys):
         return True, True
 
     return False, False
 
 
 def local_check_authorization(principal: Node, action_to_check: str, resource_to_check: str,
-                              condition_keys_to_check: dict, debug: bool = False) -> bool:
+                              condition_keys_to_check: dict) -> bool:
     """Determine if a node is authorized to make an API call. It will perform a local evaluation of the attached
     IAM policies to determine authorization.
 
@@ -150,25 +147,25 @@ def local_check_authorization(principal: Node, action_to_check: str, resource_to
     # Handle permission boundaries if applicable
     if principal.permissions_boundary is not None:
         if policy_has_matching_statement(principal.permissions_boundary, 'Deny', action_to_check, resource_to_check,
-                                         conditions_keys_copy, debug):
+                                         conditions_keys_copy):
             return False
         if not policy_has_matching_statement(principal.permissions_boundary, 'Allow', action_to_check, resource_to_check,
-                                             conditions_keys_copy, debug):
+                                             conditions_keys_copy):
             return False
 
     # must have a matching Allow statement, otherwise it's an implicit deny
     if not has_matching_statement(principal, 'Allow', action_to_check, resource_to_check,
-                                  conditions_keys_copy, debug):
+                                  conditions_keys_copy):
         return False
 
     # must not have a matching Deny statement, otherwise it's an explicit deny
     return not has_matching_statement(principal, 'Deny', action_to_check, resource_to_check,
-                                      conditions_keys_copy, debug)
+                                      conditions_keys_copy)
 
 
 def local_check_authorization_with_resource_policy(principal: Node, action_to_check: str, resource_to_check: str,
                                                    condition_keys_to_check: dict, resource_policy: dict,
-                                                   resource_owner: str, debug: bool = False) -> bool:
+                                                   resource_owner: str) -> bool:
     """Determine if a given node is authorized to make an API call. It will perform a local evaluation of the
     attached IAM policies of the principal and the given resource policy to determine authorization.
 
@@ -190,21 +187,21 @@ def local_check_authorization_with_resource_policy(principal: Node, action_to_ch
     # Pull permissions boundary data
     if principal.permissions_boundary is not None:
         pb_deny = policy_has_matching_statement(principal.permissions_boundary, 'Deny', action_to_check,
-                                                resource_to_check, conditions_keys_copy, debug)
+                                                resource_to_check, conditions_keys_copy)
         pb_allow = policy_has_matching_statement(principal.permissions_boundary, 'Allow', action_to_check,
-                                                 resource_to_check, conditions_keys_copy, debug)
+                                                 resource_to_check, conditions_keys_copy)
     else:
         pb_deny, pb_allow = None, None
 
     # Pull resource policy authorization data
     rp_result = resource_policy_authorization(principal, resource_owner, resource_policy, action_to_check,
-                                              resource_to_check, conditions_keys_copy, debug)
+                                              resource_to_check, conditions_keys_copy)
 
     # Pull IAM policy authorization data
     iam_policy_allow = has_matching_statement(principal, 'Allow', action_to_check, resource_to_check,
-                                              conditions_keys_copy, debug)
+                                              conditions_keys_copy)
     iam_policy_deny = has_matching_statement(principal, 'Deny', action_to_check, resource_to_check,
-                                             conditions_keys_copy, debug)
+                                             conditions_keys_copy)
 
     # Knock out deny cases
     if iam_policy_deny or rp_result == ResourcePolicyEvalResult.DENY_MATCH:
@@ -231,7 +228,7 @@ def local_check_authorization_with_resource_policy(principal: Node, action_to_ch
 
 
 def simulation_api_check_authorization(iamclient, principal: Node, action_to_check: str, resource_to_check: str,
-                                       condition_keys_to_check: dict, debug: bool = False) -> bool:
+                                       condition_keys_to_check: dict) -> bool:
     """DO NOT USE THIS FUNCTION, IT WILL ONLY THROW A NotImplementedError."""
 
     raise NotImplementedError('Principal Mapper only supports local authorization checks, and will continue to only '

@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 class STSEdgeChecker(EdgeChecker):
     """Class for identifying if STS can be used by IAM principals to gain access to other IAM principals."""
 
-    def return_edges(self, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
+    def return_edges(self, nodes: List[Node]) -> List[Edge]:
         """Fulfills expected method return_edges. If the session object is None, performs checks in offline-mode"""
 
         result = []
@@ -59,7 +59,6 @@ class STSEdgeChecker(EdgeChecker):
                         'sts:AssumeRole',
                         node_destination.arn,
                         {},
-                        debug
                     )
 
                     if sim_result == ResourcePolicyEvalResult.DENY_MATCH:
@@ -69,7 +68,7 @@ class STSEdgeChecker(EdgeChecker):
                         continue  # Resource policy must match for sts:AssumeRole, even in same-account scenarios
 
                     assume_auth, need_mfa = query_interface.local_check_authorization_handling_mfa(
-                        node_source, 'sts:AssumeRole', node_destination.arn, {}, debug
+                        node_source, 'sts:AssumeRole', node_destination.arn, {}
                     )
                     policy_denies = has_matching_statement(
                         node_source,
@@ -77,7 +76,6 @@ class STSEdgeChecker(EdgeChecker):
                         'sts:AssumeRole',
                         node_destination.arn,
                         {},
-                        debug
                     )
                     policy_denies_mfa = has_matching_statement(
                         node_source,
@@ -88,7 +86,6 @@ class STSEdgeChecker(EdgeChecker):
                             'aws:MultiFactorAuthAge': '1',
                             'aws:MultiFactorAuthPresent': 'true'
                         },
-                        debug
                     )
 
                     if assume_auth:

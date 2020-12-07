@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 class SSMEdgeChecker(EdgeChecker):
     """Class for identifying if SSM can be used by IAM principals to gain access to other IAM principals."""
 
-    def return_edges(self, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
+    def return_edges(self, nodes: List[Node]) -> List[Edge]:
         """Fulfills expected method return_edges. If session object is None, runs checks in offline mode."""
 
         result = []
@@ -61,7 +61,6 @@ class SSMEdgeChecker(EdgeChecker):
                     'sts:AssumeRole',
                     node_destination.arn,
                     {},
-                    debug
                 )
 
                 if sim_result != ResourcePolicyEvalResult.SERVICE_MATCH:
@@ -70,7 +69,7 @@ class SSMEdgeChecker(EdgeChecker):
                 # at this point, we make an assumption that some instance is operating with the given instance profile
                 # we assume if the role can call ssmmessages:CreateControlChannel, anyone with ssm perms can access it
                 if not query_interface.local_check_authorization(node_destination, 'ssmmessages:CreateControlChannel',
-                                                                 '*', {}, False):
+                                                                 '*', {}):
                     continue
 
                 # so if source can call ssm:SendCommand or ssm:StartSession, it's an edge
@@ -79,7 +78,6 @@ class SSMEdgeChecker(EdgeChecker):
                     'ssm:SendCommand',
                     '*',
                     {},
-                    False
                 )
 
                 if cmd_auth_res:
@@ -93,7 +91,6 @@ class SSMEdgeChecker(EdgeChecker):
                     'ssm:StartSession',
                     '*',
                     {},
-                    False
                 )
 
                 if sesh_auth_res:

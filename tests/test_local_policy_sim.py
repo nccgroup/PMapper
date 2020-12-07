@@ -82,8 +82,7 @@ class TestLocalPolicyVariableExpansions(unittest.TestCase):
         self.assertTrue(_matches_after_expansion(
             'arn:aws:iam::000000000000:user/test',
             'arn:aws:iam::000000000000:user/${aws:username}',
-            {'aws:username': 'test'},
-            True
+            {'aws:username': 'test'}
         ))
 
     def test_asterisk_expansion(self):
@@ -91,19 +90,16 @@ class TestLocalPolicyVariableExpansions(unittest.TestCase):
             'test-123',
             'test*',
             None,
-            True
         ))
         self.assertTrue(_matches_after_expansion(
             'test',
             'test*',
             None,
-            True
         ))
         self.assertFalse(_matches_after_expansion(
             'tset',
             'test*',
             None,
-            True
         ))
 
     def test_qmark_expansion(self):
@@ -111,11 +107,9 @@ class TestLocalPolicyVariableExpansions(unittest.TestCase):
             'test-1',
             'test-?',
             None,
-            True
         ))
         self.assertFalse(_matches_after_expansion(
             'test1',
             'test-?',
             None,
-            True
         ))

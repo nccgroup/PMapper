@@ -231,13 +231,22 @@ def main() -> int:
 
     parsed_args = argument_parser.parse_args()
 
-    logging.basicConfig(
-        format='%(asctime)s|%(levelname)8s|%(name)s|%(message)s',
-        level=logging.DEBUG if parsed_args.debug else logging.INFO,
-        handlers=[
-            logging.StreamHandler(sys.stdout)
-        ]
-    )
+    if parsed_args.debug:
+        logging.basicConfig(
+            format='%(asctime)s|%(levelname)8s|%(name)s|%(message)s',
+            level=logging.DEBUG,
+            handlers=[
+                logging.StreamHandler(sys.stdout)
+            ]
+        )
+    else:
+        logging.basicConfig(
+            format='%(asctime)s | %(message)s',
+            level=logging.INFO,
+            handlers=[
+                logging.StreamHandler(sys.stdout)
+            ]
+        )
     botocore_logger = logging.getLogger('botocore')
     botocore_logger.setLevel(logging.WARNING)
     urllib3_logger = logging.getLogger('urllib3')
@@ -268,15 +277,14 @@ def handle_graph(parsed_args) -> int:
         session = None
 
     if parsed_args.create:  # --create
-        graph = principalmapper.graphing.graph_actions.create_new_graph(session, checker_map.keys(), parsed_args.debug)
+        graph = principalmapper.graphing.graph_actions.create_new_graph(session, checker_map.keys())
         principalmapper.graphing.graph_actions.print_graph_data(graph)
         graph.store_graph_as_json(os.path.join(get_storage_root(), graph.metadata['account_id']))
 
     elif parsed_args.display:  # --display
         graph = principalmapper.graphing.graph_actions.get_existing_graph(
             session,
-            parsed_args.account,
-            parsed_args.debug
+            parsed_args.account
         )
         principalmapper.graphing.graph_actions.print_graph_data(graph)
 
@@ -293,12 +301,11 @@ def handle_graph(parsed_args) -> int:
     elif parsed_args.update_edges:  # --update-edges
         graph = principalmapper.graphing.graph_actions.get_existing_graph(
             session,
-            parsed_args.account,
-            parsed_args.debug
+            parsed_args.account
         )
-        graph.edges = principalmapper.graphing.edge_identification.obtain_edges(session, checker_map.keys(),
-                                                                                graph.nodes, sys.stdout,
-                                                                                parsed_args.debug)
+        graph.edges = principalmapper.graphing.edge_identification.obtain_edges(
+            session, checker_map.keys(), graph.nodes
+        )
         principalmapper.graphing.graph_actions.print_graph_data(graph)
         graph.store_graph_as_json(os.path.join(get_storage_root(), graph.metadata['account_id']))
 
@@ -308,7 +315,7 @@ def handle_graph(parsed_args) -> int:
 def handle_query(parsed_args) -> int:
     """Processes the arguments for the query subcommand and executes related tasks"""
     session = _grab_session(parsed_args)
-    graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account, parsed_args.debug)
+    graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account)
 
     if parsed_args.grab_resource_policy:
         if session is None:
@@ -321,8 +328,9 @@ def handle_query(parsed_args) -> int:
 
     resource_owner = parsed_args.resource_owner
 
-    query_actions.query_response(graph, parsed_args.query, parsed_args.skip_admin, sys.stdout, resource_policy,
-                                 resource_owner, parsed_args.include_unauthorized, parsed_args.debug)
+    query_actions.query_response(
+        graph, parsed_args.query, parsed_args.skip_admin, resource_policy, resource_owner, parsed_args.include_unauthorized
+    )
 
     return 0
 
@@ -330,7 +338,7 @@ def handle_query(parsed_args) -> int:
 def handle_argquery(parsed_args) -> int:
     """Processes the arguments for the argquery subcommand and executes related tasks"""
     session = _grab_session(parsed_args)
-    graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account, parsed_args.debug)
+    graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account)
 
     # process condition args to generate input dict
     conditions = {}
@@ -355,8 +363,8 @@ def handle_argquery(parsed_args) -> int:
         resource_policy = None
 
     query_actions.argquery(graph, parsed_args.principal, parsed_args.action, parsed_args.resource, conditions,
-                           parsed_args.preset, parsed_args.skip_admin, sys.stdout, resource_policy,
-                           parsed_args.resource_owner, parsed_args.include_unauthorized, parsed_args.debug)
+                           parsed_args.preset, parsed_args.skip_admin, resource_policy,
+                           parsed_args.resource_owner, parsed_args.include_unauthorized)
 
     return 0
 
@@ -364,7 +372,7 @@ def handle_argquery(parsed_args) -> int:
 def handle_repl(parsed_args):
     """Processes the arguments for the query REPL and initiates"""
     session = _grab_session(parsed_args)
-    graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account, parsed_args.debug)
+    graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account)
 
     repl_obj = repl.PMapperREPL(graph)
     repl_obj.begin_repl()
@@ -376,7 +384,7 @@ def handle_visualization(parsed_args):
     """Processes the arguments for the visualization subcommand and executes related tasks"""
     # get Graph to draw/write
     session = _grab_session(parsed_args)
-    graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account, parsed_args.debug)
+    graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account)
 
     if parsed_args.only_privesc:
         filepath = './{}-privesc-risks.{}'.format(graph.metadata['account_id'], parsed_args.filetype)
@@ -395,7 +403,7 @@ def handle_analysis(parsed_args):
     """Processes the arguments for the analysis subcommand and executes related tasks"""
     # get Graph object
     session = _grab_session(parsed_args)
-    graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account, parsed_args.debug)
+    graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account)
 
     # execute analysis
     gen_findings_and_print(graph, parsed_args.output_type)

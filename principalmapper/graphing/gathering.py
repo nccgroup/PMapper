@@ -33,8 +33,7 @@ from typing import List, Optional
 logger = logging.getLogger(__name__)
 
 
-def create_graph(session: botocore.session.Session, service_list: list, output: io.StringIO = os.devnull,
-                 debug=False) -> Graph:
+def create_graph(session: botocore.session.Session, service_list: list) -> Graph:
     """Constructs a Graph object.
 
     Information about the graph as it's built will be written to the IO parameter `output`.
@@ -49,7 +48,7 @@ def create_graph(session: botocore.session.Session, service_list: list, output: 
 
     iamclient = session.create_client('iam')
 
-    results = get_nodes_groups_and_policies(iamclient, output, debug)
+    results = get_nodes_groups_and_policies(iamclient)
     nodes_result = results['nodes']
     groups_result = results['groups']
     policies_result = results['policies']
@@ -64,21 +63,21 @@ def create_graph(session: botocore.session.Session, service_list: list, output: 
     # policies_result = get_policies_and_fill_out(iamclient, nodes_result, groups_result, output, debug)
 
     # Determine which nodes are admins and update node objects
-    update_admin_status(nodes_result, output, debug)
+    update_admin_status(nodes_result)
 
     # Generate edges, generate Edge objects
-    edges_result = edge_identification.obtain_edges(session, service_list, nodes_result, output, debug)
+    edges_result = edge_identification.obtain_edges(session, service_list, nodes_result)
 
     # Pull S3, SNS, SQS, and KMS resource policies
-    policies_result.extend(get_s3_bucket_policies(session, output, debug))
-    policies_result.extend(get_sns_topic_policies(session, output, debug))
-    policies_result.extend(get_sqs_queue_policies(session, caller_identity['Account'], output, debug))
-    policies_result.extend(get_kms_key_policies(session, output, debug))
+    policies_result.extend(get_s3_bucket_policies(session))
+    policies_result.extend(get_sns_topic_policies(session))
+    policies_result.extend(get_sqs_queue_policies(session, caller_identity['Account']))
+    policies_result.extend(get_kms_key_policies(session))
 
     return Graph(nodes_result, edges_result, policies_result, groups_result, metadata)
 
 
-def get_nodes_groups_and_policies(iamclient, output: io.StringIO = os.devnull, debug=False) -> dict:
+def get_nodes_groups_and_policies(iamclient) -> dict:
     """Using an IAM.Client object, return a dictionary containing nodes, groups, and policies to be
     added to a Graph object. Admin status for the nodes are not updated.
 
@@ -237,7 +236,7 @@ def get_nodes_groups_and_policies(iamclient, output: io.StringIO = os.devnull, d
     return result
 
 
-def get_s3_bucket_policies(session: botocore.session.Session, output: io.StringIO = os.devnull, debug=False) -> List[Policy]:
+def get_s3_bucket_policies(session: botocore.session.Session) -> List[Policy]:
     """Using a botocore Session object, return a list of Policy objects representing the bucket policies of each
     S3 bucket in this account.
     """
@@ -274,7 +273,7 @@ def get_s3_bucket_policies(session: botocore.session.Session, output: io.StringI
     return result
 
 
-def get_kms_key_policies(session: botocore.session.Session, output: io.StringIO = os.devnull, debug=False) -> List[Policy]:
+def get_kms_key_policies(session: botocore.session.Session) -> List[Policy]:
     """Using a botocore Session object, return a list of Policy objects representing the key policies of each
     KMS key in this account.
     """
@@ -305,7 +304,7 @@ def get_kms_key_policies(session: botocore.session.Session, output: io.StringIO 
     return result
 
 
-def get_sns_topic_policies(session: botocore.session.Session, output: io.StringIO = os.devnull, debug=False) -> List[Policy]:
+def get_sns_topic_policies(session: botocore.session.Session) -> List[Policy]:
     """Using a botocore Session object, return a list of Policy objects representing the key policies of each
     KMS key in this account.
     """
@@ -335,7 +334,7 @@ def get_sns_topic_policies(session: botocore.session.Session, output: io.StringI
     return result
 
 
-def get_sqs_queue_policies(session: botocore.session.Session, account_id: str, output: io.StringIO = os.devnull, debug=False) -> List[Policy]:
+def get_sqs_queue_policies(session: botocore.session.Session, account_id: str) -> List[Policy]:
     """Using a botocore Session object, return a list of Policy objects representing the key policies of each
     KMS key in this account.
     """
@@ -368,7 +367,7 @@ def get_sqs_queue_policies(session: botocore.session.Session, account_id: str, o
     return result
 
 
-def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False) -> List[Node]:
+def get_unfilled_nodes(iamclient) -> List[Node]:
     """Using an IAM.Client object, return a list of Node object for each IAM user and role in an account.
 
     Does not set Group or Policy objects, does not set permissions boundary attr. Those have to be filled in later.
@@ -460,7 +459,7 @@ def get_unfilled_nodes(iamclient, output: io.StringIO = os.devnull, debug=False)
     return result
 
 
-def get_unfilled_groups(iamclient, nodes: List[Node], output: io.StringIO = os.devnull, debug=False) -> List[Group]:
+def get_unfilled_groups(iamclient, nodes: List[Node]) -> List[Group]:
     """Using an IAM.Client object, returns a list of Group objects. Adds to each passed Node's group_memberships
     property.
 
@@ -500,8 +499,7 @@ def get_unfilled_groups(iamclient, nodes: List[Node], output: io.StringIO = os.d
     return result
 
 
-def get_policies_and_fill_out(iamclient, nodes: List[Node], groups: List[Group],
-                              output: io.StringIO = os.devnull, debug=False) -> List[Policy]:
+def get_policies_and_fill_out(iamclient, nodes: List[Node], groups: List[Group]) -> List[Policy]:
     """Using an IAM.Client object, return a list of Policy objects. Adds references to each passed Node and
     Group object where applicable. Updates boundary policies.
 
@@ -625,7 +623,7 @@ def get_policies_and_fill_out(iamclient, nodes: List[Node], groups: List[Group],
     return result
 
 
-def update_admin_status(nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> None:
+def update_admin_status(nodes: List[Node]) -> None:
     """Given a list of nodes, goes through and updates each node's is_admin data."""
     logger.info('Determining which principals have administrative privileges')
     for node in nodes:
@@ -637,7 +635,7 @@ def update_admin_status(nodes: List[Node], output: io.StringIO = os.devnull, deb
             action = 'iam:PutUserPolicy'
         else:  # node_type == 'role'
             action = 'iam:PutRolePolicy'
-        if query_interface.local_check_authorization_handling_mfa(node, action, node.arn, {}, debug)[0]:
+        if query_interface.local_check_authorization_handling_mfa(node, action, node.arn, {})[0]:
             node.is_admin = True
             continue
 
@@ -647,18 +645,17 @@ def update_admin_status(nodes: List[Node], output: io.StringIO = os.devnull, deb
         else:
             action = 'iam:AttachRolePolicy'
         condition_keys = {'iam:PolicyARN': 'arn:aws:iam::aws:policy/AdministratorAccess'}
-        if query_interface.local_check_authorization_handling_mfa(node, action, node.arn, condition_keys, debug)[0]:
+        if query_interface.local_check_authorization_handling_mfa(node, action, node.arn, condition_keys)[0]:
             node.is_admin = True
             continue
 
         # check if node can create a role and attach the AdministratorAccess policy or an inline policy
-        if query_interface.local_check_authorization_handling_mfa(node, 'iam:CreateRole', '*', {}, debug)[0]:
+        if query_interface.local_check_authorization_handling_mfa(node, 'iam:CreateRole', '*', {})[0]:
             if query_interface.local_check_authorization_handling_mfa(node, 'iam:AttachRolePolicy', '*',
-                                                                      condition_keys, debug)[0]:
+                                                                      condition_keys)[0]:
                 node.is_admin = True
                 continue
-            if query_interface.local_check_authorization_handling_mfa(node, 'iam:PutRolePolicy', '*', condition_keys,
-                                                                      debug)[0]:
+            if query_interface.local_check_authorization_handling_mfa(node, 'iam:PutRolePolicy', '*', condition_keys)[0]:
                 node.is_admin = True
                 continue
 
@@ -666,25 +663,24 @@ def update_admin_status(nodes: List[Node], output: io.StringIO = os.devnull, deb
         for attached_policy in node.attached_policies:
             if attached_policy.arn != node.arn:
                 if query_interface.local_check_authorization_handling_mfa(node, 'iam:CreatePolicyVersion',
-                                                                          attached_policy.arn, {}, debug)[0]:
+                                                                          attached_policy.arn, {})[0]:
                     node.is_admin = True
                     continue
 
         # check if node is a user, and if it can attach or modify any of its groups's policies
         if node_type == 'user':
             for group in node.group_memberships:
-                if query_interface.local_check_authorization_handling_mfa(node, 'iam:PutGroupPolicy', group.arn, {},
-                                                                          debug)[0]:
+                if query_interface.local_check_authorization_handling_mfa(node, 'iam:PutGroupPolicy', group.arn, {})[0]:
                     node.is_admin = True
                     break  # break the loop through groups
                 if query_interface.local_check_authorization_handling_mfa(node, 'iam:AttachGroupPolicy', group.arn,
-                                                                          condition_keys, debug)[0]:
+                                                                          condition_keys)[0]:
                     node.is_admin = True
                     break  # as above
                 for attached_policy in group.attached_policies:
                     if attached_policy.arn != group.arn:
                         if query_interface.local_check_authorization_handling_mfa(node, 'iam:CreatePolicyVersion',
-                                                                                  attached_policy.arn, {}, debug)[0]:
+                                                                                  attached_policy.arn, {})[0]:
                             node.is_admin = True
                             break  # break the loop through policies
                 if node.is_admin:

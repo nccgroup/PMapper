@@ -212,7 +212,7 @@ def gen_overprivileged_function_findings(graph: Graph) -> List[Finding]:
     for node in graph.nodes:
         if ':role/' in node.arn and node.is_admin:
             if query_interface.resource_policy_authorization('lambda.amazonaws.com', arns.get_account_id(node.arn),
-                                                             node.trust_policy, 'sts:AssumeRole', node.arn, {}, False)\
+                                                             node.trust_policy, 'sts:AssumeRole', node.arn, {})\
                     == query_interface.ResourcePolicyEvalResult.SERVICE_MATCH:
                 affected_roles.append(node)
 
@@ -249,7 +249,7 @@ def gen_overprivileged_stack_findings(graph: Graph) -> List[Finding]:
         if ':role/' in node.arn and node.is_admin:
             if query_interface.resource_policy_authorization('cloudformation.amazonaws.com',
                                                              arns.get_account_id(node.arn), node.trust_policy,
-                                                             'sts:AssumeRole', node.arn, {}, False) == \
+                                                             'sts:AssumeRole', node.arn, {}) == \
                     query_interface.ResourcePolicyEvalResult.SERVICE_MATCH:
                 affected_roles.append(node)
 

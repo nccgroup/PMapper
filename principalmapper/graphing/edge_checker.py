@@ -31,7 +31,7 @@ class EdgeChecker(object):
     def __init__(self, session: botocore.session.Session):
         self.session = session
 
-    def return_edges(self, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
+    def return_edges(self, nodes: List[Node]) -> List[Edge]:
         """Expect subclasses to override. Given a list of nodes, the EdgeChecker should be able to use its session
         object in order to make clients and call the AWS API to resolve information about the account. Then,
         with this information, it should return a list of edges between the passed nodes.

@@ -70,11 +70,11 @@ class LocalPermissionsBoundaryHandlingTests(unittest.TestCase):
         iam_user_1.permissions_boundary = boundary
 
         self.assertTrue(
-            local_check_authorization(iam_user_1, 's3:GetObject', 'arn:aws:s3:::bucket/object', {}, True)
+            local_check_authorization(iam_user_1, 's3:GetObject', 'arn:aws:s3:::bucket/object', {})
         )
 
         self.assertFalse(
-            local_check_authorization(iam_user_1, 's3:PutObject', 'arn:aws:s3:::bucket/object', {}, True)
+            local_check_authorization(iam_user_1, 's3:PutObject', 'arn:aws:s3:::bucket/object', {})
         )
 
     def test_permissions_boundary_with_resource_policy(self):
@@ -151,8 +151,7 @@ class LocalPermissionsBoundaryHandlingTests(unittest.TestCase):
                 'arn:aws:iam::000000000000:role/JumpRole',
                 {},
                 trust_doc,
-                '000000000000',
-                True
+                '000000000000'
             )
         )
 
@@ -163,7 +162,6 @@ class LocalPermissionsBoundaryHandlingTests(unittest.TestCase):
                 'arn:aws:iam::000000000000:role/JumpRole',
                 {},
                 trust_doc,
-                '000000000000',
-                True
+                '000000000000'
             )
         )

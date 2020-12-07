@@ -38,12 +38,52 @@ class QueryResult(object):
         self.edge_list = edge_list
         self.node = node
 
-    def write_result(self, action_param: str, resource_param: str, output: io.StringIO = os.devnull):
-        """Writes information above the QueryResult object to the given IO interface."""
+    def print_result(self, action_param: str, resource_param: str):
+        """Prints information about the QueryResult object to stdout."""
         if self.allowed:
             if isinstance(self.edge_list, Node) and self.edge_list == self.node:
                 # node is an Admin but can't directly call the action
-                output.write('{} IS authorized to call action {} for resource {} THRU its admin privileges'.format(
+                print('{} IS authorized to call action {} for resource {} THRU its admin privileges'.format(
+                    self.node.searchable_name(), action_param, resource_param
+                ))
+
+            if len(self.edge_list) == 0:
+                # node itself is auth'd
+                print('{} IS authorized to call action {} for resource {}'.format(
+                    self.node.searchable_name(), action_param, resource_param
+                ))
+            else:
+                # node is auth'd through other nodes
+                print('{} CAN call action {} for resource {} THRU {}'.format(
+                    self.node.searchable_name(), action_param, resource_param,
+                    self.edge_list[-1].destination.searchable_name()
+                ))
+
+                # print the path the node has to take
+                for edge in self.edge_list:
+                    print('   {}'.format(edge.describe_edge()))
+
+                # print that the end-edge is authorized to make the call
+                print('   {} IS authorized to call action {} for resource {}'.format(
+                    self.edge_list[-1].destination.searchable_name(),
+                    action_param,
+                    resource_param
+                ))
+        else:
+            print('{} CANNOT call action {} for resource {}'.format(
+                self.node.searchable_name(), action_param, resource_param
+            ))
+
+    def write_result(self, action_param: str, resource_param: str, output: io.StringIO):
+        """Writes information about the QueryResult object to the given IO interface.
+
+        **Change, v1.1.x:** The `output` param is no longer optional.
+        """
+
+        if self.allowed:
+            if isinstance(self.edge_list, Node) and self.edge_list == self.node:
+                # node is an Admin but can't directly call the action
+                output.write('{} IS authorized to call action {} for resource {} THRU its admin privileges\n'.format(
                     self.node.searchable_name(), action_param, resource_param
                 ))
             if len(self.edge_list) == 0:

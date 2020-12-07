@@ -44,9 +44,8 @@ Available presets:
 """
 
 
-def query_response(graph: Graph, query: str, skip_admins: bool = False, output: io.StringIO = os.devnull,
-                   resource_policy: dict = None, resource_owner: str = None, include_unauthorized: bool = False,
-                   debug: bool = False) -> None:
+def query_response(graph: Graph, query: str, skip_admins: bool = False, resource_policy: dict = None,
+                   resource_owner: str = None, include_unauthorized: bool = False) -> None:
     """Interprets, executes, and outputs the results to a query."""
     result = []
 
@@ -54,7 +53,7 @@ def query_response(graph: Graph, query: str, skip_admins: bool = False, output: 
     tokens = re.split(r'\s+', query, flags=re.UNICODE)
     logger.debug('Query tokens: {}'.format(tokens))
     if len(tokens) < 3:
-        _write_query_help(output)
+        _print_query_help()
         return
 
     nodes = []
@@ -66,7 +65,7 @@ def query_response(graph: Graph, query: str, skip_admins: bool = False, output: 
 
         if len(tokens) > 5:  # can <X> do <Y> with <Z>
             if tokens[4] != 'with':
-                _write_query_help(output)
+                _print_query_help()
                 return
             resource = tokens[5]
         else:
@@ -74,7 +73,7 @@ def query_response(graph: Graph, query: str, skip_admins: bool = False, output: 
 
         if len(tokens) > 7:  # can <X> do <Y> with <Z> when <A> and <B> and <C>
             if tokens[6] != 'when':
-                _write_query_help(output)
+                _print_query_help()
                 return
 
             # doing this funky stuff in case condition values can have spaces
@@ -100,7 +99,7 @@ def query_response(graph: Graph, query: str, skip_admins: bool = False, output: 
 
         if len(tokens) > 5:  # who can do X with Y
             if tokens[4] != 'with':
-                _write_query_help(output)
+                _print_query_help()
                 return
             resource = tokens[5]
         else:
@@ -108,7 +107,7 @@ def query_response(graph: Graph, query: str, skip_admins: bool = False, output: 
 
         if len(tokens) > 7:  # who can do X with Y when A and B and C
             if tokens[6] != 'when':
-                _write_query_help(output)
+                _print_query_help()
                 return
 
             # doing this funky stuff in case condition values can have spaces
@@ -127,11 +126,11 @@ def query_response(graph: Graph, query: str, skip_admins: bool = False, output: 
             condition = {}
 
     elif tokens[0] == 'preset':
-        handle_preset(graph, query, skip_admins, output, debug)
+        handle_preset(graph, query, skip_admins)
         return
 
     else:
-        _write_query_help(output)
+        _print_query_help()
         return
 
     # pull resource owner from arg or ARN
@@ -156,34 +155,32 @@ def query_response(graph: Graph, query: str, skip_admins: bool = False, output: 
                         action,
                         resource,
                         condition,
-                        debug
                     ), action, resource)
                 )
             else:
                 result.append((
                     search_authorization_with_resource_policy_for(
-                        graph, node, action, resource, condition, resource_policy, resource_owner, debug
+                        graph, node, action, resource, condition, resource_policy, resource_owner
                     ), action, resource
                 ))
 
     # Print
     for query_result, action, resource in result:
         if query_result.allowed or include_unauthorized:
-            query_result.write_result(action, resource, output)
+            query_result.print_result(action, resource)
 
 
-def handle_preset(graph: Graph, query: str, skip_admins: bool = False, output: io.StringIO = os.devnull,
-                  debug: bool = False) -> None:
+def handle_preset(graph: Graph, query: str, skip_admins: bool = False) -> None:
     """Interprets, executes, and outputs the result to a preset query."""
     tokens = re.split(r'\s+', query, flags=re.UNICODE)
     if tokens[1] == 'privesc':
-        privesc.handle_preset_query(graph, tokens, skip_admins, output, debug)
+        privesc.handle_preset_query(graph, tokens, skip_admins)
     elif tokens[1] == 'connected':
-        connected.handle_preset_query(graph, tokens, skip_admins, output, debug)
+        connected.handle_preset_query(graph, tokens, skip_admins)
     elif tokens[1] == 'clusters':
-        clusters.handle_preset_query(graph, tokens, skip_admins, output, debug)
+        clusters.handle_preset_query(graph, tokens, skip_admins)
     else:
-        _write_query_help(output)
+        _print_query_help()
         return
 
 
@@ -194,13 +191,12 @@ def _write_query_help(output: io.StringIO) -> None:
 
 def _print_query_help() -> None:
     """Prints information about querying"""
-    print(_query_help_string)
+    print(_query_help_string.strip())
 
 
 def argquery(graph: Graph, principal_param: Optional[str], action_param: Optional[str], resource_param: Optional[str],
              condition_param: Optional[dict], preset_param: Optional[str], skip_admins: bool = False,
-             output: io.StringIO = os.devnull, resource_policy: dict = None, resource_owner: str = None,
-             include_unauthorized: bool = False, debug: bool = False) -> None:
+             resource_policy: dict = None, resource_owner: str = None, include_unauthorized: bool = False) -> None:
     """Splits between running a normal argquery and the presets."""
     if preset_param is not None:
         if preset_param == 'privesc':
@@ -216,7 +212,7 @@ def argquery(graph: Graph, principal_param: Optional[str], action_param: Optiona
             else:
                 nodes.append(graph.get_node_by_searchable_name(principal_param))
 
-            privesc.write_privesc_results(graph, nodes, skip_admins, output, debug)
+            privesc.print_privesc_results(graph, nodes, skip_admins)
         elif preset_param == 'connected':
             # Validate params
             if action_param is not None:
@@ -234,7 +230,7 @@ def argquery(graph: Graph, principal_param: Optional[str], action_param: Optiona
             else:
                 dest_nodes.append(graph.get_node_by_searchable_name(resource_param))
 
-            connected.write_connected_results(graph, source_nodes, dest_nodes, skip_admins, output, debug)
+            connected.write_connected_results(graph, source_nodes, dest_nodes, skip_admins)
         elif preset_param == 'clusters':
             # validate params
             if action_param is not None:
@@ -243,20 +239,19 @@ def argquery(graph: Graph, principal_param: Optional[str], action_param: Optiona
             if resource_param is None:
                 raise ValueError('For the clusters preset query, the --resource parameter must be set.')
 
-            clusters.handle_preset_query(graph, ['', '', resource_param], skip_admins, output, debug)
+            clusters.handle_preset_query(graph, ['', '', resource_param], skip_admins)
         else:
             raise ValueError('Parameter for "preset" is not valid. Expected values: "privesc", "connected", or "clusters".')
 
     else:
         argquery_response(graph, principal_param, action_param, resource_param, condition_param, skip_admins,
-                          resource_policy, resource_owner, output, include_unauthorized, debug)
+                          resource_policy, resource_owner, include_unauthorized)
 
 
 def argquery_response(graph: Graph, principal_param: Optional[str], action_param: str, resource_param: Optional[str],
                       condition_param: Optional[dict], skip_admins: bool = False, resource_policy: dict = None,
-                      resource_owner: str = None, output: io.StringIO = os.devnull, include_unauthorized: bool = False,
-                      debug: bool = False) -> None:
-    """Writes the output of a non-preset argquery"""
+                      resource_owner: str = None, include_unauthorized: bool = False) -> None:
+    """Prints the output of a non-preset argquery"""
     result = []
 
     if resource_param is None:
@@ -282,15 +277,15 @@ def argquery_response(graph: Graph, principal_param: Optional[str], action_param
     for node in nodes:
         if resource_policy is None:
             result.append(
-                search_authorization_for(graph, node, action_param, resource_param, condition_param, debug)
+                search_authorization_for(graph, node, action_param, resource_param, condition_param)
             )
         else:
             result.append(
                 search_authorization_with_resource_policy_for(
-                    graph, node, action_param, resource_param, condition_param, resource_policy, resource_owner, debug
+                    graph, node, action_param, resource_param, condition_param, resource_policy, resource_owner
                 )
             )
 
     for query_result in result:
         if query_result.allowed or include_unauthorized:
-            query_result.write_result(action_param, resource_param, output)
+            query_result.print_result(action_param, resource_param)

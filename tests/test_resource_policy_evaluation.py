@@ -85,8 +85,7 @@ class LocalResourcePolicyEvalTests(unittest.TestCase):
                 'arn:aws:iam::000000000000:role/test1',
                 {},
                 trust_doc_1,
-                '000000000000',
-                True
+                '000000000000'
             )
         )
 
@@ -98,8 +97,7 @@ class LocalResourcePolicyEvalTests(unittest.TestCase):
                 'arn:aws:iam::000000000000:role/test1',
                 {},
                 trust_doc_2,
-                '000000000000',
-                True
+                '000000000000'
             )
         )
 
@@ -111,8 +109,7 @@ class LocalResourcePolicyEvalTests(unittest.TestCase):
                 'arn:aws:iam::000000000000:role/test1',
                 {},
                 trust_doc_1,
-                '000000000000',
-                True
+                '000000000000'
             )
         )
 
@@ -124,8 +121,7 @@ class LocalResourcePolicyEvalTests(unittest.TestCase):
                 'arn:aws:iam::000000000000:role/test1',
                 {},
                 trust_doc_2,
-                '000000000000',
-                True
+                '000000000000'
             )
         )
 
@@ -185,8 +181,7 @@ class LocalResourcePolicyEvalTests(unittest.TestCase):
             bucket_policy_1,
             's3:GetObject',
             'arn:aws:s3:::bucket/object',
-            {},
-            True
+            {}
         )
         self.assertTrue(
             rpa_result == ResourcePolicyEvalResult.NODE_MATCH
@@ -198,8 +193,7 @@ class LocalResourcePolicyEvalTests(unittest.TestCase):
             bucket_policy_1,
             's3:PutObject',
             'arn:aws:s3:::bucket/object',
-            {},
-            True
+            {}
         )
         self.assertTrue(
             rpa_result == ResourcePolicyEvalResult.NO_MATCH

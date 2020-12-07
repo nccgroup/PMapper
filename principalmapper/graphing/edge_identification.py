@@ -45,8 +45,7 @@ checker_map = {
 }
 
 
-def obtain_edges(session: Optional[botocore.session.Session], checker_list: List[str], nodes: List[Node],
-                 output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
+def obtain_edges(session: Optional[botocore.session.Session], checker_list: List[str], nodes: List[Node]) -> List[Edge]:
     """Given a list of nodes and a botocore Session, return a list of edges between those nodes. Only checks
     against services passed in the checker_list param. """
     result = []
@@ -55,5 +54,5 @@ def obtain_edges(session: Optional[botocore.session.Session], checker_list: List
     for check in checker_list:
         if check in checker_map:
             checker_obj = checker_map[check](session)
-            result.extend(checker_obj.return_edges(nodes, output, debug))
+            result.extend(checker_obj.return_edges(nodes))
     return result

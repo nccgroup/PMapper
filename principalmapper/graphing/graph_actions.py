@@ -30,12 +30,12 @@ from typing import List, Optional
 logger = logging.getLogger(__name__)
 
 
-def create_new_graph(session: botocore.session.Session, service_list: List[str], debug=False) -> Graph:
+def create_new_graph(session: botocore.session.Session, service_list: List[str]) -> Graph:
     """Wraps around principalmapper.graphing.gathering.create_graph(...), specifying to print data to stdout. This
     fulfills `pmapper graph --create`.
     """
 
-    return gathering.create_graph(session, service_list, sys.stdout, debug)
+    return gathering.create_graph(session, service_list)
 
 
 def print_graph_data(graph: Graph) -> None:
@@ -61,7 +61,7 @@ def get_graph_from_disk(location: str) -> Graph:
     return Graph.create_graph_from_local_disk(location)
 
 
-def get_existing_graph(session: Optional[botocore.session.Session], account: Optional[str], debug=False) -> Graph:
+def get_existing_graph(session: Optional[botocore.session.Session], account: Optional[str]) -> Graph:
     """Returns a Graph object stored on-disk in a standard location (per-OS, using the get_storage_root utility function
     in principalmapper.util.storage). Uses the session/account parameter to choose the directory from under the
     standard location.
