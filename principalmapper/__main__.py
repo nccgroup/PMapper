@@ -29,6 +29,13 @@ from typing import Optional
 
 import botocore.session
 
+from principalmapper.analysis import cli as analysis_cli
+from principalmapper.graphing import cli as graphing_cli
+from principalmapper.querying import query_cli
+from principalmapper.querying import argquery_cli
+from principalmapper.querying import repl_cli
+from principalmapper.visualizing import cli as visualizing_cli
+
 from principalmapper.analysis.find_risks import gen_findings_and_print
 import principalmapper.graphing.graph_actions
 from principalmapper.graphing.edge_identification import checker_map
@@ -46,12 +53,12 @@ def main() -> int:
     argument_parser = argparse.ArgumentParser(prog='pmapper')
     argument_parser.add_argument(
         '--profile',
-        help='AWS CLI (botocore) profile to use to call the AWS API'
+        help='The AWS CLI (botocore) profile to use to call the AWS API.'
     )  # Note: do NOT set the default, we want to know if the profile arg was specified or not
     argument_parser.add_argument(
         '--debug',
         action='store_true',
-        help='Produces debug-level output'
+        help='Produces debug-level output of the underlying Principal Mapper library during execution.'
     )
     argument_parser.add_argument(
         '--account',
@@ -72,27 +79,7 @@ def main() -> int:
         description='Obtains information about a specific AWS account\'s use of IAM for analysis.',
         help='Pulls information for an AWS account\'s use of IAM.'
     )
-    command_group = graphparser.add_mutually_exclusive_group(required=True)
-    command_group.add_argument(
-        '--create',
-        action='store_true',
-        help='Creates a completely new graph for an AWS account, wiping away any old data.'
-    )
-    command_group.add_argument(
-        '--display',
-        action='store_true',
-        help='Displays information about a currently-stored graph based on the AWS credentials used.'
-    )
-    command_group.add_argument(
-        '--list',
-        action='store_true',
-        help='List the Account IDs of graphs stored on this computer.'
-    )
-    command_group.add_argument(
-        '--update-edges',
-        action='store_true',
-        help='Updates the edges of an AWS account. Does not gather information about IAM users or roles.'
-    )
+    graphing_cli.provide_arguments(graphparser)
 
     # Query subcommand
     queryparser = subparser.add_parser(
@@ -100,94 +87,15 @@ def main() -> int:
         description='Displays information corresponding to a roughly human-readable query.',
         help='Displays information corresponding to a query'
     )
-    queryparser.add_argument(
-        '-s',
-        '--skip-admin',
-        action='store_true',
-        help='Ignores "admin" level principals when querying about multiple principals in an account'
-    )
-    queryparser.add_argument(
-        '-u',
-        '--include-unauthorized',
-        action='store_true',
-        help='Includes output to say if a given principal is not able to call an action.'
-    )
-    query_rpolicy_args = queryparser.add_mutually_exclusive_group()
-    query_rpolicy_args.add_argument(
-        '--grab-resource-policy',
-        action='store_true',
-        help='Retrieves the resource policy for resource in the query. Handles S3, IAM, SNS, SQS, and KMS. Requires an '
-             'active session from botocore (cannot use --account param).'
-    )
-    query_rpolicy_args.add_argument(
-        '--resource-policy-text',
-        help='The full text of a resource policy to consider during authorization evaluation.'
-    )
-    queryparser.add_argument(
-        '--resource-owner',
-        help='The account ID of the owner of the resource. Required for S3 objects (which do not have it in the ARN).'
-    )
-    queryparser.add_argument(
-        'query',
-        help='The query to execute.'
-    )
+    query_cli.provide_arguments(queryparser)
 
-    # New Query subcommand
+    # Argquery subcommand
     argqueryparser = subparser.add_parser(
         'argquery',
         description='Displays information corresponding to a arg-specified query.',
         help='Displays information corresponding to a query'
     )
-    argqueryparser.add_argument(
-        '-s',
-        '--skip-admin',
-        action='store_true',
-        help='Ignores administrative principals when querying about multiple principals in an account'
-    )
-    argqueryparser.add_argument(
-        '-u',
-        '--include-unauthorized',
-        action='store_true',
-        help='Includes output to say if a given principal is not able to call an action.'
-    )
-    argqueryparser.add_argument(
-        '--principal',
-        default='*',
-        help='A string matching one or more IAM users or roles in the account, or use * (the default) to include all'
-    )
-    argqueryparser.add_argument(
-        '--action',
-        help='An AWS action to test for, allows * wildcards'
-    )
-    argqueryparser.add_argument(
-        '--resource',
-        default='*',
-        help='An AWS resource (denoted by ARN) to test for'
-    )
-    argqueryparser.add_argument(
-        '--condition',
-        action='append',
-        help='A set of key-value pairs to test specific conditions'
-    )
-    argqueryparser.add_argument(
-        '--preset',
-        help='A preset query to run'
-    )
-    argquery_rpolicy_args = argqueryparser.add_mutually_exclusive_group()
-    argquery_rpolicy_args.add_argument(
-        '--grab-resource-policy',
-        action='store_true',
-        help='Retrieves the resource policy for the resource given by the --resource parameter. Handles S3, IAM, SNS, '
-             'SQS, and KMS. Requires an active session from botocore (cannot use --account param).'
-    )
-    argquery_rpolicy_args.add_argument(
-        '--resource-policy-text',
-        help='The full text of a resource policy to consider during authorization evaluation.'
-    )
-    argqueryparser.add_argument(
-        '--resource-owner',
-        help='The account ID of the owner of the resource. Required for S3 objects (which do not have it in the ARN).'
-    )
+    argquery_cli.provide_arguments(argqueryparser)
 
     # REPL subcommand
     replparser = subparser.add_parser(
@@ -202,17 +110,7 @@ def main() -> int:
         description='Generates an image file to display information about an AWS account',
         help='Generates an image representing the AWS account'
     )
-    visualizationparser.add_argument(
-        '--filetype',
-        default='svg',
-        choices=['svg', 'png', 'dot'],
-        help='The (lowercase) filetype to output the image as.'
-    )
-    visualizationparser.add_argument(
-        '--only-privesc',
-        help='Generates an image file representing an AWS account.',
-        action='store_true'
-    )
+    visualizing_cli.provide_arguments(visualizationparser)
 
     # Analysis subcommand
     analysisparser = subparser.add_parser(
@@ -220,14 +118,9 @@ def main() -> int:
         description='Analyzes and reports identified issues',
         help='Analyzes and reports identified issues'
     )
-    analysisparser.add_argument(
-        '--output-type',
-        default='text',
-        choices=['text', 'json'],
-        help='The type of output for identified issues.'
-    )
+    analysis_cli.provide_arguments(analysisparser)
 
-    # TODO: Cross-Account subcommand(s)
+    # TODO: Cross-Account subcommand(s)?
 
     parsed_args = argument_parser.parse_args()
 
