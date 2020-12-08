@@ -15,7 +15,7 @@
 #      You should have received a copy of the GNU Affero General Public License
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
-from typing import Optional
+from typing import List, Optional
 
 import botocore.session
 
@@ -33,4 +33,38 @@ def get_session(profile_arg: Optional[str]) -> botocore.session.Session:
 
     stsclient = result.create_client('sts')
     stsclient.get_caller_identity()  # raises error if it's not workable
+    return result
+
+
+def get_regions_to_search(session: botocore.session.Session, service_name: str, region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[str]:
+    """Using a botocore Session object, the name of a service, and either an allow-list or a deny-list (but not both),
+    return a list of regions to be used during the gathering process. This uses the botocore Session object's
+    get_available_regions method as the base list.
+
+    If the allow-list is specified, the returned list is the union of the base list and the allow-list. No error is
+    thrown if a region is specified in the allow-list but not included in the base list.
+
+    If the deny-list is specified, the returned list is the base list minus the elements of the deny-list. No error is
+    thrown if a region is specified inthe deny-list but not included in the base list.
+
+    A ValueError is thrown if the allow-list AND deny-list are both not None.
+    """
+
+    if region_allow_list is not None and region_deny_list is not None:
+        raise ValueError('This function allows only either the allow-list or the deny-list, but NOT both.')
+
+    base_list = session.get_available_regions(service_name)
+    result = []
+
+    if region_allow_list is not None:
+        for element in base_list:
+            if element in region_allow_list:
+                result.append(element)
+    elif region_deny_list is not None:
+        for element in base_list:
+            if element not in region_deny_list:
+                result.append(element)
+    else:
+        result = base_list
+
     return result

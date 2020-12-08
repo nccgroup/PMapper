@@ -18,7 +18,7 @@
 import io
 import logging
 import os
-from typing import List
+from typing import List, Optional
 
 from botocore.exceptions import ClientError
 
@@ -26,7 +26,7 @@ from principalmapper.common import Edge, Node
 from principalmapper.graphing.edge_checker import EdgeChecker
 from principalmapper.querying import query_interface
 from principalmapper.querying.local_policy_simulation import resource_policy_authorization, ResourcePolicyEvalResult
-from principalmapper.util import arns
+from principalmapper.util import arns, botocore_tools
 
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 class CloudFormationEdgeChecker(EdgeChecker):
     """Class for identifying if CloudFormation can be used by IAM principals to gain access to other IAM principals."""
 
-    def return_edges(self, nodes: List[Node]) -> List[Edge]:
+    def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[Edge]:
         """Fulfills expected method return_edges."""
 
         result = []
@@ -44,7 +44,7 @@ class CloudFormationEdgeChecker(EdgeChecker):
         # Grab existing stacks in each region
         cloudformation_clients = []
         if self.session is not None:
-            cf_regions = self.session.get_available_regions('cloudformation')
+            cf_regions = botocore_tools.get_regions_to_search(self.session, 'cloduformation', region_allow_list, region_deny_list)
             for region in cf_regions:
                 cloudformation_clients.append(self.session.create_client('cloudformation', region_name=region))
 

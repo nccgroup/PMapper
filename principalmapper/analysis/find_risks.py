@@ -451,10 +451,10 @@ def print_report(report: Report) -> None:
     print('Date and Time: {}'.format(report.date_and_time.isoformat()))
     print()
     print(report.source)
+    print()
 
     # Findings
     if len(report.findings) == 0:
-        print()
         print("None found.")
         print()
     else:

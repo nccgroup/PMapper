@@ -18,7 +18,7 @@
 import io
 import logging
 import os
-from typing import List
+from typing import List, Optional
 
 from botocore.exceptions import ClientError
 
@@ -26,7 +26,7 @@ from principalmapper.common import Edge, Node
 from principalmapper.graphing.edge_checker import EdgeChecker
 from principalmapper.querying.local_policy_simulation import resource_policy_authorization, ResourcePolicyEvalResult
 from principalmapper.querying import query_interface
-from principalmapper.util import arns
+from principalmapper.util import arns, botocore_tools
 
 
 logger = logging.getLogger(__name__)
@@ -35,14 +35,14 @@ logger = logging.getLogger(__name__)
 class LambdaEdgeChecker(EdgeChecker):
     """Class for identifying if Lambda can be used by IAM principals to gain access to other IAM principals."""
 
-    def return_edges(self, nodes: List[Node]) -> List[Edge]:
+    def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[Edge]:
         """Fulfills expected method return_edges. If session object is None, runs checks in offline mode."""
         result = []
         logger.info('Searching Lambda for edges')
 
         lambda_clients = []
         if self.session is not None:
-            lambda_regions = self.session.get_available_regions('lambda')
+            lambda_regions = botocore_tools.get_regions_to_search(self.session, 'lambda', region_allow_list, region_deny_list)
             for region in lambda_regions:
                 lambda_clients.append(self.session.create_client('lambda', region_name=region))
 

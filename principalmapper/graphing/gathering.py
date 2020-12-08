@@ -27,6 +27,7 @@ from principalmapper.common import Node, Group, Policy, Graph
 from principalmapper.graphing import edge_identification
 from principalmapper.querying import query_interface
 from principalmapper.util import arns
+from principalmapper.util.botocore_tools import get_regions_to_search
 from typing import List, Optional
 
 
@@ -295,7 +296,7 @@ def get_kms_key_policies(session: botocore.session.Session, region_allow_list: O
     result = []
 
     # Iterate through all regions of KMS where possible
-    for kms_region in _get_regions_to_search(session, 'kms', region_allow_list, region_deny_list):
+    for kms_region in get_regions_to_search(session, 'kms', region_allow_list, region_deny_list):
         try:
             # Grab the keys
             cmks = []
@@ -330,7 +331,7 @@ def get_sns_topic_policies(session: botocore.session.Session, region_allow_list:
     result = []
 
     # Iterate through all regions of SNS where possible
-    for sns_region in _get_regions_to_search(session, 'sns', region_allow_list, region_deny_list):
+    for sns_region in get_regions_to_search(session, 'sns', region_allow_list, region_deny_list):
         try:
             # Grab the topics
             topics = []
@@ -365,7 +366,7 @@ def get_sqs_queue_policies(session: botocore.session.Session, account_id: str, r
     result = []
 
     # Iterate through all regions of SQS where possible
-    for sqs_region in _get_regions_to_search(session, 'sqs', region_allow_list, region_deny_list):
+    for sqs_region in get_regions_to_search(session, 'sqs', region_allow_list, region_deny_list):
         try:
             # Grab the queue names
             queue_urls = []
@@ -388,40 +389,6 @@ def get_sqs_queue_policies(session: botocore.session.Session, account_id: str, r
         except botocore.exceptions.ClientError as ex:
             logger.info('Unable to search SQS in region {} for queues. The region may be disabled, or the current principal may not be authorized to access the service. Continuing.'.format(sqs_region))
             logger.debug('Exception was: {}'.format(ex))
-
-    return result
-
-
-def _get_regions_to_search(session: botocore.session.Session, service_name: str, region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[str]:
-    """Using a botocore Session object, the name of a service, and either an allow-list or a deny-list (but not both),
-    return a list of regions to be used during the gathering process. This uses the botocore Session object's
-    get_available_regions method as the base list.
-
-    If the allow-list is specified, the returned list is the union of the base list and the allow-list. No error is
-    thrown if a region is specified in the allow-list but not included in the base list.
-
-    If the deny-list is specified, the returned list is the base list minus the elements of the deny-list. No error is
-    thrown if a region is specified inthe deny-list but not included in the base list.
-
-    A ValueError is thrown if the allow-list AND deny-list are both not None.
-    """
-
-    if region_allow_list is not None and region_deny_list is not None:
-        raise ValueError('This function allows only either the allow-list or the deny-list, but NOT both.')
-
-    base_list = session.get_available_regions(service_name)
-    result = []
-
-    if region_allow_list is not None:
-        for element in base_list:
-            if element in region_allow_list:
-                result.append(element)
-    elif region_deny_list is not None:
-        for element in base_list:
-            if element not in region_deny_list:
-                result.append(element)
-    else:
-        result = base_list
 
     return result
 

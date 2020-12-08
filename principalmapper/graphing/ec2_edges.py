@@ -19,7 +19,7 @@
 import io
 import logging
 import os
-from typing import List
+from typing import List, Optional
 
 from principalmapper.common import Edge, Node
 from principalmapper.graphing.edge_checker import EdgeChecker
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 class EC2EdgeChecker(EdgeChecker):
     """Class for identifying if EC2 can be used by IAM principals to gain access to other IAM principals."""
 
-    def return_edges(self, nodes: List[Node]) -> List[Edge]:
+    def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[Edge]:
         """Fulfills expected method return_edges."""
 
         result = []
