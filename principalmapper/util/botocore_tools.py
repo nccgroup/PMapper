@@ -15,9 +15,13 @@
 #      You should have received a copy of the GNU Affero General Public License
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
+import logging
 from typing import List, Optional
 
 import botocore.session
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_session(profile_arg: Optional[str]) -> botocore.session.Session:
@@ -54,6 +58,7 @@ def get_regions_to_search(session: botocore.session.Session, service_name: str, 
         raise ValueError('This function allows only either the allow-list or the deny-list, but NOT both.')
 
     base_list = session.get_available_regions(service_name)
+
     result = []
 
     if region_allow_list is not None:
@@ -66,5 +71,7 @@ def get_regions_to_search(session: botocore.session.Session, service_name: str, 
                 result.append(element)
     else:
         result = base_list
+
+    logger.debug('Final list of regions for {}: {}'.format(service_name, result))
 
     return result

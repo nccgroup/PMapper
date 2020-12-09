@@ -40,7 +40,9 @@ def create_graph(session: botocore.session.Session, service_list: list, region_a
     Information about the graph as it's built will be written to the IO parameter `output`.
 
     The region allow/deny lists are mutually-exclusive (i.e. at least one of which has the value None) lists of
-    allowed/denied regions to pull data from.
+    allowed/denied regions to pull data from. Note that we don't do the same allow/deny list parameters for the
+    service list, because that is a fixed property of what pmapper supports as opposed to an unknown/uncontrolled
+    list of regions that AWS supports.
     """
     stsclient = session.create_client('sts')
     caller_identity = stsclient.get_caller_identity()
@@ -70,7 +72,7 @@ def create_graph(session: botocore.session.Session, service_list: list, region_a
     update_admin_status(nodes_result)
 
     # Generate edges, generate Edge objects
-    edges_result = edge_identification.obtain_edges(session, service_list, nodes_result)
+    edges_result = edge_identification.obtain_edges(session, service_list, nodes_result, region_allow_list, region_deny_list)
 
     # Pull S3, SNS, SQS, and KMS resource policies
     policies_result.extend(get_s3_bucket_policies(session))
@@ -222,10 +224,9 @@ def get_nodes_groups_and_policies(iamclient) -> dict:
             user_name = arns.get_resource(node.arn)[5:]
             if '/' in user_name:
                 user_name = user_name.split('/')[-1]
-                logger.debug('Removed path from username {}'.format(user_name))
             access_keys_data = iamclient.list_access_keys(UserName=user_name)
             node.access_keys = len(access_keys_data['AccessKeyMetadata'])
-            logger.debug('Access Key Count for {}: {}'.format(user_name, len(access_keys_data['AccessKeyMetadata'])))
+            # logger.debug('Access Key Count for {}: {}'.format(user_name, len(access_keys_data['AccessKeyMetadata'])))
 
     logger.info('Gathering MFA virtual device information')
     mfa_paginator = iamclient.get_paginator('list_virtual_mfa_devices')
@@ -266,6 +267,7 @@ def get_s3_bucket_policies(session: botocore.session.Session) -> List[Policy]:
                 bucket,
                 bucket_policy
             ))
+            logger.info('Caching policy for {}'.format(bucket_arn))
         except botocore.exceptions.ClientError as ex:
             if 'NoSuchBucketPolicy' in str(ex):
                 logger.info('Bucket {} does not have a bucket policy, adding a "stub" policy instead.'.format(
@@ -313,6 +315,7 @@ def get_kms_key_policies(session: botocore.session.Session, region_allow_list: O
                     cmk.split('/')[-1],  # CMK ARN Format: arn:<partition>:kms:<region>:<account>:key/<Key ID>
                     json.loads(policy_str)
                 ))
+                logger.info('Caching policy for {}'.format(cmk))
         except botocore.exceptions.ClientError as ex:
             logger.info('Unable to search KMS in region {} for key policies. The region may be disabled, or the current principal may not be authorized to access the service. Continuing.'.format(kms_region))
             logger.debug('Exception was: {}'.format(ex))
@@ -348,6 +351,7 @@ def get_sns_topic_policies(session: botocore.session.Session, region_allow_list:
                     topic.split(':')[-1],  # SNS Topic ARN Format: arn:<partition>:sns:<region>:<account>:<Topic Name>
                     json.loads(policy_str)
                 ))
+                logger.info('Caching policy for {}'.format(topic))
         except botocore.exceptions.ClientError as ex:
             logger.info('Unable to search SNS in region {} for topic policies. The region may be disabled, or the current principal may not be authorized to access the service. Continuing.'.format(sns_region))
             logger.debug('Exception was: {}'.format(ex))
@@ -386,6 +390,7 @@ def get_sqs_queue_policies(session: botocore.session.Session, account_id: str, r
                     queue_name,
                     json.loads(policy_str)
                 ))
+                logger.info('Caching policy for {}'.format('arn:aws:sqs:{}:{}:{}'.format(sqs_region, account_id, queue_name)))
         except botocore.exceptions.ClientError as ex:
             logger.info('Unable to search SQS in region {} for queues. The region may be disabled, or the current principal may not be authorized to access the service. Continuing.'.format(sqs_region))
             logger.debug('Exception was: {}'.format(ex))

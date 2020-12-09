@@ -140,14 +140,13 @@ def main() -> int:
                 logging.StreamHandler(sys.stdout)
             ]
         )
-    botocore_logger = logging.getLogger('botocore')
-    botocore_logger.setLevel(logging.WARNING)
-    urllib3_logger = logging.getLogger('urllib3')
-    urllib3_logger.setLevel(logging.WARNING)
+    logging.getLogger('botocore').setLevel(logging.WARNING)
+    logging.getLogger('urllib3').setLevel(logging.WARNING)
+    logging.getLogger('principalmapper.querying.query_interface').setLevel(logging.WARNING)
 
-    logger.debug('Chosen subcommand: {}'.format(parsed_args.picked_cmd))
+    logger.debug('Parsed args: {}'.format(parsed_args))
     if parsed_args.picked_cmd == 'graph':
-        return handle_graph(parsed_args)
+        return graphing_cli.process_arguments(parsed_args)
     elif parsed_args.picked_cmd == 'query':
         return handle_query(parsed_args)
     elif parsed_args.picked_cmd == 'argquery':
@@ -160,49 +159,6 @@ def main() -> int:
         return handle_analysis(parsed_args)
 
     return 64  # /usr/include/sysexits.h
-
-
-def handle_graph(parsed_args) -> int:
-    """Processes the arguments for the graph subcommand and executes related tasks"""
-    if not parsed_args.list:
-        session = _grab_session(parsed_args)
-    else:
-        session = None
-
-    if parsed_args.create:  # --create
-        graph = principalmapper.graphing.graph_actions.create_new_graph(session, checker_map.keys())
-        principalmapper.graphing.graph_actions.print_graph_data(graph)
-        graph.store_graph_as_json(os.path.join(get_storage_root(), graph.metadata['account_id']))
-
-    elif parsed_args.display:  # --display
-        graph = principalmapper.graphing.graph_actions.get_existing_graph(
-            session,
-            parsed_args.account
-        )
-        principalmapper.graphing.graph_actions.print_graph_data(graph)
-
-    elif parsed_args.list:  # --list
-        print("Account IDs:")
-        print("---")
-        storage_root = Path(get_storage_root())
-        for direct in storage_root.iterdir():
-            metadata_file = direct.joinpath(Path('metadata.json'))
-            with open(str(metadata_file)) as fd:
-                version = json.load(fd)['pmapper_version']
-            print("{} (PMapper Graph Version {})".format(direct.name, version))
-
-    elif parsed_args.update_edges:  # --update-edges
-        graph = principalmapper.graphing.graph_actions.get_existing_graph(
-            session,
-            parsed_args.account
-        )
-        graph.edges = principalmapper.graphing.edge_identification.obtain_edges(
-            session, checker_map.keys(), graph.nodes
-        )
-        principalmapper.graphing.graph_actions.print_graph_data(graph)
-        graph.store_graph_as_json(os.path.join(get_storage_root(), graph.metadata['account_id']))
-
-    return 0
 
 
 def handle_query(parsed_args) -> int:

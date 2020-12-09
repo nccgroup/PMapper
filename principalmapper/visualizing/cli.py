@@ -36,5 +36,6 @@ def provide_arguments(parser: ArgumentParser):
 
 
 def process_arguments(parsed_args: Namespace):
-    """Given a namespace object generated from parsing args, perform the appropriate tasks."""
+    """Given a namespace object generated from parsing args, perform the appropriate tasks. Returns an int
+    matching expectations set by /usr/include/sysexits.h for command-line utilities."""
     pass
