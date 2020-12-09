@@ -16,6 +16,15 @@
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 from argparse import ArgumentParser, Namespace
+import json
+import logging
+
+from principalmapper.graphing import graph_actions
+from principalmapper.querying import query_utils, query_actions
+from principalmapper.util import botocore_tools
+
+
+logger = logging.getLogger(__name__)
 
 
 def provide_arguments(parser: ArgumentParser):
@@ -58,4 +67,30 @@ def provide_arguments(parser: ArgumentParser):
 def process_arguments(parsed_args: Namespace):
     """Given a namespace object generated from parsing args, perform the appropriate tasks. Returns an int
     matching expectations set by /usr/include/sysexits.h for command-line utilities."""
-    pass
+
+    if parsed_args.account is None:
+        session = botocore_tools.get_session(parsed_args.profile)
+    else:
+        session = None
+
+    graph = graph_actions.get_existing_graph(session, parsed_args.account)
+    logger.debug('Querying against graph {}'.format(graph.metadata['account_id']))
+
+    if parsed_args.grab_resource_policy:
+        if session is None:
+            raise ValueError('Resource policy retrieval requires an active session (missing --profile argument?)')
+        resource_policy = query_utils.pull_cached_resource_policy_by_arn(graph.policies, arn=None,
+                                                                         query=parsed_args.query)
+    elif parsed_args.resource_policy_text:
+        resource_policy = json.loads(parsed_args.resource_policy_text)
+    else:
+        resource_policy = None
+
+    resource_owner = parsed_args.resource_owner
+
+    query_actions.query_response(
+        graph, parsed_args.query, parsed_args.skip_admin, resource_policy, resource_owner,
+        parsed_args.include_unauthorized
+    )
+
+    return 0

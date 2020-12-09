@@ -17,6 +17,10 @@
 
 from argparse import ArgumentParser, Namespace
 
+from principalmapper.graphing import graph_actions
+from principalmapper.querying import repl
+from principalmapper.util import botocore_tools
+
 
 def provide_arguments(parser: ArgumentParser):
     """Given a parser object (which should be a subparser), add arguments to provide a CLI interface to the
@@ -28,4 +32,14 @@ def provide_arguments(parser: ArgumentParser):
 def process_arguments(parsed_args: Namespace):
     """Given a namespace object generated from parsing args, perform the appropriate tasks. Returns an int
     matching expectations set by /usr/include/sysexits.h for command-line utilities."""
-    pass
+
+    if parsed_args.account is None:
+        session = botocore_tools.get_session(parsed_args.profile)
+    else:
+        session = None
+    graph = graph_actions.get_existing_graph(session, parsed_args.account)
+
+    repl_obj = repl.PMapperREPL(graph)
+    repl_obj.begin_repl()
+
+    return 0

@@ -16,6 +16,15 @@
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 from argparse import ArgumentParser, Namespace
+import json
+import logging
+
+from principalmapper.graphing import graph_actions
+from principalmapper.querying import query_utils, query_actions
+from principalmapper.util import botocore_tools
+
+
+logger = logging.getLogger(__name__)
 
 
 def provide_arguments(parser: ArgumentParser):
@@ -77,4 +86,38 @@ def provide_arguments(parser: ArgumentParser):
 def process_arguments(parsed_args: Namespace):
     """Given a namespace object generated from parsing args, perform the appropriate tasks. Returns an int
     matching expectations set by /usr/include/sysexits.h for command-line utilities."""
-    pass
+
+    if parsed_args.account is None:
+        session = botocore_tools.get_session(parsed_args.profile)
+    else:
+        session = None
+    graph = graph_actions.get_existing_graph(session, parsed_args.account)
+    logger.debug('Querying against graph {}'.format(graph.metadata['account_id']))
+
+    # process condition args to generate input dict
+    conditions = {}
+    if parsed_args.condition is not None:
+        for arg in parsed_args.condition:
+            # split on equals-sign (=), assume first instance separates the key and value
+            components = arg.split('=')
+            if len(components) < 2:
+                print('Format for condition args not matched: <key>=<value>')
+                return 64
+            key = components[0]
+            value = '='.join(components[1:])
+            conditions.update({key: value})
+
+    if parsed_args.grab_resource_policy:
+        if session is None:
+            raise ValueError('Resource policy retrieval requires an active session (missing --profile argument?)')
+        resource_policy = query_utils.pull_cached_resource_policy_by_arn(graph.policies, parsed_args.resource)
+    elif parsed_args.resource_policy_text:
+        resource_policy = json.loads(parsed_args.resource_policy_text)
+    else:
+        resource_policy = None
+
+    query_actions.argquery(graph, parsed_args.principal, parsed_args.action, parsed_args.resource, conditions,
+                           parsed_args.preset, parsed_args.skip_admin, resource_policy,
+                           parsed_args.resource_owner, parsed_args.include_unauthorized)
+
+    return 0

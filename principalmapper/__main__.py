@@ -18,16 +18,8 @@ Provides a command-line interface to use the principalmapper library
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 import argparse
-import json
 import logging
-import os
-import os.path
-from pathlib import Path
-import re
 import sys
-from typing import Optional
-
-import botocore.session
 
 from principalmapper.analysis import cli as analysis_cli
 from principalmapper.graphing import cli as graphing_cli
@@ -35,14 +27,6 @@ from principalmapper.querying import query_cli
 from principalmapper.querying import argquery_cli
 from principalmapper.querying import repl_cli
 from principalmapper.visualizing import cli as visualizing_cli
-
-from principalmapper.analysis.find_risks import gen_findings_and_print
-import principalmapper.graphing.graph_actions
-from principalmapper.graphing.edge_identification import checker_map
-from principalmapper.querying import query_actions, query_utils, repl
-from principalmapper.util import botocore_tools
-from principalmapper.util.storage import get_storage_root
-from principalmapper.visualizing import graph_writer
 
 
 logger = logging.getLogger(__name__)
@@ -148,123 +132,17 @@ def main() -> int:
     if parsed_args.picked_cmd == 'graph':
         return graphing_cli.process_arguments(parsed_args)
     elif parsed_args.picked_cmd == 'query':
-        return handle_query(parsed_args)
+        return query_cli.process_arguments(parsed_args)
     elif parsed_args.picked_cmd == 'argquery':
-        return handle_argquery(parsed_args)
+        return argquery_cli.process_arguments(parsed_args)
     elif parsed_args.picked_cmd == 'repl':
-        return handle_repl(parsed_args)
+        return repl_cli.process_arguments(parsed_args)
     elif parsed_args.picked_cmd == 'visualize':
-        return handle_visualization(parsed_args)
+        return visualizing_cli.process_arguments(parsed_args)
     elif parsed_args.picked_cmd == 'analysis':
-        return handle_analysis(parsed_args)
+        return analysis_cli.process_arguments(parsed_args)
 
     return 64  # /usr/include/sysexits.h
-
-
-def handle_query(parsed_args) -> int:
-    """Processes the arguments for the query subcommand and executes related tasks"""
-    session = _grab_session(parsed_args)
-    graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account)
-
-    if parsed_args.grab_resource_policy:
-        if session is None:
-            raise ValueError('Resource policy retrieval requires an active session (missing --profile argument?)')
-        resource_policy = query_utils.pull_cached_resource_policy_by_arn(graph.policies, arn=None, query=parsed_args.query)
-    elif parsed_args.resource_policy_text:
-        resource_policy = json.loads(parsed_args.resource_policy_text)
-    else:
-        resource_policy = None
-
-    resource_owner = parsed_args.resource_owner
-
-    query_actions.query_response(
-        graph, parsed_args.query, parsed_args.skip_admin, resource_policy, resource_owner, parsed_args.include_unauthorized
-    )
-
-    return 0
-
-
-def handle_argquery(parsed_args) -> int:
-    """Processes the arguments for the argquery subcommand and executes related tasks"""
-    session = _grab_session(parsed_args)
-    graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account)
-
-    # process condition args to generate input dict
-    conditions = {}
-    if parsed_args.condition is not None:
-        for arg in parsed_args.condition:
-            # split on equals-sign (=), assume first instance separates the key and value
-            components = arg.split('=')
-            if len(components) < 2:
-                print('Format for condition args not matched: <key>=<value>')
-                return 64
-            key = components[0]
-            value = '='.join(components[1:])
-            conditions.update({key: value})
-
-    if parsed_args.grab_resource_policy:
-        if session is None:
-            raise ValueError('Resource policy retrieval requires an active session (missing --profile argument?)')
-        resource_policy = query_utils.pull_cached_resource_policy_by_arn(graph.policies, parsed_args.resource)
-    elif parsed_args.resource_policy_text:
-        resource_policy = json.loads(parsed_args.resource_policy_text)
-    else:
-        resource_policy = None
-
-    query_actions.argquery(graph, parsed_args.principal, parsed_args.action, parsed_args.resource, conditions,
-                           parsed_args.preset, parsed_args.skip_admin, resource_policy,
-                           parsed_args.resource_owner, parsed_args.include_unauthorized)
-
-    return 0
-
-
-def handle_repl(parsed_args):
-    """Processes the arguments for the query REPL and initiates"""
-    session = _grab_session(parsed_args)
-    graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account)
-
-    repl_obj = repl.PMapperREPL(graph)
-    repl_obj.begin_repl()
-
-    return 0
-
-
-def handle_visualization(parsed_args):
-    """Processes the arguments for the visualization subcommand and executes related tasks"""
-    # get Graph to draw/write
-    session = _grab_session(parsed_args)
-    graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account)
-
-    if parsed_args.only_privesc:
-        filepath = './{}-privesc-risks.{}'.format(graph.metadata['account_id'], parsed_args.filetype)
-        graph_writer.draw_privesc_paths(graph, filepath, parsed_args.filetype)
-    else:
-        # create file
-        filepath = './{}.{}'.format(graph.metadata['account_id'], parsed_args.filetype)
-        graph_writer.handle_request(graph, filepath, parsed_args.filetype)
-
-    print('Created file {}'.format(filepath))
-
-    return 0
-
-
-def handle_analysis(parsed_args):
-    """Processes the arguments for the analysis subcommand and executes related tasks"""
-    # get Graph object
-    session = _grab_session(parsed_args)
-    graph = principalmapper.graphing.graph_actions.get_existing_graph(session, parsed_args.account)
-
-    # execute analysis
-    gen_findings_and_print(graph, parsed_args.output_type)
-
-    return 0
-
-
-def _grab_session(parsed_args) -> Optional[botocore.session.Session]:
-    if parsed_args.account is None:
-        return botocore_tools.get_session(parsed_args.profile)
-    else:
-        return None
 
 
 if __name__ == '__main__':

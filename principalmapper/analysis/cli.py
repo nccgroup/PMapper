@@ -17,6 +17,10 @@
 
 from argparse import ArgumentParser, Namespace
 
+from principalmapper.analysis import find_risks
+from principalmapper.graphing import graph_actions
+from principalmapper.util import botocore_tools
+
 
 def provide_arguments(parser: ArgumentParser):
     """Given a parser object (which should be a subparser), add arguments to provide a CLI interface to the
@@ -34,3 +38,12 @@ def process_arguments(parsed_args: Namespace) -> int:
     """Given a namespace object generated from parsing args, perform the appropriate tasks. Returns an int
     matching expectations set by /usr/include/sysexits.h for command-line utilities."""
 
+    if parsed_args.account is None:
+        session = botocore_tools.get_session(parsed_args.profile)
+    else:
+        session = None
+    graph = graph_actions.get_existing_graph(session, parsed_args.account)
+
+    find_risks.gen_findings_and_print(graph, parsed_args.output_type)
+
+    return 0

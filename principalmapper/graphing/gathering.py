@@ -44,6 +44,7 @@ def create_graph(session: botocore.session.Session, service_list: list, region_a
     service list, because that is a fixed property of what pmapper supports as opposed to an unknown/uncontrolled
     list of regions that AWS supports.
     """
+
     stsclient = session.create_client('sts')
     caller_identity = stsclient.get_caller_identity()
     logger.debug("Caller Identity: {}".format(caller_identity['Arn']))
@@ -58,15 +59,6 @@ def create_graph(session: botocore.session.Session, service_list: list, region_a
     nodes_result = results['nodes']
     groups_result = results['groups']
     policies_result = results['policies']
-
-    # Gather users and roles, generating a Node per user and per role
-    # nodes_result = get_unfilled_nodes(iamclient)
-
-    # Gather groups from current list of nodes (users), generate Group objects, attach to nodes in-flight
-    # groups_result = get_unfilled_groups(iamclient, nodes_result)
-
-    # Resolve all policies, generate Policy objects, attach to all groups and nodes
-    # policies_result = get_policies_and_fill_out(iamclient, nodes_result, groups_result)
 
     # Determine which nodes are admins and update node objects
     update_admin_status(nodes_result)
