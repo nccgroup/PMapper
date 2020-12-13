@@ -29,7 +29,7 @@ def provide_arguments(parser: ArgumentParser):
     parser.add_argument(
         '--filetype',
         default='svg',
-        choices=['svg', 'png', 'dot'],
+        choices=['svg', 'png', 'dot', 'graphml'],
         help='The (lowercase) filetype to output the image as.'
     )
     parser.add_argument(

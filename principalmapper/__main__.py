@@ -108,6 +108,7 @@ def main() -> int:
 
     parsed_args = argument_parser.parse_args()
 
+    # setup our outputs here
     if parsed_args.debug:
         logging.basicConfig(
             format='%(asctime)s|%(levelname)8s|%(name)s|%(message)s',
@@ -124,6 +125,8 @@ def main() -> int:
                 logging.StreamHandler(sys.stdout)
             ]
         )
+
+    # we don't wanna hear from these loggers, even during debugging, due to the sheer volume of output
     logging.getLogger('botocore').setLevel(logging.WARNING)
     logging.getLogger('urllib3').setLevel(logging.WARNING)
     logging.getLogger('principalmapper.querying.query_interface').setLevel(logging.WARNING)

@@ -21,116 +21,34 @@ from typing import List
 
 from principalmapper.common import Graph, Node, Edge
 from principalmapper.querying.presets.privesc import can_privesc
+from principalmapper.visualizing import graphml_writer, graphviz_writer
 
 
 def handle_request(graph: Graph, path: str, file_format: str) -> None:
     """Meat of the graph_writer.py module, writes graph data in a given file-format to the given path."""
-    # Load graph data into pydot
-    pydg = pydot.Dot(
-        graph_type='digraph',
-        graph_name='Principal Mapper Visualization: {}'.format(graph.metadata['account_id']),
-        overlap='scale',
-        layout='neato',
-        concentrate='true',
-        splines='true'
-    )
-    pyd_nd = {}
 
-    for node in graph.nodes:
-        if node.is_admin:
-            color = '#BFEFFF'
-        elif can_privesc(graph, node)[0]:
-            color = '#FADBD8'
-        else:
-            color = 'white'
+    # adding extra branch to handle new GraphML format
+    if file_format == 'graphml':
+        return graphml_writer.write_standard_graphml(graph, path)
 
-        pyd_nd[node] = pydot.Node(node.searchable_name(), style='filled', fillcolor=color, shape='box')
-        pydg.add_node(pyd_nd[node])
+    elif file_format in ('svg', 'png', 'dot'):
+        return graphviz_writer.write_standard_graphviz(graph, path, file_format)
 
-    for edge in graph.edges:
-        if not edge.source.is_admin:
-            pydg.add_edge(pydot.Edge(pyd_nd[edge.source], pyd_nd[edge.destination]))
-
-    # and draw
-    pydg.write(path, format=file_format)
+    else:
+        raise ValueError('Unexpected value for parameter `file_format`')
 
 
 def draw_privesc_paths(graph: Graph, path: str, file_format: str) -> None:
     """Draws a graph using Graphviz (dot) with a specific set of nodes and edges to highlight admins and privilege
     escalation paths."""
-    pydg = pydot.Dot(
-        graph_type='digraph',
-        overlap='scale',
-        layout='dot',
-        splines='ortho',
-        rankdir='LR',
-        forcelabels='true'
-    )
 
-    pydot_nodes = {}
+    # adding extra branch to handle new GraphML format
+    if file_format == 'graphml':
+        return graphml_writer.write_privesc_graphml(graph, path)
 
-    # Need to draw in order of "rank", one new subgraph per-rank, using the edge_list length from the privesc method
-    ranked_nodes = {}
-    for node in graph.nodes:
-        if node.is_admin:
-            if 0 not in ranked_nodes:
-                ranked_nodes[0] = []
-            ranked_nodes[0].append(node)
-        else:
-            pe, edge_list = can_privesc(graph, node)
-            if pe:
-                if len(edge_list) not in ranked_nodes:
-                    ranked_nodes[len(edge_list)] = []
-                ranked_nodes[len(edge_list)].append(node)
+    elif file_format in ('svg', 'png', 'dot'):
+        return graphviz_writer.write_privesc_graphviz(graph, path, file_format)
 
-    for rank in sorted(ranked_nodes.keys()):
-        s = pydot.Subgraph(rank='same')
-        for node in ranked_nodes[rank]:
-            if node.is_admin:
-                # just draw the node and nothing more
-                pydot_node = pydot.Node(node.searchable_name(), style='filled', fillcolor='#BFEFFF', shape='box')
-                pydot_nodes[node] = pydot_node
-                s.add_node(pydot_node)
-            else:
-                # draw the node + add edge
-                pe, edge_list = can_privesc(graph, node)
-                pydot_node = pydot.Node(node.searchable_name(), style='filled', fillcolor='#FADBD8', shape='box')
-                pydot_nodes[node] = pydot_node
-                s.add_node(pydot_node)
+    else:
+        raise ValueError('Unexpected value for parameter `file_format`')
 
-                edge_to_add = pydot.Edge(node.searchable_name(), edge_list[0].destination.searchable_name(), xlabel=edge_list[0].short_reason)
-                pydg.add_edge(edge_to_add)
-
-        pydg.add_subgraph(s)
-
-    # and draw
-    pydg.write(path, format=file_format)
-
-
-def draw_specific_nodes_and_edges(graph: Graph, nodes: List[Node], edges: List[Edge], path: str, file_format: str) -> None:
-    """Draws a graph using Graphviz (dot) with a specific set of nodes and edges."""
-    pydg = pydot.Dot(
-        graph_type='digraph',
-        overlap='scale',
-        layout='neato',
-        splines='true'
-    )
-    pyd_nd = {}
-
-    for node in nodes:
-        if node.is_admin:
-            color = '#BFEFFF'
-        elif can_privesc(graph, node)[0]:
-            color = '#FADBD8'
-        else:
-            color = 'white'
-
-        pyd_nd[node] = pydot.Node(node.searchable_name(), style='filled', fillcolor=color, shape='box')
-        pydg.add_node(pyd_nd[node])
-
-    for edge in edges:
-        if not edge.source.is_admin:
-            pydg.add_edge(pydot.Edge(pyd_nd[edge.source], pyd_nd[edge.destination], label=edge.short_reason))
-
-    # and draw
-    pydg.write(path, format=file_format)
