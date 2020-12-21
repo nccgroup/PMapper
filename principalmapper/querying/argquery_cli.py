@@ -81,6 +81,10 @@ def provide_arguments(parser: ArgumentParser):
         '--resource-owner',
         help='The account ID of the owner of the resource. Required for S3 objects (which do not have it in the ARN).'
     )
+    parser.add_argument(
+        '--session-policy',
+        help='The full text of a session policy to consider during authorization evaluation.'
+    )
 
 
 def process_arguments(parsed_args: Namespace):
@@ -118,6 +122,6 @@ def process_arguments(parsed_args: Namespace):
 
     query_actions.argquery(graph, parsed_args.principal, parsed_args.action, parsed_args.resource, conditions,
                            parsed_args.preset, parsed_args.skip_admin, resource_policy,
-                           parsed_args.resource_owner, parsed_args.include_unauthorized)
+                           parsed_args.resource_owner, parsed_args.include_unauthorized, parsed_args.session_policy)
 
     return 0

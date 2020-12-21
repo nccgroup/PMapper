@@ -45,7 +45,8 @@ Available presets:
 
 
 def query_response(graph: Graph, query: str, skip_admins: bool = False, resource_policy: Optional[dict] = None,
-                   resource_owner: Optional[str] = None, include_unauthorized: bool = False) -> None:
+                   resource_owner: Optional[str] = None, include_unauthorized: bool = False,
+                   session_policy: Optional[dict] = None) -> None:
     """Interprets, executes, and outputs the results to a query."""
     result = []
 
@@ -144,6 +145,7 @@ def query_response(graph: Graph, query: str, skip_admins: bool = False, resource
                 raise ValueError('Param --resource-owner must be set if resource param does not include the '
                                  'account ID.')
 
+    # TODO: Grab SCPs from Graph for query_actions.query_response
     # Execute
     for node in nodes:
         if not skip_admins or not node.is_admin:
@@ -160,7 +162,7 @@ def query_response(graph: Graph, query: str, skip_admins: bool = False, resource
             else:
                 result.append((
                     search_authorization_full(
-                        graph, node, action, resource, condition, resource_policy, resource_owner  # TODO: Handle SCPs + session policy
+                        graph, node, action, resource, condition, resource_policy, resource_owner, None, session_policy
                     ), action, resource
                 ))
 
@@ -196,7 +198,8 @@ def _print_query_help() -> None:
 
 def argquery(graph: Graph, principal_param: Optional[str], action_param: Optional[str], resource_param: Optional[str],
              condition_param: Optional[dict], preset_param: Optional[str], skip_admins: bool = False,
-             resource_policy: dict = None, resource_owner: str = None, include_unauthorized: bool = False) -> None:
+             resource_policy: dict = None, resource_owner: str = None, include_unauthorized: bool = False,
+             session_policy: Optional[dict] = None) -> None:
     """Splits between running a normal argquery and the presets."""
     if preset_param is not None:
         if preset_param == 'privesc':
@@ -250,7 +253,8 @@ def argquery(graph: Graph, principal_param: Optional[str], action_param: Optiona
 
 def argquery_response(graph: Graph, principal_param: Optional[str], action_param: str, resource_param: Optional[str],
                       condition_param: Optional[dict], skip_admins: bool = False, resource_policy: dict = None,
-                      resource_owner: str = None, include_unauthorized: bool = False) -> None:
+                      resource_owner: str = None, include_unauthorized: bool = False,
+                      session_policy: Optional[dict] = None) -> None:
     """Prints the output of a non-preset argquery"""
     result = []
 
@@ -273,6 +277,7 @@ def argquery_response(graph: Graph, principal_param: Optional[str], action_param
         else:
             nodes = [target_node]
 
+    # TODO: Grab SCPs from graph to handle in query_actions.argquery_response
     # go through all nodes
     for node in nodes:
         if resource_policy is None:
@@ -282,7 +287,7 @@ def argquery_response(graph: Graph, principal_param: Optional[str], action_param
         else:
             result.append(
                 search_authorization_full(
-                    graph, node, action_param, resource_param, condition_param, resource_policy, resource_owner  # TODO: SCPs and Session Policy here
+                    graph, node, action_param, resource_param, condition_param, resource_policy, resource_owner, None, session_policy
                 )
             )
 
