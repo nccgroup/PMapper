@@ -24,7 +24,7 @@ from typing import Optional
 
 from principalmapper.common import Graph
 from principalmapper.querying.presets import privesc, connected, clusters
-from principalmapper.querying.query_interface import search_authorization_for, search_authorization_with_resource_policy_for
+from principalmapper.querying.query_interface import search_authorization_for, search_authorization_full
 from principalmapper.util import arns
 
 
@@ -44,8 +44,8 @@ Available presets:
 """
 
 
-def query_response(graph: Graph, query: str, skip_admins: bool = False, resource_policy: dict = None,
-                   resource_owner: str = None, include_unauthorized: bool = False) -> None:
+def query_response(graph: Graph, query: str, skip_admins: bool = False, resource_policy: Optional[dict] = None,
+                   resource_owner: Optional[str] = None, include_unauthorized: bool = False) -> None:
     """Interprets, executes, and outputs the results to a query."""
     result = []
 
@@ -159,8 +159,8 @@ def query_response(graph: Graph, query: str, skip_admins: bool = False, resource
                 )
             else:
                 result.append((
-                    search_authorization_with_resource_policy_for(
-                        graph, node, action, resource, condition, resource_policy, resource_owner
+                    search_authorization_full(
+                        graph, node, action, resource, condition, resource_policy, resource_owner  # TODO: Handle SCPs + session policy
                     ), action, resource
                 ))
 
@@ -281,8 +281,8 @@ def argquery_response(graph: Graph, principal_param: Optional[str], action_param
             )
         else:
             result.append(
-                search_authorization_with_resource_policy_for(
-                    graph, node, action_param, resource_param, condition_param, resource_policy, resource_owner
+                search_authorization_full(
+                    graph, node, action_param, resource_param, condition_param, resource_policy, resource_owner  # TODO: SCPs and Session Policy here
                 )
             )
 

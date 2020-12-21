@@ -21,7 +21,7 @@ from tests.build_test_graphs import *
 from tests.build_test_graphs import _build_user_with_policy
 
 from principalmapper.querying.local_policy_simulation import resource_policy_authorization, ResourcePolicyEvalResult
-from principalmapper.querying.query_interface import local_check_authorization_with_resource_policy
+from principalmapper.querying.query_interface import local_check_authorization_full
 
 
 class LocalResourcePolicyEvalTests(unittest.TestCase):
@@ -79,7 +79,7 @@ class LocalResourcePolicyEvalTests(unittest.TestCase):
 
         # account root + iam policy => authorized
         self.assertTrue(
-            local_check_authorization_with_resource_policy(
+            local_check_authorization_full(
                 iam_user_1,
                 'sts:AssumeRole',
                 'arn:aws:iam::000000000000:role/test1',
@@ -91,7 +91,7 @@ class LocalResourcePolicyEvalTests(unittest.TestCase):
 
         # iam policy only => not authorized
         self.assertFalse(
-            local_check_authorization_with_resource_policy(
+            local_check_authorization_full(
                 iam_user_1,
                 'sts:AssumeRole',
                 'arn:aws:iam::000000000000:role/test1',
@@ -103,7 +103,7 @@ class LocalResourcePolicyEvalTests(unittest.TestCase):
 
         # account root only => not authorized
         self.assertFalse(
-            local_check_authorization_with_resource_policy(
+            local_check_authorization_full(
                 iam_user_2,
                 'sts:AssumeRole',
                 'arn:aws:iam::000000000000:role/test1',
@@ -115,7 +115,7 @@ class LocalResourcePolicyEvalTests(unittest.TestCase):
 
         # Neither the account root nor the iam policy => not authorized
         self.assertFalse(
-            local_check_authorization_with_resource_policy(
+            local_check_authorization_full(
                 iam_user_2,
                 'sts:AssumeRole',
                 'arn:aws:iam::000000000000:role/test1',

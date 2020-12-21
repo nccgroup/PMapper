@@ -53,12 +53,17 @@ def has_matching_statement(principal: Node, effect_value: str, action_to_check: 
     return False
 
 
-def policy_has_matching_statement(policy: Policy, effect_value: str, action_to_check: str, resource_to_check: str,
+def policy_has_matching_statement(policy: Union[Policy, dict], effect_value: str, action_to_check: str, resource_to_check: str,
                                   condition_keys_to_check: dict) -> bool:
-    """Searches a specific Policy object for a statement with a matching Effect/Action/Resource/Condition"""
+    """Searches a specific Policy/dict object for a statement with a matching Effect/Action/Resource/Condition"""
+
+    if isinstance(policy, Policy):
+        base_obj = policy.policy_doc
+    else:
+        base_obj = policy
 
     # go through each policy_doc
-    for statement in _listify_dictionary(policy.policy_doc['Statement']):
+    for statement in _listify_dictionary(base_obj['Statement']):
         if statement['Effect'] != effect_value:
             continue  # skip if effect doesn't match
 

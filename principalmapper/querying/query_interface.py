@@ -50,21 +50,27 @@ def search_authorization_for(graph: Graph, principal: Node, action_to_check: str
     return QueryResult(False, [], principal)
 
 
-def search_authorization_with_resource_policy_for(graph: Graph, principal: Node, action_to_check: str,
-                                                  resource_to_check: str, condition_keys_to_check: dict,
-                                                  resource_policy: dict, resource_owner: str) -> QueryResult:
+def search_authorization_full(graph: Graph, principal: Node, action_to_check: str, resource_to_check: str,
+                              condition_keys_to_check: dict, resource_policy: Optional[dict] = None,
+                              resource_owner: Optional[str] = None, service_control_policies: List[dict] = None,
+                              session_policy: Optional[dict] = None) -> QueryResult:
     """Determines if the passed principal, or any principals it can access, can perform a given action for a
-    given resource/condition while accounting for the passed resource policy."""
+    given resource/condition. Handles an optional resource policy, an optional SCP list, and an optional
+    session policy. SCPs are considered in the full search list, but the session policy is discarded after checking
+    if the passed principal has access (we assume it is discarded after each pivot, and that it does NOT affect
+    the accessibility of the edges).
 
-    if local_check_authorization_with_resource_policy(principal, action_to_check, resource_to_check,
-                                                      condition_keys_to_check, resource_policy, resource_owner):
+    If the resource_owner param is not None, and the resource_owner param is None, the `local_check_authorization_full`
+    function that gets called will throw a ValueError, so make sure the resource ownership is sorted before calling
+    this method."""
+
+    if local_check_authorization_full(principal, action_to_check, resource_to_check, condition_keys_to_check,
+                                      resource_policy, resource_owner, service_control_policies, session_policy):
         return QueryResult(True, [], principal)
 
-    # We do NOT assume admins have access due to cross-account scenarios, but we're gonna be looking through a LOT
-    # of generated admin edges otherwise
     for edge_list in query_utils.get_search_list(graph, principal):
-        if local_check_authorization_with_resource_policy(principal, action_to_check, resource_to_check,
-                                                          condition_keys_to_check, resource_policy, resource_owner):
+        if local_check_authorization_full(principal, action_to_check, resource_to_check, condition_keys_to_check,
+                                          resource_policy, resource_owner, service_control_policies, None):
             return QueryResult(True, edge_list, principal)
 
     return QueryResult(False, [], principal)
@@ -163,68 +169,124 @@ def local_check_authorization(principal: Node, action_to_check: str, resource_to
                                       conditions_keys_copy)
 
 
-def local_check_authorization_with_resource_policy(principal: Node, action_to_check: str, resource_to_check: str,
-                                                   condition_keys_to_check: dict, resource_policy: dict,
-                                                   resource_owner: str) -> bool:
-    """Determine if a given node is authorized to make an API call. It will perform a local evaluation of the
-    attached IAM policies of the principal and the given resource policy to determine authorization.
+def local_check_authorization_full(principal: Node, action_to_check: str, resource_to_check: str,
+                                   condition_keys_to_check: dict, resource_policy: Optional[dict] = None,
+                                   resource_owner: Optional[str] = None, service_control_policies: List[dict] = None,
+                                   session_policy: Optional[dict] = None) -> bool:
+    """Determine if a given node is authorized to make an API call. It will perform a full local policy evaluation,
+    which includes:
 
-    NOTE: This will add condition keys that may be inferred, assuming they are not already set, such as the
+    * Checking for any matching Deny statements in all policies that are given
+    * Checking Organization SCPs (if given)
+    * Checking the resource policy (if given)
+    * Checking the principal's permission boundaries (if the caller has any attached)
+    * Checking the session policy (if given)
+    * Checking the principal's policies
+
+    This will add condition keys that may be inferred, assuming they are not already set, such as the
     aws:username or aws:userid keys.
-    """
+
+    If the resource_policy param is not None but the resource_owner is None, this raises a ValueError, so that must
+    be sorted beforehand by any code calling this function."""
+
+    if resource_policy is not None and resource_owner is None:
+        raise ValueError('Must specify the AWS Account ID of the owner of the resource when specifying a resource policy')
 
     conditions_keys_copy = copy.deepcopy(condition_keys_to_check)
     conditions_keys_copy.update(_infer_condition_keys(principal, conditions_keys_copy))
 
-    logger.debug('Testing authorization for: principal: {}, action: {}, resource: {}, conditions: {}, Resource Policy: {}'.format(
-        principal.arn,
-        action_to_check,
-        resource_to_check,
-        conditions_keys_copy,
-        resource_policy
-    ))
+    logger.debug(
+        'Testing authorization for: principal: {}, action: {}, resource: {}, conditions: {}, Resource Policy: {}, SCPs: {}, Session Policy: {}'.format(
+            principal.arn,
+            action_to_check,
+            resource_to_check,
+            conditions_keys_copy,
+            resource_policy,
+            service_control_policies,
+            session_policy
+        ))
 
-    # Pull permissions boundary data
-    if principal.permissions_boundary is not None:
-        pb_deny = policy_has_matching_statement(principal.permissions_boundary, 'Deny', action_to_check,
-                                                resource_to_check, conditions_keys_copy)
-        pb_allow = policy_has_matching_statement(principal.permissions_boundary, 'Allow', action_to_check,
-                                                 resource_to_check, conditions_keys_copy)
-    else:
-        pb_deny, pb_allow = None, None
-
-    # Pull resource policy authorization data
-    rp_result = resource_policy_authorization(principal, resource_owner, resource_policy, action_to_check,
-                                              resource_to_check, conditions_keys_copy)
-
-    # Pull IAM policy authorization data
-    iam_policy_allow = has_matching_statement(principal, 'Allow', action_to_check, resource_to_check,
-                                              conditions_keys_copy)
-    iam_policy_deny = has_matching_statement(principal, 'Deny', action_to_check, resource_to_check,
-                                             conditions_keys_copy)
-
-    # Knock out deny cases
-    if iam_policy_deny or rp_result == ResourcePolicyEvalResult.DENY_MATCH:
-        return False
-    if pb_deny is not None and pb_deny:
-        return False
-
-    # From here, a tangled web of scenarios based on resource ownership and service
-    if arns.get_account_id(principal.arn) == resource_owner:
-        if arns.get_service(resource_to_check) in ('iam', 'kms'):  # TODO: tuple or list?
-            # IAM or KMS, the resource policy has to match too
-            if rp_result != ResourcePolicyEvalResult.NO_MATCH and ((iam_policy_allow and (pb_allow is None or pb_allow)) or rp_result == ResourcePolicyEvalResult.NODE_MATCH):
-                return True
+    # Check all policies for a matching deny
+    for policy in principal.attached_policies:
+        if policy_has_matching_statement(policy, 'Deny', action_to_check, resource_to_check, conditions_keys_copy):
+            logger.debug('Explicit Deny: Principal\'s attached policies.')
             return False
-        # Otherwise, either the principal's policies or the resource policy need to match
-        if (iam_policy_allow and (pb_allow is None or pb_allow)) or rp_result == ResourcePolicyEvalResult.NODE_MATCH:
-            return True
-        return False
-    else:
-        # Separate accounts, the principal policies and the resource policy must allow it
-        if (iam_policy_allow and (pb_allow is None or pb_allow)) and rp_result != ResourcePolicyEvalResult.NO_MATCH:
-            return True
-        return False
+
+    if service_control_policies is not None:
+        for service_control_policy in service_control_policies:
+            if policy_has_matching_statement(service_control_policy, 'Deny', action_to_check, resource_to_check, conditions_keys_copy):
+                logger.debug('Explicit Deny: SCPs')
+                return False
+
+    if resource_policy is not None:
+        rp_matching_statements = resource_policy_matching_statements(principal, resource_policy, action_to_check, resource_to_check, conditions_keys_copy)
+        for statement in rp_matching_statements:
+            if statement['Effect'] == 'Deny':
+                logger.debug('Explicit Deny: Resource Policy')
+                return False
+
+    if session_policy is not None:
+        if policy_has_matching_statement(session_policy, 'Deny', action_to_check, resource_to_check, conditions_keys_copy):
+            logger.debug('Explict Deny: Session policy')
+            return False
+
+    if principal.permissions_boundary is not None:
+        if policy_has_matching_statement(principal.permissions_boundary, 'Deny', action_to_check, resource_to_check, conditions_keys_copy):
+            logger.debug('Explicit Deny: Permission Boundary')
+            return False
+
+    # Check SCPs
+    if service_control_policies is not None:
+        scp_result = False
+        for service_control_policy in service_control_policies:
+            if policy_has_matching_statement(service_control_policy, 'Allow', action_to_check, resource_to_check, conditions_keys_copy):
+                scp_result = True
+
+        if not scp_result:
+            logger.debug('Implicit Deny: SCPs')
+            return False
+
+    # Check resource policy
+    if resource_policy is not None:
+        rp_auth_result = resource_policy_authorization(principal, resource_owner, resource_policy, action_to_check, resource_to_check, conditions_keys_copy)
+        if arns.get_account_id(principal.arn) == resource_owner:
+            # resource is owned by account
+            if arns.get_service(resource_to_check) in ('iam', 'kms'):  # TODO: tuple or list?
+                # IAM and KMS require the trust/key policy to match
+                if rp_auth_result is not ResourcePolicyEvalResult.NODE_MATCH and rp_auth_result is not ResourcePolicyEvalResult.ROOT_MATCH:
+                    logger.debug('IAM/KMS Denial: RP must authorize even with same account')
+                    return False
+            if rp_auth_result is ResourcePolicyEvalResult.NODE_MATCH:
+                # If the specific IAM User/Role is given in the resource policy's Principal element and from the same
+                # account as the resource, we're done since we've already done deny-checks and the permission boundaries
+                # + session policy + principal policies aren't necessary to grant authorization
+                logger.debug('RP approval: skip further evaluation')
+                return True
+        else:
+            # resource is owned by another account
+            if rp_auth_result is ResourcePolicyEvalResult.NO_MATCH:
+                logger.debug('Cross-Account authorization denied')
+                return False
+
+    # Check permission boundary
+    if principal.permissions_boundary is not None:
+        if not policy_has_matching_statement(principal.permissions_boundary, 'Allow', action_to_check, resource_to_check, conditions_keys_copy):
+            logger.debug('Implicit Deny: Permission Boundary')
+            return False
+
+    # Check session policy
+    if session_policy is not None:
+        if not policy_has_matching_statement(session_policy, 'Allow', action_to_check, resource_to_check, conditions_keys_copy):
+            logger.debug('Implicit Deny: Session Policy')
+            return False
+
+    # Check principal's policies
+    for policy in principal.attached_policies:
+        if policy_has_matching_statement(policy, 'Allow', action_to_check, resource_to_check, conditions_keys_copy):
+            return True  # already did Deny statement checks, so we're done
+
+    logger.debug('Implicit Deny: Principal\'s Attached Policies')
+    return False
 
 
 def simulation_api_check_authorization(iamclient, principal: Node, action_to_check: str, resource_to_check: str,
