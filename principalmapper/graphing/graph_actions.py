@@ -31,8 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 def create_new_graph(session: botocore.session.Session, service_list: List[str], region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> Graph:
-    """Wraps around principalmapper.graphing.gathering.create_graph(...), specifying to print data to stdout. This
-    fulfills `pmapper graph create`.
+    """Wraps around principalmapper.graphing.gathering.create_graph(...) This fulfills `pmapper graph create`.
     """
 
     return gathering.create_graph(session, service_list, region_allow_list, region_deny_list)

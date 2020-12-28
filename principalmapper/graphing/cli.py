@@ -90,6 +90,25 @@ def provide_arguments(parser: ArgumentParser):
         help='List the Account IDs of graphs stored on this computer'
     )
 
+    # new args for handling AWS Organizations
+    org_create_parser = graph_subparser.add_parser(
+        'org_create',
+        description='Creates a OrganizationTree object for a given AWS Organization',
+        help='Creates a OrganizationTree object for a given AWS Organization'
+    )
+
+    org_list_parser = graph_subparser.add_parser(
+        'org_list',
+        description='Lists the IDs of the tracked OrganizationTree objects',
+        help='Lists the IDs of the tracked OrganizationTree objects'
+    )
+
+    org_display_parser = graph_subparser.add_parser(
+        'org_display',
+        description='Gives details on a given AWS Organization',
+        help='Gives details on a given AWS Organization'
+    )
+
 
 def process_arguments(parsed_args: Namespace):
     """Given a namespace object generated from parsing args, perform the appropriate tasks. Returns an int
@@ -141,5 +160,14 @@ def process_arguments(parsed_args: Namespace):
             with open(str(metadata_file)) as fd:
                 version = json.load(fd)['pmapper_version']
             print("{} (PMapper Graph Version {})".format(direct.name, version))
+
+    elif parsed_args.picked_graph_cmd == 'org_create':
+        raise NotImplementedError('TODO: org_create')
+
+    elif parsed_args.picked_graph_cmd == 'org_list':
+        raise NotImplementedError('TODO: org_create')
+
+    elif parsed_args.picked_graph_cmd == 'org_display':
+        raise NotImplementedError('TODO: org_create')
 
     return 0
