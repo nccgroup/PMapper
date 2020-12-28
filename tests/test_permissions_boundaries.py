@@ -15,6 +15,7 @@
 
 """Test functions for permissions boundaries assigned to IAM Users/Roles."""
 
+import logging
 import unittest
 
 from tests.build_test_graphs import *
@@ -30,6 +31,7 @@ class LocalPermissionsBoundaryHandlingTests(unittest.TestCase):
 
     https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_boundaries.html
     """
+
     def test_permissions_boundary_no_resource_policy(self):
         """In the case of no resource policy, the effective permissions are the "intersection" of the caller's
         identity policies + the boundary policy. Both the user's identity policies + boundary policy must

@@ -1,6 +1,4 @@
-"""Code for testing code operating on Graph objects"""
-
-#  Copyright (c) NCC Group and Erik Steringer 2019. This file is part of Principal Mapper.
+#  Copyright (c) NCC Group and Erik Steringer 2020. This file is part of Principal Mapper.
 #
 #      Principal Mapper is free software: you can redistribute it and/or modify
 #      it under the terms of the GNU Affero General Public License as published by
@@ -16,8 +14,11 @@
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 import logging
-import unittest
+import sys
 
-
-class GraphCheckingTest(unittest.TestCase):
-    pass
+logging.basicConfig(
+    stream=sys.stderr,
+    level=logging.DEBUG,
+    datefmt='%Y-%m-%d %H:%M:%S%z',
+    format='%(asctime)s | %(levelname)8s | %(name)s | %(message)s'
+)

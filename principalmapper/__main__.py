@@ -112,6 +112,7 @@ def main() -> int:
     if parsed_args.debug:
         logging.basicConfig(
             format='%(asctime)s|%(levelname)8s|%(name)s|%(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S%z',
             level=logging.DEBUG,
             handlers=[
                 logging.StreamHandler(sys.stdout)
@@ -120,6 +121,7 @@ def main() -> int:
     else:
         logging.basicConfig(
             format='%(asctime)s | %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S%z',
             level=logging.INFO,
             handlers=[
                 logging.StreamHandler(sys.stdout)

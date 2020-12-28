@@ -15,6 +15,7 @@
 
 """Test functions for local resource policy evaluation (S3 bucket policies, IAM Role Trust Docs, etc.)"""
 
+import logging
 import unittest
 
 from tests.build_test_graphs import *
