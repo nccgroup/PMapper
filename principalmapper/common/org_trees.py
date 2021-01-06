@@ -53,12 +53,17 @@ class OrganizationNode(object):
 
     def __init__(self, ou_id: str, ou_name: str, accounts: List[OrganizationAccount], child_nodes: list,
                  scps: List[Policy], tags: Optional[dict]):
+        """
+        Constructor. Note the self-referential typing.
+
+        :type child_nodes List[OrganizationNode]
+        """
         self.ou_id = ou_id
         self.ou_name = ou_name
         self.accounts = accounts
         self.child_nodes = child_nodes  # type: List[OrganizationNode]
         self.scps = scps
-        if self.tags is None:
+        if tags is None:
             self.tags = {}
         else:
             self.tags = tags
@@ -70,7 +75,7 @@ class OrganizationNode(object):
         return {
             'ou_id': self.ou_id,
             'ou_name': self.ou_name,
-            'accounts': [x.as_dictionary for x in self.accounts],
+            'accounts': [x.as_dictionary() for x in self.accounts],
             'child_nodes': [x.as_dictionary() for x in self.child_nodes],
             'scps': [x.arn for x in self.scps],
             'tags': self.tags
@@ -82,29 +87,26 @@ class OrganizationTree(object):
     accounts are organized in a hierarchy (we use a tree for this).
     """
 
-    def __init__(self, org_id: str, management_account_id: str, root_ou: OrganizationNode, tags: Optional[dict],
-                 all_scps: List[Policy], metadata: dict):
+    def __init__(self, org_id: str, management_account_id: str, root_ous: List[OrganizationNode],
+                 all_scps: List[Policy], accounts: List[str], metadata: dict):
         self.org_id = org_id
         self.management_account_id = management_account_id
-        self.root_ou = root_ou
-        if self.tags is None:
-            self.tags = {}
-        else:
-            self.tags = tags
+        self.root_ous = root_ous
         self.all_scps = all_scps
+        self.accounts = accounts
         if 'pmapper_version' not in metadata:
             raise ValueError('The pmapper_version key/value (str) is required: {"pmapper_version": "..."}')
         self.metadata = metadata
 
     def as_dictionary(self) -> dict:
         """Returns a dictionary representation of this OrganizationTree object. Used for serialization to disk. We
-        exclude the SCPs since `save_organization_to_disk` is doing that in a separate file."""
+        exclude the SCPs and metadata since `save_organization_to_disk` does those in a separate file."""
 
         return {
             'org_id': self.org_id,
             'management_account_id': self.management_account_id,
-            'root_ou': self.root_ou.as_dictionary(),
-            'tags': self.tags
+            'root_ous': [x.as_dictionary() for x in self.root_ous],
+            'accounts': self.accounts
         }
 
     def save_organization_to_disk(self, dirpath: str):
@@ -135,7 +137,8 @@ class OrganizationTree(object):
         with open(scps_filepath, 'w') as f:
             json.dump([x.to_dictionary() for x in self.all_scps], f, indent=4)
         with open(org_data_filepath, 'w') as f:
-            json.dump(self.as_dictionary(), f, indent=4)
+            org_data_dict = self.as_dictionary()
+            json.dump(org_data_dict, f, indent=4)
         os.umask(old_umask)
 
     @classmethod
@@ -173,12 +176,12 @@ class OrganizationTree(object):
             )
 
         # we have to build the OrganizationNodes first
-        root_ou = _produce_ou(org_dictrepr['root_ou'])
+        root_ous = [_produce_ou(x) for x in org_dictrepr['root_ous']]
         return OrganizationTree(
             org_dictrepr['org_id'],
             org_dictrepr['management_account_id'],
-            root_ou,
-            org_dictrepr['tags'],
+            root_ous,
             [x for x in policies.values()],
+            org_dictrepr['accounts'],
             metadata_obj
         )

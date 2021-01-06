@@ -22,6 +22,7 @@ from argparse import ArgumentParser, Namespace
 from pathlib import Path
 
 from principalmapper.graphing import graph_actions
+from principalmapper.graphing.gathering import get_organizations_data
 from principalmapper.graphing.edge_identification import checker_map
 from principalmapper.util import botocore_tools
 from principalmapper.util.storage import get_storage_root
@@ -97,6 +98,12 @@ def provide_arguments(parser: ArgumentParser):
         help='Creates a OrganizationTree object for a given AWS Organization'
     )
 
+    org_update_parser = graph_subparser.add_parser(
+        'org_update',
+        description='Updates all graphed accounts with AWS Organizations data',
+        help='Updates all graphed accounts with AWS Organizations data',
+    )
+
     org_list_parser = graph_subparser.add_parser(
         'org_list',
         description='Lists the IDs of the tracked OrganizationTree objects',
@@ -162,7 +169,20 @@ def process_arguments(parsed_args: Namespace):
             print("{} (PMapper Graph Version {})".format(direct.name, version))
 
     elif parsed_args.picked_graph_cmd == 'org_create':
-        raise NotImplementedError('TODO: org_create')
+        logger.debug('Called create subcommand for organizations')
+
+        # filter the args first
+        if parsed_args.account is not None:
+            print('Cannot specify offline-mode param `--account` when calling `pmapper graph org_create`. If you have '
+                  'credentials for a specific account to graph, you can use those credentials similar to how the '
+                  'AWS CLI works (environment variables, profiles, EC2 instance metadata). In the case of using '
+                  'a profile, use the `--profile [PROFILE]` argument before specifying the `graph` subcommand.')
+            return 64
+
+        session = botocore_tools.get_session(parsed_args.profile)
+        org_tree = get_organizations_data(session)
+        org_tree.save_organization_to_disk(os.path.join(get_storage_root(), org_tree.org_id))
+        logger.info('Generated organization data for {}'.format(org_tree.org_id))
 
     elif parsed_args.picked_graph_cmd == 'org_list':
         raise NotImplementedError('TODO: org_create')

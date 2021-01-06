@@ -111,7 +111,7 @@ def main() -> int:
     # setup our outputs here
     if parsed_args.debug:
         logging.basicConfig(
-            format='%(asctime)s|%(levelname)8s|%(name)s|%(message)s',
+            format='%(asctime)s | %(levelname)8s | %(name)s | %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S%z',
             level=logging.DEBUG,
             handlers=[

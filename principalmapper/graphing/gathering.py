@@ -23,13 +23,12 @@ import os
 import botocore.session
 import botocore.exceptions
 import principalmapper
-from principalmapper.common import Node, Group, Policy, Graph
+from principalmapper.common import Node, Group, Policy, Graph, OrganizationTree, OrganizationNode, OrganizationAccount
 from principalmapper.graphing import edge_identification
 from principalmapper.querying import query_interface
 from principalmapper.util import arns
 from principalmapper.util.botocore_tools import get_regions_to_search
-from typing import List, Optional
-
+from typing import List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -710,6 +709,138 @@ def update_admin_status(nodes: List[Node]) -> None:
                     break  # break the loop through groups
             if node.is_admin:
                 continue  # if we add more checks later, this optimizes them out when appropriate
+
+
+def get_organizations_data(session: botocore.session.Session) -> OrganizationTree:
+    """Given a botocore Session object, generate an OrganizationTree object. This throws a RuntimeError if the session
+    is for an Account that is not able to gather Organizations data, along with the reason why."""
+
+    # grab account data
+    stsclient = session.create_client('sts')
+    account_data = stsclient.get_caller_identity()
+
+    # try to grab org data, raising RuntimeError if appropriate
+    try:
+        orgsclient = session.create_client('organizations')
+        organization_data = orgsclient.describe_organization()
+    except botocore.exceptions.ClientError as ex:
+        if 'AccessDeniedException' in str(ex):
+            raise RuntimeError('Encountered a permission error. Either the current principal ({}) is not authorized to '
+                               'interact with AWS Organizations, or the current account ({}) is not the '
+                               'management account'.format(account_data['Arn'], account_data['Account']))
+        else:
+            raise ex
+
+    # compose the OrganizationTree object
+    logger.info('Generating data for organization {} through management account {}'.format(
+        organization_data['Organization']['Id'],
+        organization_data['Organization']['MasterAccountId']
+    ))
+    result = OrganizationTree(
+        organization_data['Organization']['Id'],
+        organization_data['Organization']['MasterAccountId'],
+        None,  # fill in `root_ous` later
+        None,  # get SCPs later
+        None,  # get account list later
+        {'pmapper_version': principalmapper.__version__}
+    )
+
+    scp_list = []
+    root_ous = []
+    account_ids = []
+
+    # get root IDs to start
+    logger.info('Going through roots of organization')
+    root_ids_and_names = []
+    list_roots_paginator = orgsclient.get_paginator('list_roots')
+    for page in list_roots_paginator.paginate():
+        root_ids_and_names.extend([(x['Id'], x['Name']) for x in page['Roots']])
+
+    def _get_scps_for_target(target_id: str) -> List[Policy]:
+        """This method takes an ID for a target (root, OU, or account), then composes and returns a list of Policy
+        objects for that target."""
+        scps_result = []
+        policy_id_arn_list = []
+        list_policies_paginator = orgsclient.get_paginator('list_policies_for_target')
+        for lpp_page in list_policies_paginator.paginate(TargetId=target_id, Filter='SERVICE_CONTROL_POLICY'):
+            for policy in lpp_page['Policies']:
+                policy_id_arn_list.append((policy['Id'], policy['Arn']))
+
+        for id_arn_pair in policy_id_arn_list:
+            policy_id, policy_arn = id_arn_pair
+            desc_policy_resp = orgsclient.describe_policy(PolicyId=policy_id)
+            scps_result.append(Policy(policy_arn, policy_id, json.loads(desc_policy_resp['Policy']['Content'])))
+
+        scp_list.extend(scps_result)
+        return scps_result
+
+    def _get_tags_for_target(target_id: str) -> dict:
+        """This method takes an ID for a target (root/OU/account) then composes and returns a dictionary for the
+        tags for that target"""
+        target_tags = {}
+        list_tags_paginator = orgsclient.get_paginator('list_tags_for_resource')
+        for ltp_page in list_tags_paginator.paginate(ResourceId=target_id):
+            for tag in ltp_page['Tags']:
+                target_tags[tag['Key']] = tag['Value']
+        return target_tags
+
+    # for each root, recursively grab child OUs while filling out OrganizationNode/OrganizationAccount objects
+    # need to get tags, SCPs too
+    def _compose_ou(parent_id: str, parent_name: str) -> OrganizationNode:
+        """This method takes an OU's ID and Name to compose and return an OrganizationNode object for that OU. This
+        grabs the accounts in the OU, tags for the OU, SCPs for the OU, and then gets the child OUs to recursively
+        compose those OrganizationNode objects."""
+
+        logger.info('Composing data for {}'.format(parent_id))
+
+        # Get tags for the OU
+        ou_tags = _get_tags_for_target(parent_id)
+
+        # Get SCPs for the OU
+        ou_scps = _get_scps_for_target(parent_id)
+
+        # Get accounts under the OU
+        org_account_objs = []   # type: List[OrganizationAccount]
+        list_accounts_paginator = orgsclient.get_paginator('list_accounts_for_parent')
+        ou_child_account_list = []
+        for lap_page in list_accounts_paginator.paginate(ParentId=parent_id):
+            for child_account_data in lap_page['Accounts']:
+                ou_child_account_list.append(child_account_data['Id'])
+
+        account_ids.extend(ou_child_account_list)
+        for ou_child_account_id in ou_child_account_list:
+            child_account_tags = _get_tags_for_target(ou_child_account_id)
+            child_account_scps = _get_scps_for_target(ou_child_account_id)
+            org_account_objs.append(OrganizationAccount(ou_child_account_id, child_account_scps, child_account_tags))
+
+        # get child OUs (pairs of Ids and Names)
+        child_ou_ids = []
+        list_children_paginator = orgsclient.get_paginator('list_children')
+        for lcp_page in list_children_paginator.paginate(ParentId=parent_id, ChildType='ORGANIZATIONAL_UNIT'):
+            for child in lcp_page['Children']:
+                child_ou_ids.append(child['Id'])
+
+        child_ous = []  # type: List[OrganizationNode]
+        for child_ou_id in child_ou_ids:
+            desc_ou_resp = orgsclient.describe_organizational_unit(OrganizationalUnitId=child_ou_id)
+            child_ous.append(_compose_ou(child_ou_id, desc_ou_resp['OrganizationalUnit']['Name']))
+
+        return OrganizationNode(parent_id, parent_name, org_account_objs, child_ous, ou_scps, ou_tags)
+
+    for root_id_and_name in root_ids_and_names:
+        root_ou_id, root_ou_name = root_id_and_name
+        root_ous.append(_compose_ou(root_ou_id, root_ou_name))
+
+    # apply root OUs to result
+    result.root_ous = root_ous
+
+    # apply collected SCPs to result
+    result.all_scps = scp_list
+
+    # apply collected account IDs to result
+    result.accounts = account_ids
+
+    return result
 
 
 def _get_policy_by_arn(arn: str, policies: List[Policy]) -> Optional[Policy]:
