@@ -101,7 +101,12 @@ def _infer_condition_keys(principal: Node, current_keys: dict) -> dict:
     if ':user/' in principal.arn and 'aws:username' not in current_keys:
         result['aws:username'] = principal.searchable_name().split('/')[1]
 
-    # TODO: Add aws:SecureTransport and aws:PrincipalArn ?
+    result['aws:SecureTransport'] = 'true'
+    result['aws:PrincipalAccount'] = arns.get_account_id(principal.arn)
+    result['aws:PrincipalArn'] = principal.arn
+
+    for tag_key, tag_value in principal.tags.items():
+        result['aws:PrincipalTag/{}'.format(tag_key)] = tag_value
 
     return result
 

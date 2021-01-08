@@ -713,7 +713,9 @@ def update_admin_status(nodes: List[Node]) -> None:
 
 def get_organizations_data(session: botocore.session.Session) -> OrganizationTree:
     """Given a botocore Session object, generate an OrganizationTree object. This throws a RuntimeError if the session
-    is for an Account that is not able to gather Organizations data, along with the reason why."""
+    is for an Account that is not able to gather Organizations data, along with the reason why.
+
+    The edge_list field of the OrganizationTree object is not populated. """
 
     # grab account data
     stsclient = session.create_client('sts')
@@ -742,6 +744,7 @@ def get_organizations_data(session: botocore.session.Session) -> OrganizationTre
         None,  # fill in `root_ous` later
         None,  # get SCPs later
         None,  # get account list later
+        [],  # caller is responsible for creating and setting the edge list
         {'pmapper_version': principalmapper.__version__}
     )
 
