@@ -44,7 +44,7 @@ class CloudFormationEdgeChecker(EdgeChecker):
         # Grab existing stacks in each region
         cloudformation_clients = []
         if self.session is not None:
-            cf_regions = botocore_tools.get_regions_to_search(self.session, 'cloduformation', region_allow_list, region_deny_list)
+            cf_regions = botocore_tools.get_regions_to_search(self.session, 'cloudformation', region_allow_list, region_deny_list)
             for region in cf_regions:
                 cloudformation_clients.append(self.session.create_client('cloudformation', region_name=region))
 

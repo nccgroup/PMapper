@@ -105,7 +105,7 @@ def process_arguments(parsed_args: Namespace):
         account_ou_map = _map_account_ou_paths(org_tree)
         logger.debug('account_ou_map: {}'.format(account_ou_map))
         _update_accounts_with_ou_path_map(org_tree.org_id, account_ou_map, get_storage_root())
-        logger.info('Updated currently stored accounts with applicable AWS Organizations data')
+        logger.info('Updated currently stored Graphs with applicable AWS Organizations data')
 
         # create and cache a list of edges between all the accounts we have data for
         edge_list = []
@@ -142,7 +142,7 @@ def process_arguments(parsed_args: Namespace):
         account_ou_map = _map_account_ou_paths(org_tree)
         logger.debug('account_ou_map: {}'.format(account_ou_map))
         _update_accounts_with_ou_path_map(org_tree.org_id, account_ou_map, get_storage_root())
-        logger.info('Updated currently stored accounts with applicable AWS Organizations data')
+        logger.info('Updated currently stored Graphs with applicable AWS Organizations data')
 
         # create and cache a list of edges between all the accounts we have data for
         edge_list = []
@@ -155,7 +155,8 @@ def process_arguments(parsed_args: Namespace):
                 graph_objs.append(graph_obj)
             except Exception as ex:
                 logger.warning('Unable to load a Graph object for account {}, possibly because it is not mapped yet. '
-                               'Please map all accounts and then update the Organization Tree (`pmapper graph org_update`).')
+                               'Please map all accounts and then update the Organization Tree '
+                               '(`pmapper graph org_update`).'.format(account))
                 logger.debug(str(ex))
 
         for graph_obj_a in graph_objs:

@@ -25,6 +25,7 @@ from principalmapper.graphing.cloudformation_edges import CloudFormationEdgeChec
 from principalmapper.graphing.ec2_edges import EC2EdgeChecker
 from principalmapper.graphing.iam_edges import IAMEdgeChecker
 from principalmapper.graphing.lambda_edges import LambdaEdgeChecker
+from principalmapper.graphing.sagemaker_edges import SageMakerEdgeChecker
 from principalmapper.graphing.ssm_edges import SSMEdgeChecker
 from principalmapper.graphing.sts_edges import STSEdgeChecker
 
@@ -38,6 +39,7 @@ checker_map = {
     'ec2': EC2EdgeChecker,
     'iam': IAMEdgeChecker,
     'lambda': LambdaEdgeChecker,
+    'sagemaker': SageMakerEdgeChecker,
     'ssm': SSMEdgeChecker,
     'sts': STSEdgeChecker
 }
