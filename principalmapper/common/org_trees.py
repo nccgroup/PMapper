@@ -108,7 +108,7 @@ class OrganizationTree(object):
             'org_id': self.org_id,
             'management_account_id': self.management_account_id,
             'root_ous': [x.as_dictionary() for x in self.root_ous],
-            'edge_list': [x.to_dictionary() for x in self.edge_list],
+            'edge_list': [x for x in self.edge_list],
             'accounts': self.accounts
         }
 
@@ -181,17 +181,12 @@ class OrganizationTree(object):
         # we have to build the OrganizationNodes first
         root_ous = [_produce_ou(x) for x in org_dictrepr['root_ous']]
 
-        # compose the Edge objects
-        edges = []
-        for x in org_dictrepr['edge_list']:
-            edges.append(Edge(x['source'], x['destination'], x['reason'], x['short_reason']))
-
         return OrganizationTree(
             org_dictrepr['org_id'],
             org_dictrepr['management_account_id'],
             root_ous,
             [x for x in policies.values()],
             org_dictrepr['accounts'],
-            edges,
+            org_dictrepr['edge_list'],
             metadata_obj
         )

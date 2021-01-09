@@ -22,7 +22,8 @@ import logging
 import sys
 
 from principalmapper.analysis import cli as analysis_cli
-from principalmapper.graphing import cli as graphing_cli
+from principalmapper.graphing import graph_cli
+from principalmapper.graphing import orgs_cli
 from principalmapper.querying import query_cli
 from principalmapper.querying import argquery_cli
 from principalmapper.querying import repl_cli
@@ -63,7 +64,15 @@ def main() -> int:
         description='Obtains information about a specific AWS account\'s use of IAM for analysis.',
         help='Pulls information for an AWS account\'s use of IAM.'
     )
-    graphing_cli.provide_arguments(graphparser)
+    graph_cli.provide_arguments(graphparser)
+
+    # Organizations subcommand
+    orgsparser = subparser.add_parser(
+        'orgs',
+        description='Obtains information about an AWS Organization for further analysis.',
+        help='Pulls information for an AWS Organization'
+    )
+    orgs_cli.provide_arguments(orgsparser)
 
     # Query subcommand
     queryparser = subparser.add_parser(
@@ -104,8 +113,6 @@ def main() -> int:
     )
     analysis_cli.provide_arguments(analysisparser)
 
-    # TODO: Cross-Account subcommand(s)?
-
     parsed_args = argument_parser.parse_args()
 
     # setup our outputs here
@@ -135,7 +142,9 @@ def main() -> int:
 
     logger.debug('Parsed args: {}'.format(parsed_args))
     if parsed_args.picked_cmd == 'graph':
-        return graphing_cli.process_arguments(parsed_args)
+        return graph_cli.process_arguments(parsed_args)
+    elif parsed_args.picked_cmd == 'orgs':
+        return orgs_cli.process_arguments(parsed_args)
     elif parsed_args.picked_cmd == 'query':
         return query_cli.process_arguments(parsed_args)
     elif parsed_args.picked_cmd == 'argquery':
