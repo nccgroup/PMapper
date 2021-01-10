@@ -22,8 +22,9 @@ import os.path
 import re
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
+from typing import List
 
-from principalmapper.common import OrganizationTree, OrganizationNode, Graph
+from principalmapper.common import OrganizationTree, OrganizationNode, Graph, OrganizationAccount, Policy
 from principalmapper.graphing.cross_account_edges import get_edges_between_graphs
 from principalmapper.graphing.gathering import get_organizations_data
 from principalmapper.util import botocore_tools
@@ -118,7 +119,8 @@ def process_arguments(parsed_args: Namespace):
                 graph_objs.append(graph_obj)
             except Exception as ex:
                 logger.warning('Unable to load a Graph object for account {}, possibly because it is not mapped yet. '
-                               'Please map all accounts and then update the Organization Tree (`pmapper graph org_update`).')
+                               'Please map all accounts and then update the Organization Tree '
+                               '(`pmapper graph org_update`).'.format(account))
                 logger.debug(str(ex))
 
         for graph_obj_a in graph_objs:
@@ -176,17 +178,27 @@ def process_arguments(parsed_args: Namespace):
         org_filepath = os.path.join(get_storage_root(), parsed_args.org)
         org_tree = OrganizationTree.create_from_dir(org_filepath)
 
-        def _walk_and_print(org_node: OrganizationNode, indent_level: int):
+        def _print_account(org_account: OrganizationAccount, indent_level: int, inherited_scps: List[Policy]):
+            print('{} {}:'.format(' ' * indent_level, org_account.account_id))
+            print('{}  Directly Attached SCPs: {}'.format(' ' * indent_level, [x.name for x in org_account.scps]))
+            print('{}  Inherited SCPs:         {}'.format(' ' * indent_level, [x.name for x in inherited_scps]))
+
+        def _walk_and_print_ou(org_node: OrganizationNode, indent_level: int, inherited_scps: List[Policy]):
             print('{}"{}" ({}):'.format(' ' * indent_level, org_node.ou_name, org_node.ou_id))
-            print('{}  Accounts: {}'.format(' ' * indent_level, [x.account_id for x in org_node.accounts]))
-            print('{}  Number of Attached SCPs: {}'.format(' ' * indent_level, len(org_node.scps)))
+            print('{}  Accounts:'.format(' ' * indent_level))
+            for o_account in org_node.accounts:
+                _print_account(o_account, indent_level + 2, inherited_scps)
+            print('{}  Directly Attached SCPs: {}'.format(' ' * indent_level, [x.name for x in org_node.scps]))
+            print('{}  Inherited SCPs:         {}'.format(' ' * indent_level, [x.name for x in inherited_scps]))
             print('{}  Child OUs:'.format(' ' * indent_level))
             for child_node in org_node.child_nodes:
-                _walk_and_print(child_node, indent_level + 4)
+                new_inherited_scps = inherited_scps.copy()
+                new_inherited_scps.extend([x for x in org_node.scps if x not in inherited_scps])
+                _walk_and_print_ou(child_node, indent_level + 4, new_inherited_scps)
 
         print('Organization {}:'.format(org_tree.org_id))
         for root_ou in org_tree.root_ous:
-            _walk_and_print(root_ou, 0)
+            _walk_and_print_ou(root_ou, 0, [])
 
     elif parsed_args.picked_orgs_cmd == 'list':
         print("Organization IDs:")

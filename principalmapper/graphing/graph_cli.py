@@ -145,7 +145,8 @@ def process_arguments(parsed_args: Namespace):
             if account_id_pattern.search(str(direct)) is not None:
                 metadata_file = direct.joinpath(Path('metadata.json'))
                 with open(str(metadata_file)) as fd:
-                    version = json.load(fd)['pmapper_version']
+                    account_metadata = json.load(fd)
+                version = account_metadata['pmapper_version']
                 print("{} (PMapper Version {})".format(direct.name, version))
 
     return 0

@@ -20,8 +20,8 @@ import logging
 from typing import List
 
 from principalmapper.common import Edge, Graph
-from principalmapper.querying.query_interface import resource_policy_authorization, ResourcePolicyEvalResult
-
+from principalmapper.querying.query_interface import local_check_authorization_full
+from principalmapper.util import arns
 
 logger = logging.getLogger(__name__)
 
@@ -56,16 +56,16 @@ def get_edges_between_graphs(graph_a: Graph, graph_b: Graph) -> List[Edge]:
             conditions['aws:PrincipalTag/{}'.format(tag_key)] = tag_value
 
         # check without MFA
-        rp_result = resource_policy_authorization(
+        auth_result = local_check_authorization_full(
             na,
-            gb.metadata['account_id'],
-            nb.trust_policy,
             'sts:AssumeRole',
             nb.arn,
-            conditions
+            conditions,
+            nb.trust_policy,
+            arns.get_account_id(nb.arn)
         )
 
-        if rp_result == ResourcePolicyEvalResult.DIFF_ACCOUNT_MATCH:
+        if auth_result:
             return True
 
         # check with MFA
@@ -73,30 +73,36 @@ def get_edges_between_graphs(graph_a: Graph, graph_b: Graph) -> List[Edge]:
             'aws:MultiFactorAuthAge': '1',
             'aws:MultiFactorAuthPresent': 'true'
         })
-        rp_result = resource_policy_authorization(
+        auth_result = local_check_authorization_full(
             na,
-            gb.metadata['account_id'],
-            nb.trust_policy,
             'sts:AssumeRole',
             nb.arn,
-            {
-                'aws:MultiFactorAuthAge': '1',
-                'aws:MultiFactorAuthPresent': 'true'
-            }
+            conditions,
+            nb.trust_policy,
+            arns.get_account_id(nb.arn)
         )
 
-        return rp_result == ResourcePolicyEvalResult.DIFF_ACCOUNT_MATCH
+        return auth_result
+
+    def _describe_edge(na, nb) -> str:
+        """Quick method for generating strings describing edges."""
+        return '{} -> {}'.format(
+            '{}/{}'.format(arns.get_account_id(na.arn), na.searchable_name()),
+            '{}/{}'.format(arns.get_account_id(nb.arn), nb.searchable_name())
+        )
 
     for node_a in graph_a.nodes:
         for node_b in graph_b.nodes:
             # check a -> b
             if node_b.searchable_name().startswith('role/'):
                 if _check_assume_role(graph_a, node_a, graph_b, node_b):
+                    logger.info('Found edge: {}'.format(_describe_edge(node_a, node_b)))
                     result.append(Edge(node_a, node_b, 'can call sts:AssumeRole to access', 'STS'))
 
             # check b -> a
             if node_a.searchable_name().startswith('role/'):
                 if _check_assume_role(graph_b, node_b, graph_a, node_a):
+                    logger.info('Found edge: {}'.format(_describe_edge(node_b, node_a)))
                     result.append(Edge(node_b, node_a, 'can call sts:AssumeRole to access', 'STS'))
 
     return result

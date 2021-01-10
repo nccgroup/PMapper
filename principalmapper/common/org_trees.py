@@ -108,7 +108,7 @@ class OrganizationTree(object):
             'org_id': self.org_id,
             'management_account_id': self.management_account_id,
             'root_ous': [x.as_dictionary() for x in self.root_ous],
-            'edge_list': [x for x in self.edge_list],
+            'edge_list': [x.to_dictionary() for x in self.edge_list],
             'accounts': self.accounts
         }
 

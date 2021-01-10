@@ -42,14 +42,17 @@ def print_graph_data(graph: Graph) -> None:
     `pmapper graph display`, and also gets ran after `pmapper graph --create`.
     """
     print('Graph Data for Account:  {}'.format(graph.metadata['account_id']))
+    if 'org-id' in graph.metadata:
+        print('  Organization: {}'.format(graph.metadata['org-id']))
+        print('  OU Path:      {}'.format(graph.metadata['org-path']))
     admin_count = 0
     for node in graph.nodes:
         if node.is_admin:
             admin_count += 1
-    print('# of Nodes:              {} ({} admins)'.format(len(graph.nodes), admin_count))
-    print('# of Edges:              {}'.format(len(graph.edges)))
-    print('# of Groups:             {}'.format(len(graph.groups)))
-    print('# of (tracked) Policies: {}'.format(len(graph.policies)))
+    print('  # of Nodes:              {} ({} admins)'.format(len(graph.nodes), admin_count))
+    print('  # of Edges:              {}'.format(len(graph.edges)))
+    print('  # of Groups:             {}'.format(len(graph.groups)))
+    print('  # of (tracked) Policies: {}'.format(len(graph.policies)))
 
 
 def get_graph_from_disk(location: str) -> Graph:

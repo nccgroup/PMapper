@@ -763,16 +763,18 @@ def get_organizations_data(session: botocore.session.Session) -> OrganizationTre
         """This method takes an ID for a target (root, OU, or account), then composes and returns a list of Policy
         objects for that target."""
         scps_result = []
-        policy_id_arn_list = []
+        policy_name_arn_list = []
         list_policies_paginator = orgsclient.get_paginator('list_policies_for_target')
         for lpp_page in list_policies_paginator.paginate(TargetId=target_id, Filter='SERVICE_CONTROL_POLICY'):
             for policy in lpp_page['Policies']:
-                policy_id_arn_list.append((policy['Id'], policy['Arn']))
+                policy_name_arn_list.append((policy['Name'], policy['Arn']))
 
-        for id_arn_pair in policy_id_arn_list:
-            policy_id, policy_arn = id_arn_pair
-            desc_policy_resp = orgsclient.describe_policy(PolicyId=policy_id)
-            scps_result.append(Policy(policy_arn, policy_id, json.loads(desc_policy_resp['Policy']['Content'])))
+        for name_arn_pair in policy_name_arn_list:
+            policy_name, policy_arn = name_arn_pair
+            desc_policy_resp = orgsclient.describe_policy(PolicyId=policy_arn.split('/')[-1])
+            scps_result.append(Policy(policy_arn, policy_name, json.loads(desc_policy_resp['Policy']['Content'])))
+
+        logger.debug('SCPs of {}: {}'.format(target_id, [x.arn for x in scps_result]))
 
         scp_list.extend(scps_result)
         return scps_result
@@ -785,6 +787,8 @@ def get_organizations_data(session: botocore.session.Session) -> OrganizationTre
         for ltp_page in list_tags_paginator.paginate(ResourceId=target_id):
             for tag in ltp_page['Tags']:
                 target_tags[tag['Key']] = tag['Value']
+
+        logger.debug('Tags for {}: {}'.format(target_id, target_tags))
         return target_tags
 
     # for each root, recursively grab child OUs while filling out OrganizationNode/OrganizationAccount objects
@@ -794,7 +798,7 @@ def get_organizations_data(session: botocore.session.Session) -> OrganizationTre
         grabs the accounts in the OU, tags for the OU, SCPs for the OU, and then gets the child OUs to recursively
         compose those OrganizationNode objects."""
 
-        logger.info('Composing data for {}'.format(parent_id))
+        logger.info('Composing data for "{}" ({})'.format(parent_name, parent_id))
 
         # Get tags for the OU
         ou_tags = _get_tags_for_target(parent_id)
@@ -809,6 +813,7 @@ def get_organizations_data(session: botocore.session.Session) -> OrganizationTre
         for lap_page in list_accounts_paginator.paginate(ParentId=parent_id):
             for child_account_data in lap_page['Accounts']:
                 ou_child_account_list.append(child_account_data['Id'])
+        logger.debug('Accounts: {}'.format(ou_child_account_list))
 
         account_ids.extend(ou_child_account_list)
         for ou_child_account_id in ou_child_account_list:
@@ -838,7 +843,15 @@ def get_organizations_data(session: botocore.session.Session) -> OrganizationTre
     result.root_ous = root_ous
 
     # apply collected SCPs to result
-    result.all_scps = scp_list
+    filtered_scp_list = []
+    filtered_arns = []
+    for scp in scp_list:
+        if scp.arn in filtered_arns:
+            continue
+        filtered_scp_list.append(scp)
+        filtered_arns.append(scp.arn)
+
+    result.all_scps = filtered_scp_list
 
     # apply collected account IDs to result
     result.accounts = account_ids
