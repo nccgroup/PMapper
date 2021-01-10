@@ -678,8 +678,8 @@ def resource_policy_matching_statements(node_or_service: Union[Node, str], resou
         if not matches_principal:
             continue
 
-        # if principal is good, proceed to check the Action
-        matches_action = _statement_matches_action(statement, action_to_check, condition_keys_to_check)
+        # if principal is good, proceed to check the Action, process depending on prefix
+        matches_action = _statement_matches_action(statement, action_to_check, condition_keys_to_check, True)
         if not matches_action:
             continue
 
@@ -801,19 +801,47 @@ def policies_include_matching_allow_action(principal: Node, action_to_check: str
     return False
 
 
-def _statement_matches_action(statement: dict, action: str, condition_keys: Optional[dict] = None) -> bool:
+def _statement_matches_action(statement: dict, action: str, condition_keys: Optional[dict] = None,
+                              is_resource_policy_check: bool = False) -> bool:
     """Helper function, returns True if the given action is in the given policy statement"""
+    exempted_services = ('sns', 'sqs')
     if 'Action' in statement:
         for item in _listify_string(statement['Action']):
-            if _matches_after_expansion(action, item, condition_keys):
-                return True
+            if not is_resource_policy_check:
+                if _matches_after_expansion(action, item, condition_keys):
+                    return True
+            else:
+                if action.startswith('SNS') or action.startswith('SQS') or item.startswith('SNS') or item.startswith('SQS'):
+                    action_parts = action.split(':')
+                    item_parts = action.split(':')
+                    new_action = '{}:{}'.format(action_parts[0].lower(), action_parts[1])
+                    new_item = '{}:{}'.format(item_parts[0].lower(), item_parts[1])
+                    if _matches_after_expansion(new_action, new_item, condition_keys):
+                        return True
+                else:
+                    if _matches_after_expansion(action, item, condition_keys):
+                        return True
         return False
     elif 'NotAction' in statement:
         result = True
         for item in _listify_string(statement['NotAction']):
-            if _matches_after_expansion(action, item, condition_keys):
-                result = False
-                break
+            if not is_resource_policy_check:
+                if _matches_after_expansion(action, item, condition_keys):
+                    result = False
+                    break
+            else:
+                if action.startswith('SNS') or action.startswith('SQS') or item.startswith('SNS') or item.startswith('SQS'):
+                    action_parts = action.split(':')
+                    item_parts = action.split(':')
+                    new_action = '{}:{}'.format(action_parts[0].lower(), action_parts[1])
+                    new_item = '{}:{}'.format(item_parts[0].lower(), item_parts[1])
+                    if _matches_after_expansion(new_action, new_item, condition_keys):
+                        result = False
+                        break
+                else:
+                    if _matches_after_expansion(action, item, condition_keys):
+                        result = False
+                        break
         return result
     else:
         return True

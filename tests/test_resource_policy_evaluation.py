@@ -21,7 +21,8 @@ import unittest
 from tests.build_test_graphs import *
 from tests.build_test_graphs import _build_user_with_policy
 
-from principalmapper.querying.local_policy_simulation import resource_policy_authorization, ResourcePolicyEvalResult
+from principalmapper.querying.local_policy_simulation import resource_policy_authorization, ResourcePolicyEvalResult, \
+    _statement_matches_action
 from principalmapper.querying.query_interface import local_check_authorization_full
 
 
@@ -199,3 +200,36 @@ class LocalResourcePolicyEvalTests(unittest.TestCase):
         self.assertTrue(
             rpa_result == ResourcePolicyEvalResult.NO_MATCH
         )
+
+    def test_sns_sqs_alternate_action_matching(self):
+        """Test that we handle SNS:... and SQS:... differently with respect to action matching"""
+        self.assertTrue(_statement_matches_action(
+            {
+                'Effect': 'Allow',
+                'Action': 'SQS:CreateQueue',
+                'Resource': '*'
+            },
+            'sqs:CreateQueue',
+            {},
+            True
+        ))
+        self.assertTrue(_statement_matches_action(
+            {
+                'Effect': 'Allow',
+                'Action': 'SNS:CreateTopic',
+                'Resource': '*'
+            },
+            'sns:CreateTopic',
+            {},
+            True
+        ))
+        self.assertFalse(_statement_matches_action(
+            {
+                'Effect': 'Allow',
+                'Action': 'S3:CreateBucket',
+                'Resource': '*'
+            },
+            's3:CreateTopic',
+            {},
+            True
+        ))
