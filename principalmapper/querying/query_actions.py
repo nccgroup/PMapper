@@ -197,7 +197,7 @@ def _print_query_help() -> None:
 def argquery(graph: Graph, principal_param: Optional[str], action_param: Optional[str], resource_param: Optional[str],
              condition_param: Optional[dict], preset_param: Optional[str], skip_admins: bool = False,
              resource_policy: dict = None, resource_owner: str = None, include_unauthorized: bool = False,
-             session_policy: Optional[dict] = None) -> None:
+             session_policy: Optional[dict] = None, scps: Optional[List[List[dict]]] = None) -> None:
     """Splits between running a normal argquery and the presets."""
     if preset_param is not None:
         if preset_param == 'privesc':
@@ -246,13 +246,13 @@ def argquery(graph: Graph, principal_param: Optional[str], action_param: Optiona
 
     else:
         argquery_response(graph, principal_param, action_param, resource_param, condition_param, skip_admins,
-                          resource_policy, resource_owner, include_unauthorized)
+                          resource_policy, resource_owner, include_unauthorized, session_policy, scps)
 
 
 def argquery_response(graph: Graph, principal_param: Optional[str], action_param: str, resource_param: Optional[str],
                       condition_param: Optional[dict], skip_admins: bool = False, resource_policy: dict = None,
                       resource_owner: str = None, include_unauthorized: bool = False,
-                      session_policy: Optional[dict] = None) -> None:
+                      session_policy: Optional[dict] = None, scps: Optional[List[List[dict]]] = None) -> None:
     """Prints the output of a non-preset argquery"""
     result = []
 
@@ -275,19 +275,21 @@ def argquery_response(graph: Graph, principal_param: Optional[str], action_param
         else:
             nodes = [target_node]
 
-    # TODO: Grab SCPs from graph to handle in query_actions.argquery_response
     # go through all nodes
     for node in nodes:
-        if resource_policy is None:
-            result.append(
-                search_authorization_for(graph, node, action_param, resource_param, condition_param)
+        result.append(
+            search_authorization_full(
+                graph,
+                node,
+                action_param,
+                resource_param,
+                condition_param,
+                resource_policy,
+                resource_owner,
+                scps,
+                session_policy
             )
-        else:
-            result.append(
-                search_authorization_full(
-                    graph, node, action_param, resource_param, condition_param, resource_policy, resource_owner, None, session_policy
-                )
-            )
+        )
 
     for query_result in result:
         if query_result.allowed or include_unauthorized:

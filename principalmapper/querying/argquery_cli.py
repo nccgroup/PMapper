@@ -15,14 +15,16 @@
 #      You should have received a copy of the GNU Affero General Public License
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
+import os
 from argparse import ArgumentParser, Namespace
 import json
 import logging
 
+from principalmapper.common import OrganizationTree
 from principalmapper.graphing import graph_actions
-from principalmapper.querying import query_utils, query_actions
+from principalmapper.querying import query_utils, query_actions, query_orgs
 from principalmapper.util import botocore_tools
-
+from principalmapper.util.storage import get_storage_root
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +87,11 @@ def provide_arguments(parser: ArgumentParser):
         '--session-policy',
         help='The full text of a session policy to consider during authorization evaluation.'
     )
+    parser.add_argument(
+        '--scps',
+        action='store_true',
+        help='When specified, the SCPs that apply to the account are taken into consideration.'
+    )
 
 
 def process_arguments(parsed_args: Namespace):
@@ -120,8 +127,20 @@ def process_arguments(parsed_args: Namespace):
     else:
         resource_policy = None
 
+    if parsed_args.scps:
+        if 'org-id' in graph.metadata and 'org-path' in graph.metadata:
+            org_tree_path = os.path.join(get_storage_root(), graph.metadata['org-id'])
+            org_tree = OrganizationTree.create_from_dir(org_tree_path)
+            scps = query_orgs.produce_scp_list(graph, org_tree)
+        else:
+            raise ValueError('Graph for account {} does not have an associated OrganizationTree mapped (need to run '
+                             '`pmapper orgs create/update` to get that.')
+    else:
+        scps = None
+
     query_actions.argquery(graph, parsed_args.principal, parsed_args.action, parsed_args.resource, conditions,
                            parsed_args.preset, parsed_args.skip_admin, resource_policy,
-                           parsed_args.resource_owner, parsed_args.include_unauthorized, parsed_args.session_policy)
+                           parsed_args.resource_owner, parsed_args.include_unauthorized, parsed_args.session_policy,
+                           scps)
 
     return 0

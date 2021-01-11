@@ -24,6 +24,8 @@ from principalmapper.common.nodes import Node
 from principalmapper.common.policies import Policy
 from principalmapper.querying.query_interface import local_check_authorization, local_check_authorization_handling_mfa, has_matching_statement, _infer_condition_keys
 
+logger = logging.getLogger(__name__)
+
 
 class LocalQueryingTests(unittest.TestCase):
     def test_admin_can_do_anything(self):
