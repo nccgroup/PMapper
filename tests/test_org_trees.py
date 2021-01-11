@@ -32,6 +32,47 @@ class OrgTreeTests(unittest.TestCase):
     def test_admin_cannot_bypass_scps(self):
         graph = build_graph_with_one_admin()
         principal = graph.nodes[0]
+
+        # SCP list of lists, this would be akin to an account in the root OU with the S3 service denied
+        scp_collection = [
+            [
+                {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": "*",
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            ],
+            [
+                {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": "*",
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Deny",
+                            "Action": [
+                                "s3:*"
+                            ],
+                            "Resource": "*",
+                            "Sid": "Statement1"
+                        }
+                    ]
+                }
+            ]
+        ]
         self.assertFalse(
             local_check_authorization_full(
                 principal,
@@ -40,45 +81,19 @@ class OrgTreeTests(unittest.TestCase):
                 {},
                 None,
                 None,
-                [  # SCP list of lists, this would be akin to an account in the root OU with the S3 service denied
-                    [
-                        {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": "*",
-                                    "Resource": "*"
-                                }
-                            ]
-                        }
-                    ],
-                    [
-                        {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": "*",
-                                    "Resource": "*"
-                                }
-                            ]
-                        },
-                        {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Deny",
-                                    "Action": [
-                                        "s3:*"
-                                    ],
-                                    "Resource": "*",
-                                    "Sid": "Statement1"
-                                }
-                            ]
-                        }
-                    ]
-                ],
+                scp_collection,
+                None
+            )
+        )
+        self.assertTrue(
+            local_check_authorization_full(
+                principal,
+                'ec2:RunInstances',
+                '*',
+                {},
+                None,
+                None,
+                scp_collection,
                 None
             )
         )
