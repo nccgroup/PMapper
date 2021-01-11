@@ -16,13 +16,16 @@
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 from argparse import ArgumentParser, Namespace
+import os
+import os.path
 import json
 import logging
 
+from principalmapper.common import OrganizationTree
 from principalmapper.graphing import graph_actions
-from principalmapper.querying import query_utils, query_actions
+from principalmapper.querying import query_utils, query_actions, query_orgs
 from principalmapper.util import botocore_tools
-
+from principalmapper.util.storage import get_storage_root
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +66,11 @@ def provide_arguments(parser: ArgumentParser):
         help='The full text of a session policy to consider during authorization evaluation.'
     )
     parser.add_argument(
+        '--scps',
+        action='store_true',
+        help='When specified, the SCPs that apply to the account are taken into consideration.'
+    )
+    parser.add_argument(
         'query',
         help='The query to execute.'
     )
@@ -92,9 +100,20 @@ def process_arguments(parsed_args: Namespace):
 
     resource_owner = parsed_args.resource_owner
 
+    if parsed_args.scps:
+        if 'org-id' in graph.metadata and 'org-path' in graph.metadata:
+            org_tree_path = os.path.join(get_storage_root(), graph.metadata['org-id'])
+            org_tree = OrganizationTree.create_from_dir(org_tree_path)
+            scps = query_orgs.produce_scp_list(graph, org_tree)
+        else:
+            raise ValueError('Graph for account {} does not have an associated OrganizationTree mapped (need to run '
+                             '`pmapper orgs create/update` to get that.')
+    else:
+        scps = None
+
     query_actions.query_response(
         graph, parsed_args.query, parsed_args.skip_admin, resource_policy, resource_owner,
-        parsed_args.include_unauthorized, parsed_args.session_policy
+        parsed_args.include_unauthorized, parsed_args.session_policy, scps
     )
 
     return 0

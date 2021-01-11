@@ -52,13 +52,18 @@ def search_authorization_for(graph: Graph, principal: Node, action_to_check: str
 
 def search_authorization_full(graph: Graph, principal: Node, action_to_check: str, resource_to_check: str,
                               condition_keys_to_check: dict, resource_policy: Optional[dict] = None,
-                              resource_owner: Optional[str] = None, service_control_policies: List[dict] = None,
+                              resource_owner: Optional[str] = None, service_control_policies: List[List[dict]] = None,
                               session_policy: Optional[dict] = None) -> QueryResult:
     """Determines if the passed principal, or any principals it can access, can perform a given action for a
     given resource/condition. Handles an optional resource policy, an optional SCP list, and an optional
     session policy. SCPs are considered in the full search list, but the session policy is discarded after checking
     if the passed principal has access (we assume it is discarded after each pivot, and that it does NOT affect
     the accessibility of the edges).
+
+    In `local_check_authorization` we usually throw up our hands if the given principal is an admin. But, because of
+    how SCPs work (even blocking the root user), we force the full search to give more accurate results. If the
+    SCPs param is None, we assume no SCPs are in place and can make the same assumption as in
+    `local_check_authorization`.
 
     If the resource_owner param is not None, and the resource_owner param is None, the `local_check_authorization_full`
     function that gets called will throw a ValueError, so make sure the resource ownership is sorted before calling
@@ -67,6 +72,9 @@ def search_authorization_full(graph: Graph, principal: Node, action_to_check: st
     if local_check_authorization_full(principal, action_to_check, resource_to_check, condition_keys_to_check,
                                       resource_policy, resource_owner, service_control_policies, session_policy):
         return QueryResult(True, [], principal)
+
+    if service_control_policies is None and principal.is_admin:
+        return QueryResult(True, principal, principal)
 
     for edge_list in query_utils.get_search_list(graph, principal):
         if local_check_authorization_full(principal, action_to_check, resource_to_check, condition_keys_to_check,
@@ -110,9 +118,9 @@ def _infer_condition_keys(principal: Node, current_keys: dict) -> dict:
     if 'aws:PrincipalArn' not in current_keys:
         result['aws:PrincipalArn'] = principal.arn
 
-    # TODO: handle principal tags better eventually
-    # for tag_key, tag_value in principal.tags.items():
-    #     result['aws:PrincipalTag/{}'.format(tag_key)] = tag_value
+    for tag_key, tag_value in principal.tags.items():
+        if 'aws:PrincipalTag/{}'.format(tag_key) not in current_keys:
+            result['aws:PrincipalTag/{}'.format(tag_key)] = tag_value
 
     return result
 
@@ -182,7 +190,8 @@ def local_check_authorization(principal: Node, action_to_check: str, resource_to
 
 def local_check_authorization_full(principal: Node, action_to_check: str, resource_to_check: str,
                                    condition_keys_to_check: dict, resource_policy: Optional[dict] = None,
-                                   resource_owner: Optional[str] = None, service_control_policies: List[dict] = None,
+                                   resource_owner: Optional[str] = None,
+                                   service_control_policy_groups: Optional[List[List[dict]]] = None,
                                    session_policy: Optional[dict] = None) -> bool:
     """Determine if a given node is authorized to make an API call. It will perform a full local policy evaluation,
     which includes:
@@ -213,7 +222,7 @@ def local_check_authorization_full(principal: Node, action_to_check: str, resour
             resource_to_check,
             conditions_keys_copy,
             resource_policy,
-            service_control_policies,
+            service_control_policy_groups,
             session_policy
         ))
 
@@ -223,11 +232,12 @@ def local_check_authorization_full(principal: Node, action_to_check: str, resour
             logger.debug('Explicit Deny: Principal\'s attached policies.')
             return False
 
-    if service_control_policies is not None:
-        for service_control_policy in service_control_policies:
-            if policy_has_matching_statement(service_control_policy, 'Deny', action_to_check, resource_to_check, conditions_keys_copy):
-                logger.debug('Explicit Deny: SCPs')
-                return False
+    if service_control_policy_groups is not None:
+        for service_control_policy_group in service_control_policy_groups:
+            for service_control_policy in service_control_policy_group:
+                if policy_has_matching_statement(service_control_policy, 'Deny', action_to_check, resource_to_check, conditions_keys_copy):
+                    logger.debug('Explicit Deny: SCPs')
+                    return False
 
     if resource_policy is not None:
         rp_matching_statements = resource_policy_matching_statements(principal, resource_policy, action_to_check, resource_to_check, conditions_keys_copy)
@@ -247,15 +257,20 @@ def local_check_authorization_full(principal: Node, action_to_check: str, resour
             return False
 
     # Check SCPs
-    if service_control_policies is not None:
-        scp_result = False
-        for service_control_policy in service_control_policies:
-            if policy_has_matching_statement(service_control_policy, 'Allow', action_to_check, resource_to_check, conditions_keys_copy):
-                scp_result = True
+    if service_control_policy_groups is not None:
+        for service_control_policy_group in service_control_policy_groups:
+            # For every group of SCPs (policies attached to the ancestors of the account and the current account), the
+            # group of SCPs have to have a matching allow statement
+            scp_group_result = False
+            for service_control_policy in service_control_policy_group:
+                if policy_has_matching_statement(service_control_policy, 'Allow', action_to_check, resource_to_check,
+                                                 conditions_keys_copy):
+                    scp_group_result = True
+                    break
 
-        if not scp_result:
-            logger.debug('Implicit Deny: SCPs')
-            return False
+            if not scp_group_result:
+                logger.debug('Implicit Deny: SCP group')
+                return False
 
     # Check resource policy
     if resource_policy is not None:

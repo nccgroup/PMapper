@@ -20,7 +20,7 @@ import io
 import logging
 import os
 import re
-from typing import Optional
+from typing import Optional, List
 
 from principalmapper.common import Graph
 from principalmapper.querying.presets import privesc, connected, clusters
@@ -46,7 +46,7 @@ Available presets:
 
 def query_response(graph: Graph, query: str, skip_admins: bool = False, resource_policy: Optional[dict] = None,
                    resource_owner: Optional[str] = None, include_unauthorized: bool = False,
-                   session_policy: Optional[dict] = None) -> None:
+                   session_policy: Optional[dict] = None, scps: Optional[List[List[dict]]] = None) -> None:
     """Interprets, executes, and outputs the results to a query."""
     result = []
 
@@ -145,26 +145,24 @@ def query_response(graph: Graph, query: str, skip_admins: bool = False, resource
                 raise ValueError('Param --resource-owner must be set if resource param does not include the '
                                  'account ID.')
 
-    # TODO: Grab SCPs from Graph for query_actions.query_response
     # Execute
     for node in nodes:
         if not skip_admins or not node.is_admin:
-            if resource_policy is None:
-                result.append((
-                    search_authorization_for(
-                        graph,
-                        node,
-                        action,
-                        resource,
-                        condition,
-                    ), action, resource)
-                )
-            else:
-                result.append((
-                    search_authorization_full(
-                        graph, node, action, resource, condition, resource_policy, resource_owner, None, session_policy
-                    ), action, resource
-                ))
+            result.append((
+                search_authorization_full(
+                    graph,
+                    node,
+                    action,
+                    resource,
+                    condition,
+                    resource_policy,
+                    resource_owner,
+                    scps,
+                    session_policy
+                ),
+                action,
+                resource
+            ))
 
     # Print
     for query_result, action, resource in result:

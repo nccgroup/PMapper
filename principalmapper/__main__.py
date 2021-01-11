@@ -41,13 +41,13 @@ def main() -> int:
         help='The AWS CLI (botocore) profile to use to call the AWS API.'
     )  # Note: do NOT set the default, we want to know if the profile arg was specified or not
     argument_parser.add_argument(
+        '--account',
+        help='When running offline operations, this parameter determines which account to act against.'
+    )
+    argument_parser.add_argument(
         '--debug',
         action='store_true',
         help='Produces debug-level output of the underlying Principal Mapper library during execution.'
-    )
-    argument_parser.add_argument(
-        '--account',
-        help='When running offline operations, this parameter determines which account to act against.'
     )
 
     # Create subparser for various subcommands
