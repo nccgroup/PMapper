@@ -125,7 +125,7 @@ def search_authorization_across_accounts(graph_scp_pairs: List[Tuple[Graph, Opti
 
     for edge_list in query_utils.get_interaccount_search_list([x[0] for x in graph_scp_pairs], inter_account_edges, principal):
         proxy_principal = edge_list[-1].destination
-        proxy_principal_scps = account_id_graph_scp_pair_map[arns.get_account_id(proxy_principal.arn)]
+        proxy_principal_scps = account_id_graph_scp_pair_map[arns.get_account_id(proxy_principal.arn)][1]
         if local_check_authorization_full(edge_list[-1].destination, action_to_check, resource_to_check, condition_keys_to_check,
                                           resource_policy, resource_owner, proxy_principal_scps, None):
             return QueryResult(True, edge_list, principal)
