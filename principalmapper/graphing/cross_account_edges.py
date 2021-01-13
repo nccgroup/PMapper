@@ -17,7 +17,7 @@
 
 import datetime as dt
 import logging
-from typing import List
+from typing import List, Optional
 
 from principalmapper.common import Edge, Graph
 from principalmapper.querying.query_interface import local_check_authorization_full
@@ -26,13 +26,13 @@ from principalmapper.util import arns
 logger = logging.getLogger(__name__)
 
 
-def get_edges_between_graphs(graph_a: Graph, graph_b: Graph) -> List[Edge]:
+def get_edges_between_graphs(graph_a: Graph, graph_b: Graph, scps_a: Optional[List[List[dict]]] = None, scps_b: Optional[List[List[dict]]] = None) -> List[Edge]:
     """Given two Graph objects, return a list of Edge objects that represent the connections between
     the two Graphs (both to and from). Currently only does sts:AssumeRole checks."""
 
     result = []  # type: List[Edge]
 
-    def _check_assume_role(ga, na, gb, nb) -> bool:
+    def _check_assume_role(ga, na, gb, nb, scps) -> bool:
         logger.debug('Checking if {} can access {}'.format(na.arn, nb.arn))
 
         # load up conditions: inspired by _infer_condition_keys
@@ -62,7 +62,8 @@ def get_edges_between_graphs(graph_a: Graph, graph_b: Graph) -> List[Edge]:
             nb.arn,
             conditions,
             nb.trust_policy,
-            arns.get_account_id(nb.arn)
+            arns.get_account_id(nb.arn),
+            scps
         )
 
         if auth_result:
@@ -79,7 +80,8 @@ def get_edges_between_graphs(graph_a: Graph, graph_b: Graph) -> List[Edge]:
             nb.arn,
             conditions,
             nb.trust_policy,
-            arns.get_account_id(nb.arn)
+            arns.get_account_id(nb.arn),
+            scps
         )
 
         return auth_result
@@ -95,13 +97,13 @@ def get_edges_between_graphs(graph_a: Graph, graph_b: Graph) -> List[Edge]:
         for node_b in graph_b.nodes:
             # check a -> b
             if node_b.searchable_name().startswith('role/'):
-                if _check_assume_role(graph_a, node_a, graph_b, node_b):
+                if _check_assume_role(graph_a, node_a, graph_b, node_b, scps_a):
                     logger.info('Found edge: {}'.format(_describe_edge(node_a, node_b)))
                     result.append(Edge(node_a, node_b, 'can call sts:AssumeRole to access', 'STS'))
 
             # check b -> a
             if node_a.searchable_name().startswith('role/'):
-                if _check_assume_role(graph_b, node_b, graph_a, node_a):
+                if _check_assume_role(graph_b, node_b, graph_a, node_a, scps_b):
                     logger.info('Found edge: {}'.format(_describe_edge(node_b, node_a)))
                     result.append(Edge(node_b, node_a, 'can call sts:AssumeRole to access', 'STS'))
 

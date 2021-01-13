@@ -33,6 +33,9 @@ def produce_scp_list(graph: Graph, org: OrganizationTree) -> Optional[List[List[
         raise ValueError('Given graph for account {} does not have AWS Organizations data (try running '
                          '`pmapper orgs create/update`).')
 
+    if graph.metadata['account_id'] == org.management_account_id:
+        return None
+
     result = []
 
     # org-path is in the form '<organization ID>/<root ID>/[<OU 1>/<OU 2>/<OU N>/]' so we split and start from [1]

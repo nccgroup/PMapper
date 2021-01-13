@@ -41,6 +41,18 @@ cd PMapper
 pip install .
 ~~~
 
+## Using Docker
+
+~~~bash
+cd PMapper
+docker build -t $TAG .
+docker run -it $TAG
+~~~
+
+You should use `-e|--env` or `--env-file` to pass the `AWS_*` environment variables for credentials when calling
+`docker run ...`. The current Dockerfile should put you into a shell with `pmapper -h` ready to go as well as 
+`graphviz` already installed.
+
 # Usage
 
 ## Graphing
@@ -48,17 +60,46 @@ pip install .
 To start, create a graph for an AWS account:
 
 ~~~bash
-pmapper graph --create
+pmapper graph create
 ~~~
 
 This stores information locally on disk about all the IAM users, roles, groups, and policies in the account. Accounts 
 that are already graphed can be found using:
 
 ~~~bash
-pmapper graph --list
+pmapper graph list
 ~~~
 
 The account IDs that are printed can be used in other `pmapper` subcommands via the `--account` parameter.
+
+## Organizations Mapping
+
+With credentials for a principal within the the management account of an AWS Organization, you can map out the 
+structure of the organization:
+
+~~~bash
+pmapper orgs create
+~~~
+
+The organizations that have been mapped can be listed out:
+
+~~~bash
+pmapper orgs list
+~~~
+
+You can review the contents of the organization:
+
+~~~bash
+pmapper orgs display --org $ORG_ID
+~~~
+
+When you map an organization, the local account Graphs are updated with information on the organization. If you 
+create a new Graph for an account with the organization, you'll need to run an update so that Graph has that 
+organization linked.
+
+~~~bash
+pmapper orgs update --org $ORG_ID
+~~~ 
 
 ## Querying
 
@@ -181,18 +222,14 @@ Future major-version revisions (e.g. 1.X.X -> 2.0.0) of Principal Mapper may alt
 Minor-version revisions (e.g. 1.1.X -> 1.2.0) will not remove existing functions/classes/methods but may add new ones 
 or alter their behaviors.
 
-**Exception:** All instances of the `debug` parameter in all of the functions in this library, which is used by the 
-`dprint` function, will eventually be removed as the logging bits are improved. Just keep the `debug` parameter out 
-of your production code. `dprint` is gonna be replaced too.
-
 ## Packages of Interest
 
 ### Common
 
 * `principalmapper.common`
-   * Classes `Graph`, `Node`, `Edge`, `Group`, and `Policy`. These can be imported 
-   straight through `principalmapper.common` with a single statement:
-   
+   * Classes `Graph`, `Node`, `Edge`, `Group`, `Policy`, `OrganizationTree`, `OrganizationNode`, and `OrganizationAccount`. 
+   These can be imported straight through `principalmapper.common` with a single statement such as:
+      
       ~~~python
       from principalmapper.common import Graph, Node, Edge
       ~~~
@@ -205,6 +242,8 @@ of your production code. `dprint` is gonna be replaced too.
    * function `get_graph_from_disk`: grabs a Graph object from disk, user-specified directory.
 * `principalmapper.graphing.gathering` 
    * function `create_graph`: generates Graph objects using a botocore Session object.
+   * function `get_organizations_data` generates OrganizationTree objects using a botocore Session object. It must 
+   be called from the management account of the Organization.
 * `principalmapper.graphing.edge_identification` 
    * variable `checker_map`: a dictionary, the keys of which are services that this version of Principal Mapper can get 
    edge data from. This should always be updated with all services that are supported, and `checker_map.keys()` can 
@@ -213,16 +252,19 @@ of your production code. `dprint` is gonna be replaced too.
 ### Querying
 
 * `principalmapper.querying.query_interface`
-   * function `search_authorization_for`: performs an expansive search to determine if a principal can make a given 
+   * function `search_authorization_full`: performs an expansive search to determine if a principal can make a given 
    AWS API call, or if the principal can access another that does have permission. Returns `QueryResult` objects 
    (defined in `principalmapper.querying.query_result`) with information on if the principal is authorized, or if 
    it has to chain through other principals with authorization.
-   * function `local_check_authorization`: determines if a principal can make a given AWS API call, but **DOES NOT** 
-   perform the expansive search of `search_authorization_for`.
+   * function `local_check_authorization_full`: determines if a principal can make a given AWS API call, but **DOES NOT** 
+   perform the expansive search of `search_authorization_for`. It 
    * function `local_check_authorization_handling_mfa`: determines if a principal can make a given AWS API call, 
    **DOES NOT** perform the expansive search of `search_authorization_for`, but **DOES** manipulate condition keys 
    to test if the AWS API call can be made with or without MFA. Note that you can achieve the same effect by calling 
    `local_check_authorization` and setting the multi-factor auth conditions.
+
+Note that the `*_full` functions are built to do full analysis which includes session policies, SCPs, and permission 
+boundaries.
 
 ### Visualizing
 
@@ -249,7 +291,7 @@ of your production code. `dprint` is gonna be replaced too.
    * function `get_session`: get a botocore Session object based on optional profile parameter.
 * `principalmapper.util.storage`:
    * function `get_storage_root`: returns a path on disk that Principal Mapper will use for storing Graph data by 
-   default. Output depends on OS.
+   default. Output depends on OS and environment variables.
 
 # License
 

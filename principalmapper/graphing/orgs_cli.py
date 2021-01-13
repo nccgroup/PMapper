@@ -27,6 +27,7 @@ from typing import List
 from principalmapper.common import OrganizationTree, OrganizationNode, Graph, OrganizationAccount, Policy
 from principalmapper.graphing.cross_account_edges import get_edges_between_graphs
 from principalmapper.graphing.gathering import get_organizations_data
+from principalmapper.querying.query_orgs import produce_scp_list
 from principalmapper.util import botocore_tools
 from principalmapper.util.storage import get_storage_root
 
@@ -127,7 +128,9 @@ def process_arguments(parsed_args: Namespace):
             for graph_obj_b in graph_objs:
                 if graph_obj_a == graph_obj_b:
                     continue
-                edge_list.extend(get_edges_between_graphs(graph_obj_a, graph_obj_b))
+                graph_a_scps = produce_scp_list(graph_obj_a, org_tree)
+                graph_b_scps = produce_scp_list(graph_obj_b, org_tree)
+                edge_list.extend(get_edges_between_graphs(graph_obj_a, graph_obj_b, graph_a_scps, graph_b_scps))
 
         org_tree.edge_list = edge_list
         logger.info('Compiled cross-account edges')
@@ -165,7 +168,9 @@ def process_arguments(parsed_args: Namespace):
             for graph_obj_b in graph_objs:
                 if graph_obj_a == graph_obj_b:
                     continue
-                edge_list.extend(get_edges_between_graphs(graph_obj_a, graph_obj_b))
+                graph_a_scps = produce_scp_list(graph_obj_a, org_tree)
+                graph_b_scps = produce_scp_list(graph_obj_b, org_tree)
+                edge_list.extend(get_edges_between_graphs(graph_obj_a, graph_obj_b, graph_a_scps, graph_b_scps))
 
         org_tree.edge_list = edge_list
         logger.info('Compiled cross-account edges')

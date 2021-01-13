@@ -176,3 +176,59 @@ def pull_resource_policy_by_arn(session: botocore.session.Session, arn: Optional
         logger.debug('Calling KMS API to retrieve key policy of {}'.format(arn))
         key_policy = json.loads(client.get_key_policy(KeyId=arn, PolicyName='default')['Policy'])
         return key_policy
+
+
+def get_interaccount_search_list(all_graphs: List[Graph], inter_account_edges: List[Edge], node: Node) -> List[List[Edge]]:
+    """Returns a list of edge lists. Each edge list represents a path to a new unique node that's accessible from the
+    initial node (passed as a param). This is a breadth-first search, and the returned list of lists of edges will
+    represent the different available paths.
+    """
+
+    result = []
+    nodes_found = [node]
+    nodes_explored = []
+
+    account_id_graph_map = {}
+    for graph in all_graphs:
+        account_id_graph_map[graph.metadata['account_id']] = graph
+
+    # Get initial list of edges
+    first_set = get_edges_interaccount(account_id_graph_map[arns.get_account_id(node.arn)], inter_account_edges, node, nodes_found)
+    for found_edge in first_set:
+        nodes_found.append(found_edge.destination)
+        result.append([found_edge])
+    nodes_explored.append(node)
+
+    # dig through result list
+    index = 0
+    while index < len(result):
+        current_node = result[index][-1].destination
+        if current_node not in nodes_explored:
+            for edge in get_edges_interaccount(account_id_graph_map[arns.get_account_id(current_node.arn)], inter_account_edges, current_node, nodes_found):
+                result.append(result[index][:] + [edge])
+                if edge.destination not in nodes_found:
+                    nodes_found.append(edge.destination)
+            nodes_explored.append(current_node)
+        index += 1
+
+    return result
+
+
+def get_edges_interaccount(source_graph: Graph, inter_account_edges: List[Edge], node: Node, ignored_nodes: List[Node]) -> List[Edge]:
+    """Given a Node, the Graph it belongs to, a list of inter-account Edges, and a list of Nodes to skip, this returns
+    any Edges where the Node is the source element as long as the destination element isn't included in the skipped Nodes.
+
+    If the given node is an admin, those Edge objects get generated and returned.
+    """
+
+    result = []
+
+    for outbound_edge in node.get_outbound_edges(source_graph):
+        if outbound_edge.destination not in ignored_nodes:
+            result.append(outbound_edge)
+
+    for inter_account_edge in inter_account_edges:
+        if inter_account_edge.source == node and inter_account_edge.destination not in ignored_nodes:
+            result.append(inter_account_edge)
+
+    return result

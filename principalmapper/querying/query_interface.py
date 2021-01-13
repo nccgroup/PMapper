@@ -19,8 +19,9 @@
 import copy
 import hashlib
 import logging
+from typing import Tuple
 
-from principalmapper.common import Graph
+from principalmapper.common import Graph, Edge
 from principalmapper.querying import query_utils
 from principalmapper.querying.local_policy_simulation import *
 from principalmapper.querying.query_result import QueryResult
@@ -52,7 +53,7 @@ def search_authorization_for(graph: Graph, principal: Node, action_to_check: str
 
 def search_authorization_full(graph: Graph, principal: Node, action_to_check: str, resource_to_check: str,
                               condition_keys_to_check: dict, resource_policy: Optional[dict] = None,
-                              resource_owner: Optional[str] = None, service_control_policies: List[List[dict]] = None,
+                              resource_owner: Optional[str] = None, service_control_policies: List[List[Policy]] = None,
                               session_policy: Optional[dict] = None) -> QueryResult:
     """Determines if the passed principal, or any principals it can access, can perform a given action for a
     given resource/condition. Handles an optional resource policy, an optional SCP list, and an optional
@@ -77,8 +78,56 @@ def search_authorization_full(graph: Graph, principal: Node, action_to_check: st
         return QueryResult(True, principal, principal)
 
     for edge_list in query_utils.get_search_list(graph, principal):
-        if local_check_authorization_full(principal, action_to_check, resource_to_check, condition_keys_to_check,
+        if local_check_authorization_full(edge_list[-1].destination, action_to_check, resource_to_check, condition_keys_to_check,
                                           resource_policy, resource_owner, service_control_policies, None):
+            return QueryResult(True, edge_list, principal)
+
+    return QueryResult(False, [], principal)
+
+
+def search_authorization_across_accounts(graph_scp_pairs: List[Tuple[Graph, Optional[List[List[Policy]]]]],
+                                         inter_account_edges: List[Edge], principal: Node,
+                                         action_to_check: str, resource_to_check: str,
+                                         condition_keys_to_check: dict, resource_policy: Optional[dict] = None,
+                                         resource_owner: Optional[str] = None,
+                                         session_policy: Optional[dict] = None) -> QueryResult:
+    """Determines if the passed principal, or any principals it can access, can perform a given action for a
+    given resource/condition. Handles an optional resource policy, an optional SCP list, and an optional
+    session policy. The session policy is discarded after checking if the passed principal has access
+    (we assume it is discarded after each pivot, and that it does NOT affect the accessibility of the edges).
+
+    In `local_check_authorization` we usually throw up our hands if the given principal is an admin. But, because of
+    how SCPs work (even blocking the root user), we force the full search to give more accurate results. If the
+    SCPs param is None, we assume no SCPs are in place and can make the same assumption as in
+    `local_check_authorization`.
+
+    If the resource_owner param is not None, and the resource_owner param is None, the `local_check_authorization_full`
+    function that gets called will throw a ValueError, so make sure the resource ownership is sorted before calling
+    this method.
+
+    The graphs to include in the search have to be passed in tuples. The second element of the tuple is either the SCPs
+    that affect that graph or None. If your graph belongs to an organization, remember that you can take the
+    OrganizationTree object and produce the applicable SCPs by calling
+    principalmapper.querying.query_orgs.produce_scp_list and passing the graph + org-tree objects."""
+
+    account_id_graph_scp_pair_map = {}
+    for graph_scp_pair in graph_scp_pairs:
+        account_id_graph_scp_pair_map[graph_scp_pair[0].metadata['account_id']] = graph_scp_pair
+    source_graph_scp_pair = account_id_graph_scp_pair_map[arns.get_account_id(principal.arn)]
+
+    if local_check_authorization_full(principal, action_to_check, resource_to_check, condition_keys_to_check,
+                                      resource_policy, resource_owner, source_graph_scp_pair[1], session_policy):
+        return QueryResult(True, [], principal)
+
+    # now we have to check cross-account scenario for admin short-circuit
+    if source_graph_scp_pair[1] is None and principal.is_admin and resource_owner == arns.get_account_id(principal.arn):
+        return QueryResult(True, principal, principal)
+
+    for edge_list in query_utils.get_interaccount_search_list([x[0] for x in graph_scp_pairs], inter_account_edges, principal):
+        proxy_principal = edge_list[-1].destination
+        proxy_principal_scps = account_id_graph_scp_pair_map[arns.get_account_id(proxy_principal.arn)]
+        if local_check_authorization_full(edge_list[-1].destination, action_to_check, resource_to_check, condition_keys_to_check,
+                                          resource_policy, resource_owner, proxy_principal_scps, None):
             return QueryResult(True, edge_list, principal)
 
     return QueryResult(False, [], principal)
@@ -191,7 +240,7 @@ def local_check_authorization(principal: Node, action_to_check: str, resource_to
 def local_check_authorization_full(principal: Node, action_to_check: str, resource_to_check: str,
                                    condition_keys_to_check: dict, resource_policy: Optional[dict] = None,
                                    resource_owner: Optional[str] = None,
-                                   service_control_policy_groups: Optional[List[List[dict]]] = None,
+                                   service_control_policy_groups: Optional[List[List[Policy]]] = None,
                                    session_policy: Optional[dict] = None) -> bool:
     """Determine if a given node is authorized to make an API call. It will perform a full local policy evaluation,
     which includes:
