@@ -4,6 +4,6 @@ COPY . /app
 RUN apt-get update ; apt-get install -y graphviz
 RUN mkdir -p /storage
 RUN pip install /app
-ENV XDG_DATA_HOME /storage
+ENV PMAPPER_STORAGE /storage
 
 CMD sh

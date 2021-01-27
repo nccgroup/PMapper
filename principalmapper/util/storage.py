@@ -24,12 +24,16 @@ def get_storage_root():
     """Locates and returns a path to the storage root, depending on OS. If the path does not exist yet, it is
     created.
 
-    Uses per-platform locations recommended by:
+    First, it checks for the environment variable PMAPPER_STORAGE and uses that if set. Then, it goes for
+    per-platform locations recommended by:
     https://stackoverflow.com/questions/3373948/equivalents-of-xdg-config-home-and-xdg-data-home-on-mac-os-x
     """
     platform = sys.platform
+    pmapper_env_var = os.getenv('PMAPPER_STORAGE')
     result = None
-    if platform == 'win32' or platform == 'cygwin':
+    if pmapper_env_var is not None:
+        result = pmapper_env_var
+    elif platform == 'win32' or platform == 'cygwin':
         # Windows: file root at %APPDATA%\principalmapper\
         appdatadir = os.getenv('APPDATA')
         if appdatadir is None:
