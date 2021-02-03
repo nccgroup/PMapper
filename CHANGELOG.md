@@ -11,6 +11,8 @@ All notable changes to the project shall be documented in this file.
 * Added support for obtaining AWS Organizations data (OrganizationTree objects) and the `orgs` subcommand
 * Implemented logging with `logging` module for the library
 * Added new findings for `analysis` submodule/command
+* Added new output format for `visualization`: GraphML
+* Added support for the `PMAPPER_STORAGE` environment variable to set a custom location where Graph/OrganizationTree data is stored
 * Added a starter Dockerfile (should work with modifications to add creds via env vars or from an EC2 instance with an instance profile assigned)
 * Various bugfixes and improvements
 
@@ -21,13 +23,16 @@ All notable changes to the project shall be documented in this file.
 ### Removed
 
 * (Library code) Most instances of `dprint`, `debug` params, `output` params except for `write_*` functions. Replaced `write_*` functions with `print_*` functions.
+* (Library code) Dropping support for certain code in `principalmapper.gathering`: `get_unfilled_*`, `get_policies_and_fill_out`. You should use `get_nodes_groups_and_policies` instead.
 
 ### Special Thanks
 
 * @yehudacohen
 * @pr454nn4kum4r
-* NCC Group's Research Team
-* The folks at Lyft's Cartography Project
+* @kmcquade
+* @danieladams456
+* All my colleagues at NCC Group
+* Rami McCarthy
 
 ## 1.0.1
 

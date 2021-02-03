@@ -70,10 +70,10 @@ def provide_arguments(parser: ArgumentParser):
     )
     argquery_rpolicy_args = parser.add_mutually_exclusive_group()
     argquery_rpolicy_args.add_argument(
-        '--grab-resource-policy',
+        '--with-resource-policy',
         action='store_true',
-        help='Retrieves the resource policy for the resource given by the --resource parameter. Handles S3, IAM, SNS, '
-             'SQS, and KMS. Requires an active session from botocore (cannot use --account param).'
+        help='Retrieves and includes the resource policy for the resource given by the --resource parameter. '
+             'Handles S3, IAM, SNS, SQS, and KMS.'
     )
     argquery_rpolicy_args.add_argument(
         '--resource-policy-text',

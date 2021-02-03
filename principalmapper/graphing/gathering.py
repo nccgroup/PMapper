@@ -375,13 +375,25 @@ def get_sqs_queue_policies(session: botocore.session.Session, account_id: str, r
             # Grab the queue policies
             for queue_url in queue_urls:
                 queue_name = queue_url.split('/')[-1]
-                policy_str = sqsclient.get_queue_attributes(QueueUrl=queue_url, AttributeNames=['Policy'])['Policy']
-                result.append(Policy(
-                    'arn:aws:sqs:{}:{}:{}'.format(sqs_region, account_id, queue_name),
-                    queue_name,
-                    json.loads(policy_str)
-                ))
-                logger.info('Caching policy for {}'.format('arn:aws:sqs:{}:{}:{}'.format(sqs_region, account_id, queue_name)))
+                sqs_policy_response = sqsclient.get_queue_attributes(QueueUrl=queue_url, AttributeNames=['Policy'])
+                if 'Policy' in sqs_policy_response:
+                    sqs_policy_doc = json.loads(sqs_policy_response['Policy'])
+                    result.append(Policy(
+                        'arn:aws:sqs:{}:{}:{}'.format(sqs_region, account_id, queue_name),
+                        queue_name,
+                        json.loads(sqs_policy_doc)
+                    ))
+                    logger.info('Caching policy for {}'.format('arn:aws:sqs:{}:{}:{}'.format(sqs_region, account_id, queue_name)))
+                else:
+                    result.append(Policy(
+                        'arn:aws:sqs:{}:{}:{}'.format(sqs_region, account_id, queue_name),
+                        queue_name,
+                        {
+                            "Statement": [],
+                            "Version": "2012-10-17"
+                        }
+                    ))
+                    logger.info('Queue {} does not have a bucket policy, adding a "stub" policy instead.'.format(queue_name))
         except botocore.exceptions.ClientError as ex:
             logger.info('Unable to search SQS in region {} for queues. The region may be disabled, or the current principal may not be authorized to access the service. Continuing.'.format(sqs_region))
             logger.debug('Exception was: {}'.format(ex))
