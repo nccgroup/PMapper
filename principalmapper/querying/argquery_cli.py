@@ -118,9 +118,7 @@ def process_arguments(parsed_args: Namespace):
             value = '='.join(components[1:])
             conditions.update({key: value})
 
-    if parsed_args.grab_resource_policy:
-        if session is None:
-            raise ValueError('Resource policy retrieval requires an active session (missing --profile argument?)')
+    if parsed_args.with_resource_policy:
         resource_policy = query_utils.pull_cached_resource_policy_by_arn(graph.policies, parsed_args.resource)
     elif parsed_args.resource_policy_text:
         resource_policy = json.loads(parsed_args.resource_policy_text)

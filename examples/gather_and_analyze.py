@@ -1,4 +1,4 @@
-#  Copyright (c) NCC Group and Erik Steringer 2019. This file is part of Principal Mapper.
+#  Copyright (c) NCC Group and Erik Steringer 2021. This file is part of Principal Mapper.
 #
 #      Principal Mapper is free software: you can redistribute it and/or modify
 #      it under the terms of the GNU Affero General Public License as published by
@@ -13,6 +13,10 @@
 #      You should have received a copy of the GNU Affero General Public License
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
+#  Copyright (c) NCC Group and Erik Steringer 2019. This file is part of Principal Mapper.
+#
+#
+#
 """
 The following is an example of how to use Principal Mapper like a library in a script. This code pulls graph data for
 an AWS account, runs analysis on it, then prints the output of the analysis. The graph data is not stored on-disk.
@@ -36,7 +40,7 @@ def main():
     parser.add_argument('--format', default='text', choices=['text', 'json'])
     parsed_args = parser.parse_args()
 
-    # Generate the graph (such as with `pmapper graph --create`)
+    # Generate the graph (such as with `pmapper graph create`)
     session = botocore_tools.get_session(parsed_args.profile)
     # graph_obj = gathering.create_graph(session, checker_map.keys())  # gets a Graph object without printing info
     graph_obj = graph_actions.create_new_graph(session, checker_map.keys())

@@ -87,11 +87,8 @@ def process_arguments(parsed_args: Namespace):
     graph = graph_actions.get_existing_graph(session, parsed_args.account)
     logger.debug('Querying against graph {}'.format(graph.metadata['account_id']))
 
-    if parsed_args.grab_resource_policy:
-        if session is None:
-            raise ValueError('Resource policy retrieval requires an active session (missing --profile argument?)')
-        resource_policy = query_utils.pull_cached_resource_policy_by_arn(graph.policies, arn=None,
-                                                                         query=parsed_args.query)
+    if parsed_args.with_resource_policy:
+        resource_policy = query_utils.pull_cached_resource_policy_by_arn(graph.policies, arn=None, query=parsed_args.query)
     elif parsed_args.resource_policy_text:
         resource_policy = json.loads(parsed_args.resource_policy_text)
     else:

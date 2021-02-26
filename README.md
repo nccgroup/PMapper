@@ -215,7 +215,7 @@ for the command, rather that deriving the account from credentials.
 # Library Use
 
 Principal Mapper includes a library that can be used instead of the command-line interface. All functions and methods 
-have type-hints and a small amount of documentation for reference. See [example_script.py](example_script.py) for 
+have type-hints and a small amount of documentation for reference. See [example_script.py](examples/example_script.py) for 
 an example.
 
 Future major-version revisions (e.g. 1.X.X -> 2.0.0) of Principal Mapper may alter/remove functions/classes/methods. 
