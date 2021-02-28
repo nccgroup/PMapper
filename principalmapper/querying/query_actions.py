@@ -204,8 +204,8 @@ def argquery(graph: Graph, principal_param: Optional[str], action_param: Optiona
             # Validate params
             if action_param is not None:
                 raise ValueError('For the privesc preset query, the --action parameter should not be set.')
-            if resource_param is not None:
-                raise ValueError('For the privesc preset query, the --resource parameter should not be set.')
+            if resource_param is not None and resource_param != '*':
+                raise ValueError('For the privesc preset query, the --resource parameter should not be set or set to \'*\'.')
 
             nodes = []
             if principal_param is None or principal_param == '*':

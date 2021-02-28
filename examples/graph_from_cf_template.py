@@ -35,6 +35,12 @@ from principalmapper.common import Graph, Node
 from principalmapper.graphing import graph_actions
 
 
+def _resolve_string(resources, element) -> str:
+    """Given a thing that can be an object or string, turn it into a string. Handles stuff like
+    { "Fn::GetAtt": "..." } and turns it into a string."""
+    raise NotImplementedError('TODO: implement string handling/resolution')
+
+
 def _generate_iam_id(node_type: str, counter: int) -> str:
     """Internal method to generate fake IDs for IAM resources. Format is derived from
     https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_identifiers.html
