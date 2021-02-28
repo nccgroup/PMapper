@@ -38,8 +38,7 @@ class CloudFormationEdgeChecker(EdgeChecker):
     def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[Edge]:
         """Fulfills expected method return_edges."""
 
-        result = []
-        logger.info('Searching CloudFormation for edges')
+        logger.info('Pulling data on CloudFormation stacks.')
 
         # Grab existing stacks in each region
         cloudformation_clients = []
@@ -64,131 +63,144 @@ class CloudFormationEdgeChecker(EdgeChecker):
                                'be caused by an authorization issue. Continuing.'.format(cf_client.meta.region_name))
                 logger.debug('Exception details: {}'.format(ex))
 
-        logger.debug('Searching nodes for CloudFormation access')
+        logger.info('Generating Edges based on data from CloudFormation.')
+        result = generate_edges_locally(nodes, stack_list)
+
+        for edge in result:
+            logger.info("Found new edge: {}".format(edge.describe_edge()))
+        return result
+
+
+def generate_edges_locally(nodes: List[Node], stack_list: List[dict]) -> List[Edge]:
+    """Generates and returns Edge objects. Works on the assumption that the param `stack_list` is the
+    collected outputs from calling `cloudformation:DescribeStacks`. Thus, it is possible to
+    create a similar output and feed it to this method if you are operating offline (infra-as-code).
+    """
+
+    result = []
+
+    for node_destination in nodes:
+        # check if the destination is a role
+        if ':role/' not in node_destination.arn:
+            continue
+
+        # check that the destination role can be assumed by CloudFormation
+        sim_result = resource_policy_authorization(
+            'cloudformation.amazonaws.com',
+            arns.get_account_id(node_destination.arn),
+            node_destination.trust_policy,
+            'sts:AssumeRole',
+            node_destination.arn,
+            {},
+        )
+
+        if sim_result != ResourcePolicyEvalResult.SERVICE_MATCH:
+            continue  # CloudFormation wasn't auth'd to assume the role
+
         for node_source in nodes:
-            for node_destination in nodes:
-                # skip self-access checks
-                if node_source == node_destination:
-                    continue
+            # skip self-access checks
+            if node_source == node_destination:
+                continue
 
-                # check if source is an admin: if so, it can access destination but this is not tracked via an Edge
-                if node_source.is_admin:
-                    continue
+            # check if source is an admin: if so, it can access destination but this is not tracked via an Edge
+            if node_source.is_admin:
+                continue
 
-                # check if the destination is a role
-                if ':role/' not in node_destination.arn:
-                    continue
+            # Get iam:PassRole info
+            can_pass_role, need_mfa_passrole = query_interface.local_check_authorization_handling_mfa(
+                node_source,
+                'iam:PassRole',
+                node_destination.arn,
+                {
+                    'iam:PassedToService': 'cloudformation.amazonaws.com'
+                },
+            )
 
-                # check that the destination role can be assumed by CloudFormation
-                sim_result = resource_policy_authorization(
-                    'cloudformation.amazonaws.com',
-                    arns.get_account_id(node_source.arn),
-                    node_destination.trust_policy,
-                    'sts:AssumeRole',
-                    node_destination.arn,
-                    {},
-                )
-
-                if sim_result != ResourcePolicyEvalResult.SERVICE_MATCH:
-                    continue  # CloudFormation wasn't auth'd to assume the role
-
-                # Get iam:PassRole info
-                can_pass_role, need_mfa_passrole = query_interface.local_check_authorization_handling_mfa(
+            # See if source can make a new stack and pass the destination role
+            if can_pass_role:
+                can_create, need_mfa_create = query_interface.local_check_authorization_handling_mfa(
                     node_source,
-                    'iam:PassRole',
-                    node_destination.arn,
-                    {
-                        'iam:PassedToService': 'cloudformation.amazonaws.com'
-                    },
+                    'cloudformation:CreateStack',
+                    '*',
+                    {'cloudformation:RoleArn': node_destination.arn},
                 )
+                if can_create:
+                    reason = 'can create a stack in CloudFormation to access'
+                    if need_mfa_passrole or need_mfa_create:
+                        reason = '(MFA required) ' + reason
 
-                # See if source can make a new stack and pass the destination role
-                if can_pass_role:
-                    can_create, need_mfa_create = query_interface.local_check_authorization_handling_mfa(
-                        node_source,
-                        'cloudformation:CreateStack',
-                        '*',
-                        {'cloudformation:RoleArn': node_destination.arn},
+                    result.append(Edge(node_source, node_destination, reason, 'Cloudformation'))
+
+            relevant_stacks = []  # we'll reuse this for *ChangeSet
+            for stack in stack_list:
+                if 'RoleArn' in stack:
+                    if stack['RoleARN'] == node_destination.arn:
+                        relevant_stacks.append(stack)
+
+            # See if source can call UpdateStack to use the current role of a stack (setting a new template)
+            for stack in relevant_stacks:
+                can_update, need_mfa_update = query_interface.local_check_authorization_handling_mfa(
+                    node_source,
+                    'cloudformation:UpdateStack',
+                    stack['StackId'],
+                    {'cloudformation:RoleArn': node_destination.arn},
+                )
+                if can_update:
+                    reason = 'can update the CloudFormation stack {} to access'.format(
+                        stack['StackId']
                     )
-                    if can_create:
-                        reason = 'can create a stack in CloudFormation to access'
-                        if need_mfa_passrole or need_mfa_create:
-                            reason = '(MFA required) ' + reason
+                    if need_mfa_update:
+                        reason = '(MFA required) ' + reason
 
-                        result.append(Edge(node_source, node_destination, reason, 'Cloudformation'))
+                    result.append(Edge(node_source, node_destination, reason, 'Cloudformation'))
+                    break  # let's save ourselves having to dig into every CF stack edge possible
 
-                relevant_stacks = []  # we'll reuse this for *ChangeSet
+            # See if source can call UpdateStack to pass a new role to a stack and use it
+            if can_pass_role:
                 for stack in stack_list:
-                    if 'RoleArn' in stack:
-                        if stack['RoleARN'] == node_destination.arn:
-                            relevant_stacks.append(stack)
-
-                # See if source can call UpdateStack to use the current role of a stack (setting a new template)
-                for stack in relevant_stacks:
                     can_update, need_mfa_update = query_interface.local_check_authorization_handling_mfa(
                         node_source,
                         'cloudformation:UpdateStack',
                         stack['StackId'],
                         {'cloudformation:RoleArn': node_destination.arn},
                     )
+
                     if can_update:
-                        reason = 'can update the CloudFormation stack {} to access'.format(
+                        reason = 'can update the CloudFormation stack {} and pass the role to access'.format(
                             stack['StackId']
                         )
-                        if need_mfa_update:
-                            reason = '(MFA required) ' + reason
-
-                        result.append(Edge(node_source, node_destination, reason, 'Cloudformation'))
-                        break  # let's save ourselves having to dig into every CF stack edge possible
-
-                # See if source can call UpdateStack to pass a new role to a stack and use it
-                if can_pass_role:
-                    for stack in stack_list:
-                        can_update, need_mfa_update = query_interface.local_check_authorization_handling_mfa(
-                            node_source,
-                            'cloudformation:UpdateStack',
-                            stack['StackId'],
-                            {'cloudformation:RoleArn': node_destination.arn},
-                        )
-
-                        if can_update:
-                            reason = 'can update the CloudFormation stack {} and pass the role to access'.format(
-                                stack['StackId']
-                            )
-                            if need_mfa_update or need_mfa_passrole:
-                                reason = '(MFA required) ' + reason
-
-                            result.append(Edge(node_source, node_destination, reason, 'Cloudformation'))
-                            break  # save ourselves from digging into all CF stack edges possible
-
-                # See if source can call CreateChangeSet and ExecuteChangeSet to alter a stack with a given role
-                for stack in relevant_stacks:
-                    can_make_cs, need_mfa_make = query_interface.local_check_authorization_handling_mfa(
-                        node_source,
-                        'cloudformation:CreateChangeSet',
-                        stack['StackId'],
-                        {'cloudformation:RoleArn': node_destination.arn},
-                    )
-                    if not can_make_cs:
-                        continue
-
-                    can_exe_cs, need_mfa_exe = query_interface.local_check_authorization_handling_mfa(
-                        node_source,
-                        'cloudformation:ExecuteChangeSet',
-                        stack['StackId'],
-                        {},  # docs say no RoleArn context here
-                    )
-
-                    if can_exe_cs:
-                        reason = 'can create and execute a changeset in CloudFormation for stack {} to access'.format(
-                            stack['StackId']
-                        )
-                        if need_mfa_make or need_mfa_exe:
+                        if need_mfa_update or need_mfa_passrole:
                             reason = '(MFA required) ' + reason
 
                         result.append(Edge(node_source, node_destination, reason, 'Cloudformation'))
                         break  # save ourselves from digging into all CF stack edges possible
 
-        for edge in result:
-            logger.info("Found new edge: {}".format(edge.describe_edge()))
-        return result
+            # See if source can call CreateChangeSet and ExecuteChangeSet to alter a stack with a given role
+            for stack in relevant_stacks:
+                can_make_cs, need_mfa_make = query_interface.local_check_authorization_handling_mfa(
+                    node_source,
+                    'cloudformation:CreateChangeSet',
+                    stack['StackId'],
+                    {'cloudformation:RoleArn': node_destination.arn},
+                )
+                if not can_make_cs:
+                    continue
+
+                can_exe_cs, need_mfa_exe = query_interface.local_check_authorization_handling_mfa(
+                    node_source,
+                    'cloudformation:ExecuteChangeSet',
+                    stack['StackId'],
+                    {},  # docs say no RoleArn context here
+                )
+
+                if can_exe_cs:
+                    reason = 'can create and execute a changeset in CloudFormation for stack {} to access'.format(
+                        stack['StackId']
+                    )
+                    if need_mfa_make or need_mfa_exe:
+                        reason = '(MFA required) ' + reason
+
+                    result.append(Edge(node_source, node_destination, reason, 'Cloudformation'))
+                    break  # save ourselves from digging into all CF stack edges possible
+
+    return result

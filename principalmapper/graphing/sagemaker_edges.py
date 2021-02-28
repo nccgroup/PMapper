@@ -37,66 +37,77 @@ class SageMakerEdgeChecker(EdgeChecker):
     def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[Edge]:
         """fulfills expected method"""
 
-        result = []
-        logger.info('Searching SageMaker for edges')
+        logger.info('Generating Edges based on SageMaker')
+        result = generate_edges_locally(nodes)
 
-        for node_source in nodes:
-            for node_destination in nodes:
-                if node_source == node_destination:
-                    continue  # skip self-access checks
-
-                if node_source.is_admin:
-                    continue  # skip if source is already admin, not tracked via edges
-
-                if ':user/' in node_destination.arn:
-                    continue  # skip if destination is a user and not a role
-
-                sim_result = resource_policy_authorization(
-                    'sagemaker.amazonaws.com',
-                    arns.get_account_id(node_destination.arn),
-                    node_destination.trust_policy,
-                    'sts:AssumeRole',
-                    node_destination.arn,
-                    {}
-                )
-
-                if sim_result != ResourcePolicyEvalResult.SERVICE_MATCH:
-                    continue  # SageMaker is not authorized to assume the role
-
-                mfa_needed = False
-                conditions = {'iam:PassedToService': 'sagemaker.amazonaws.com'}
-                pass_role_auth, needs_mfa = query_interface.local_check_authorization_handling_mfa(
-                    node_source,
-                    'iam:PassRole',
-                    node_destination.arn,
-                    conditions
-                )
-                if not pass_role_auth:
-                    continue  # source node is not authorized to pass the role
-
-                if needs_mfa:
-                    mfa_needed = True
-
-                create_notebook_auth, needs_mfa = query_interface.local_check_authorization_handling_mfa(
-                    node_source,
-                    'sagemaker:CreateNotebookInstance',
-                    '*',
-                    {}
-                )
-
-                if not create_notebook_auth:
-                    continue  # source node is not authorized to launch the sagemaker notebook
-
-                if needs_mfa:
-                    mfa_needed = True
-
-                new_edge = Edge(
-                    node_source,
-                    node_destination,
-                    '(MFA required) can use SageMaker to launch a notebook and access' if mfa_needed else 'can use SageMaker to launch a notebook and access',
-                    'SageMaker'
-                )
-                logger.info('Found new edge: {}'.format(new_edge.describe_edge()))
-                result.append(new_edge)
+        for edge in result:
+            logger.info("Found new edge: {}".format(edge.describe_edge()))
 
         return result
+
+
+def generate_edges_locally(nodes: List[Node]) -> List[Edge]:
+    """Generates and returns Edge objects. It is possible to use this method if you are operating offline (infra-as-code).
+    """
+
+    result = []
+    for node_destination in nodes:
+
+        if ':role/' not in node_destination.arn:
+            continue  # skip if destination is a user and not a role
+
+        sim_result = resource_policy_authorization(
+            'sagemaker.amazonaws.com',
+            arns.get_account_id(node_destination.arn),
+            node_destination.trust_policy,
+            'sts:AssumeRole',
+            node_destination.arn,
+            {}
+        )
+
+        if sim_result != ResourcePolicyEvalResult.SERVICE_MATCH:
+            continue  # SageMaker is not authorized to assume the role
+
+        for node_source in nodes:
+            if node_source == node_destination:
+                continue  # skip self-access checks
+
+            if node_source.is_admin:
+                continue  # skip if source is already admin, not tracked via edges
+
+            mfa_needed = False
+            conditions = {'iam:PassedToService': 'sagemaker.amazonaws.com'}
+            pass_role_auth, needs_mfa = query_interface.local_check_authorization_handling_mfa(
+                node_source,
+                'iam:PassRole',
+                node_destination.arn,
+                conditions
+            )
+            if not pass_role_auth:
+                continue  # source node is not authorized to pass the role
+
+            if needs_mfa:
+                mfa_needed = True
+
+            create_notebook_auth, needs_mfa = query_interface.local_check_authorization_handling_mfa(
+                node_source,
+                'sagemaker:CreateNotebookInstance',
+                '*',
+                {}
+            )
+
+            if not create_notebook_auth:
+                continue  # source node is not authorized to launch the sagemaker notebook
+
+            if needs_mfa:
+                mfa_needed = True
+
+            new_edge = Edge(
+                node_source,
+                node_destination,
+                '(MFA required) can use SageMaker to launch a notebook and access' if mfa_needed else 'can use SageMaker to launch a notebook and access',
+                'SageMaker'
+            )
+            result.append(new_edge)
+
+    return result

@@ -37,9 +37,8 @@ class LambdaEdgeChecker(EdgeChecker):
 
     def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[Edge]:
         """Fulfills expected method return_edges. If session object is None, runs checks in offline mode."""
-        result = []
-        logger.info('Searching Lambda for edges')
 
+        logger.info('Pulling data on Lambda functions')
         lambda_clients = []
         if self.session is not None:
             lambda_regions = botocore_tools.get_regions_to_search(self.session, 'lambda', region_allow_list, region_deny_list)
@@ -59,107 +58,102 @@ class LambdaEdgeChecker(EdgeChecker):
                                'be caused by an authorization issue. Continuing.'.format(lambda_client.meta.region_name))
                 logger.debug('Exception details: {}'.format(ex))
 
+        logger.info('Generating Edges based on Lambda data.')
+        result = generate_edges_locally(nodes, function_list)
+
+        for edge in result:
+            logger.info("Found new edge: {}".format(edge.describe_edge()))
+
+        return result
+
+
+def generate_edges_locally(nodes: List[Node], function_list: List[dict]) -> List[Edge]:
+    """Generates and returns Edge objects. It is possible to use this method if you are operating offline
+    (infra-as-code), but you must provide a `function_list` that is a list of dictionaries that mimic the
+    output of calling `lambda:ListFunctions`.
+    """
+
+    result = []
+    for node_destination in nodes:
+        # check that destination is a role
+        if ':role/' not in node_destination.arn:
+            continue
+
+        # check that the destination role can be assumed by Lambda
+        sim_result = resource_policy_authorization(
+            'lambda.amazonaws.com',
+            arns.get_account_id(node_destination.arn),
+            node_destination.trust_policy,
+            'sts:AssumeRole',
+            node_destination.arn,
+            {},
+        )
+
+        if sim_result != ResourcePolicyEvalResult.SERVICE_MATCH:
+            continue  # Lambda wasn't auth'd to assume the role
+
         for node_source in nodes:
-            for node_destination in nodes:
-                # skip self-access checks
-                if node_source == node_destination:
-                    continue
+            # skip self-access checks
+            if node_source == node_destination:
+                continue
 
-                # check if source is an admin, if so it can access destination but this is not tracked via an Edge
-                if node_source.is_admin:
-                    continue
+            # check if source is an admin, if so it can access destination but this is not tracked via an Edge
+            if node_source.is_admin:
+                continue
 
-                # check that destination is a role
-                if ':role/' not in node_destination.arn:
-                    continue
+            # check that source can pass the destination role (store result for future reference)
+            can_pass_role, need_mfa_passrole = query_interface.local_check_authorization_handling_mfa(
+                node_source,
+                'iam:PassRole',
+                node_destination.arn,
+                {
+                    'iam:PassedToService': 'lambda.amazonaws.com'
+                },
+            )
 
-                # check that the destination role can be assumed by Lambda
-                sim_result = resource_policy_authorization(
-                    'lambda.amazonaws.com',
-                    arns.get_account_id(node_source.arn),
-                    node_destination.trust_policy,
-                    'sts:AssumeRole',
-                    node_destination.arn,
+            # check that source can create a Lambda function and pass it an execution role
+            if can_pass_role:
+                can_create_function, need_mfa_0 = query_interface.local_check_authorization_handling_mfa(
+                    node_source,
+                    'lambda:CreateFunction',
+                    '*',
                     {},
                 )
+                if can_create_function:
+                    if need_mfa_0 or need_mfa_passrole:
+                        reason = '(requires MFA) can use Lambda to create a new function with arbitrary code, ' \
+                                 'then pass and access'
+                    else:
+                        reason = 'can use Lambda to create a new function with arbitrary code, then pass and access'
+                    new_edge = Edge(
+                        node_source,
+                        node_destination,
+                        reason,
+                        'Lambda'
+                    )
+                    result.append(new_edge)
 
-                if sim_result != ResourcePolicyEvalResult.SERVICE_MATCH:
-                    continue  # Lambda wasn't auth'd to assume the role
-
-                # check that source can pass the destination role (store result for future reference)
-                can_pass_role, need_mfa_passrole = query_interface.local_check_authorization_handling_mfa(
+            func_data = []  # List[Tuple[dict, bool, bool, bool]]
+            for func in function_list:
+                can_change_code, need_mfa_1 = query_interface.local_check_authorization_handling_mfa(
                     node_source,
-                    'iam:PassRole',
-                    node_destination.arn,
-                    {
-                        'iam:PassedToService': 'lambda.amazonaws.com'
-                    },
+                    'lambda:UpdateFunctionCode',
+                    func['FunctionArn'],
+                    {},
                 )
+                can_change_config, need_mfa_2 = query_interface.local_check_authorization_handling_mfa(
+                    node_source,
+                    'lambda:UpdateFunctionConfiguration',
+                    func['FunctionArn'],
+                    {},
+                )
+                func_data.append(
+                    (func, can_change_code, can_change_config, need_mfa_passrole or need_mfa_1 or need_mfa_2))
 
-                # check that source can create a Lambda function and pass it an execution role
-                if can_pass_role:
-                    can_create_function, need_mfa_0 = query_interface.local_check_authorization_handling_mfa(
-                        node_source,
-                        'lambda:CreateFunction',
-                        '*',
-                        {},
-                    )
-                    if can_create_function:
-                        if need_mfa_0 or need_mfa_passrole:
-                            reason = '(requires MFA) can use Lambda to create a new function with arbitrary code, ' \
-                                     'then pass and access'
-                        else:
-                            reason = 'can use Lambda to create a new function with arbitrary code, then pass and access'
-                        new_edge = Edge(
-                            node_source,
-                            node_destination,
-                            reason,
-                            'Lambda'
-                        )
-                        logger.info('Found new edge: {}'.format(new_edge.describe_edge()))
-                        result.append(new_edge)
-
-                # List of (<function>, bool, bool, bool)
-                func_data = []
-                for func in function_list:
-                    can_change_code, need_mfa_1 = query_interface.local_check_authorization_handling_mfa(
-                        node_source,
-                        'lambda:UpdateFunctionCode',
-                        func['FunctionArn'],
-                        {},
-                    )
-                    can_change_config, need_mfa_2 = query_interface.local_check_authorization_handling_mfa(
-                        node_source,
-                        'lambda:UpdateFunctionConfiguration',
-                        func['FunctionArn'],
-                        {},
-                    )
-                    func_data.append((func, can_change_code, can_change_config, need_mfa_passrole or need_mfa_1 or need_mfa_2))
-
-                # check that source can modify a Lambda function and use its existing role
-                for func, can_change_code, can_change_config, need_mfa in func_data:
-                    if node_destination.arn == func['Role']:
-                        if can_change_code:
-                            if need_mfa:
-                                reason = '(requires MFA) can use Lambda to edit an existing function ({}) to access'.format(
-                                    func['FunctionArn']
-                                )
-                            else:
-                                reason = 'can use Lambda to edit an existing function ({}) to access'.format(
-                                    func['FunctionArn']
-                                )
-                            new_edge = Edge(
-                                node_source,
-                                node_destination,
-                                reason,
-                                'Lambda'
-                            )
-                            logger.info('Found new edge: {}'.format(new_edge.describe_edge()))
-                            break
-
-                # check that source can modify a Lambda function and pass it another execution role
-                for func, can_change_code, can_change_config, need_mfa in func_data:
-                    if can_change_config and can_change_code and can_pass_role:
+            # check that source can modify a Lambda function and use its existing role
+            for func, can_change_code, can_change_config, need_mfa in func_data:
+                if node_destination.arn == func['Role']:
+                    if can_change_code:
                         if need_mfa:
                             reason = '(requires MFA) can use Lambda to edit an existing function ({}) to access'.format(
                                 func['FunctionArn']
@@ -174,7 +168,25 @@ class LambdaEdgeChecker(EdgeChecker):
                             reason,
                             'Lambda'
                         )
-                        logger.info('Found new edge: {}'.format(new_edge.describe_edge()))
                         break
 
-        return result
+            # check that source can modify a Lambda function and pass it another execution role
+            for func, can_change_code, can_change_config, need_mfa in func_data:
+                if can_change_config and can_change_code and can_pass_role:
+                    if need_mfa:
+                        reason = '(requires MFA) can use Lambda to edit an existing function ({}) to access'.format(
+                            func['FunctionArn']
+                        )
+                    else:
+                        reason = 'can use Lambda to edit an existing function ({}) to access'.format(
+                            func['FunctionArn']
+                        )
+                    new_edge = Edge(
+                        node_source,
+                        node_destination,
+                        reason,
+                        'Lambda'
+                    )
+                    break
+
+    return result

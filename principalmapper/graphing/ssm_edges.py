@@ -36,69 +36,78 @@ class SSMEdgeChecker(EdgeChecker):
     def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[Edge]:
         """Fulfills expected method return_edges. If session object is None, runs checks in offline mode."""
 
-        result = []
-        logger.info('Searching SSM for edges')
-
-        for node_source in nodes:
-            for node_destination in nodes:
-                # skip self-access checks
-                if node_source == node_destination:
-                    continue
-
-                # check if source is an admin, if so it can access destination but this is not tracked via an Edge
-                if node_source.is_admin:
-                    continue
-
-                # check if destination is a role with an instance profile
-                if ':role/' not in node_destination.arn or node_destination.instance_profile is None:
-                    continue
-
-                # check if the destination can be assumed by EC2
-                sim_result = resource_policy_authorization(
-                    'ec2.amazonaws.com',
-                    arns.get_account_id(node_source.arn),
-                    node_destination.trust_policy,
-                    'sts:AssumeRole',
-                    node_destination.arn,
-                    {},
-                )
-
-                if sim_result != ResourcePolicyEvalResult.SERVICE_MATCH:
-                    continue  # EC2 wasn't auth'd to assume the role
-
-                # at this point, we make an assumption that some instance is operating with the given instance profile
-                # we assume if the role can call ssmmessages:CreateControlChannel, anyone with ssm perms can access it
-                if not query_interface.local_check_authorization(node_destination, 'ssmmessages:CreateControlChannel',
-                                                                 '*', {}):
-                    continue
-
-                # so if source can call ssm:SendCommand or ssm:StartSession, it's an edge
-                cmd_auth_res, mfa_res_1 = query_interface.local_check_authorization_handling_mfa(
-                    node_source,
-                    'ssm:SendCommand',
-                    '*',
-                    {},
-                )
-
-                if cmd_auth_res:
-                    reason = 'can call ssm:SendCommand to access an EC2 instance with access to'
-                    if mfa_res_1:
-                        reason = '(Requires MFA) ' + reason
-                    result.append(Edge(node_source, node_destination, reason, 'SSM'))
-
-                sesh_auth_res, mfa_res_2 = query_interface.local_check_authorization_handling_mfa(
-                    node_source,
-                    'ssm:StartSession',
-                    '*',
-                    {},
-                )
-
-                if sesh_auth_res:
-                    reason = 'can call ssm:StartSession to access an EC2 instance with access to'
-                    if mfa_res_2:
-                        reason = '(Requires MFA) ' + reason
-                    result.append(Edge(node_source, node_destination, reason, 'SSM'))
+        logger.info('Generating Edges based on SSM')
+        result = generate_edges_locally(nodes)
 
         for edge in result:
             logger.info("Found new edge: {}".format(edge.describe_edge()))
+
         return result
+
+
+def generate_edges_locally(nodes: List[Node]) -> List[Edge]:
+    """Generates and returns Edge objects. It is possible to use this method if you are operating offline (infra-as-code).
+    """
+
+    result = []
+
+    for node_destination in nodes:
+        # check if destination is a role with an instance profile
+        if ':role/' not in node_destination.arn or node_destination.instance_profile is None:
+            continue
+
+        # check if the destination can be assumed by EC2
+        sim_result = resource_policy_authorization(
+            'ec2.amazonaws.com',
+            arns.get_account_id(node_destination.arn),
+            node_destination.trust_policy,
+            'sts:AssumeRole',
+            node_destination.arn,
+            {},
+        )
+
+        if sim_result != ResourcePolicyEvalResult.SERVICE_MATCH:
+            continue  # EC2 wasn't auth'd to assume the role
+
+        # at this point, we make an assumption that some instance is operating with the given instance profile
+        # we assume if the role can call ssmmessages:CreateControlChannel, anyone with ssm perms can access it
+        if not query_interface.local_check_authorization(node_destination, 'ssmmessages:CreateControlChannel', '*', {}):
+            continue
+
+        for node_source in nodes:
+            # skip self-access checks
+            if node_source == node_destination:
+                continue
+
+            # check if source is an admin, if so it can access destination but this is not tracked via an Edge
+            if node_source.is_admin:
+                continue
+
+            # so if source can call ssm:SendCommand or ssm:StartSession, it's an edge
+            cmd_auth_res, mfa_res_1 = query_interface.local_check_authorization_handling_mfa(
+                node_source,
+                'ssm:SendCommand',
+                '*',
+                {},
+            )
+
+            if cmd_auth_res:
+                reason = 'can call ssm:SendCommand to access an EC2 instance with access to'
+                if mfa_res_1:
+                    reason = '(Requires MFA) ' + reason
+                result.append(Edge(node_source, node_destination, reason, 'SSM'))
+
+            sesh_auth_res, mfa_res_2 = query_interface.local_check_authorization_handling_mfa(
+                node_source,
+                'ssm:StartSession',
+                '*',
+                {},
+            )
+
+            if sesh_auth_res:
+                reason = 'can call ssm:StartSession to access an EC2 instance with access to'
+                if mfa_res_2:
+                    reason = '(Requires MFA) ' + reason
+                result.append(Edge(node_source, node_destination, reason, 'SSM'))
+
+    return result
