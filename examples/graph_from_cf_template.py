@@ -32,7 +32,7 @@ import yaml
 
 import principalmapper
 from principalmapper.common import Graph, Node
-from principalmapper.graphing import graph_actions
+from principalmapper.graphing import gathering, graph_actions, iam_edges, sts_edges
 
 
 def _resolve_string(resources, element) -> str:
@@ -93,11 +93,18 @@ def main():
         print('[!] Missing required template element "Resources"')
         return -1
 
-    # Create Nodes
-    iam_id_counter = 0
+    # Create space to stash all the data we generate
+    groups = []
+    policies = []
     nodes = []
+
+    # Handle data from IAM
+    iam_id_counter = 0
     template_resources = data['Resources']
+    # TODO: Handle policies to start
+    # TODO: Handle groups
     for logical_id, contents in template_resources.items():
+        # Get data on IAM Users and Roles
         if contents['Type'] == 'AWS::IAM::User':
             properties = contents['Properties']
             node_path = '/' if 'Path' not in properties else properties['Path']
@@ -124,16 +131,17 @@ def main():
             )
             iam_id_counter += 1
 
-    # Create Groups
-    groups = []
+        elif contents['Type'] == 'AWS::IAM::Role':
+            properties = contents['Properties']
+            # TODO: finish out roles
 
-    # Create Policies
-    policies = []
+    # TODO: update access keys for users
+
+    # Sort out administrative principals
+    gathering.update_admin_status(nodes)
 
     # Create Edges
-    edges = []
-
-    # TODO: interconnect users/groups/policies
+    edges = iam_edges.generate_edges_locally(nodes) + sts_edges.generate_edges_locally(nodes)
 
     # Create our graph and finish
     graph = Graph(nodes, edges, policies, groups, metadata)

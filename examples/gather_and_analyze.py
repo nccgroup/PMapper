@@ -27,13 +27,13 @@ import argparse
 
 from principalmapper.analysis import find_risks
 from principalmapper.graphing import graph_actions
-# from principalmapper.graphing import gathering
 from principalmapper.graphing.edge_identification import checker_map
 from principalmapper.util import botocore_tools
 
 
 def main():
     """Body of the script."""
+
     # Handle input args --profile and --format
     parser = argparse.ArgumentParser()
     parser.add_argument('--profile')
@@ -42,7 +42,6 @@ def main():
 
     # Generate the graph (such as with `pmapper graph create`)
     session = botocore_tools.get_session(parsed_args.profile)
-    # graph_obj = gathering.create_graph(session, checker_map.keys())  # gets a Graph object without printing info
     graph_obj = graph_actions.create_new_graph(session, checker_map.keys())
 
     # Print out identified findings (such as with `pmapper analysis`)
