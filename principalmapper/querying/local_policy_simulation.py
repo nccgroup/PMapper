@@ -667,7 +667,7 @@ def resource_policy_matching_statements(node_or_service: Union[Node, str], resou
         else:  # 'NotPrincipal' in statement:
             matches_principal = True
             if isinstance(node_or_service, Node):
-                if 'AWS' in statement['Principal']:
+                if 'AWS' in statement['NotPrincipal']:
                     if _principal_matches_in_statement(node_or_service, _listify_string(statement['Principal']['AWS'])):
                         matches_principal = False
             else:

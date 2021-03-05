@@ -23,7 +23,7 @@ import re
 from typing import Optional, List
 
 from principalmapper.common import Graph
-from principalmapper.querying.presets import privesc, connected, clusters
+from principalmapper.querying.presets import privesc, connected, clusters, endgame
 from principalmapper.querying.query_interface import search_authorization_for, search_authorization_full
 from principalmapper.util import arns
 
@@ -179,6 +179,8 @@ def handle_preset(graph: Graph, query: str, skip_admins: bool = False) -> None:
         connected.handle_preset_query(graph, tokens, skip_admins)
     elif tokens[1] == 'clusters':
         clusters.handle_preset_query(graph, tokens, skip_admins)
+    elif tokens[1] == 'endgame':
+        endgame.handle_preset_query(graph, tokens, skip_admins)
     else:
         _print_query_help()
         return
@@ -241,6 +243,15 @@ def argquery(graph: Graph, principal_param: Optional[str], action_param: Optiona
                 raise ValueError('For the clusters preset query, the --resource parameter must be set.')
 
             clusters.handle_preset_query(graph, ['', '', resource_param], skip_admins)
+        elif preset_param == 'endgame':
+            # validate params
+            if action_param is not None:
+                raise ValueError('For the clusters preset query, the --action parameter should not be set.')
+
+            if resource_param is None:
+                raise ValueError('For the endgame preset query, the --resource parameter must be set.')
+
+            endgame.handle_preset_query(graph, ['', '', resource_param], skip_admins)
         else:
             raise ValueError('Parameter for "preset" is not valid. Expected values: "privesc", "connected", or "clusters".')
 
