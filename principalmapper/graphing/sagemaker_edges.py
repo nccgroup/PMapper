@@ -34,11 +34,12 @@ class SageMakerEdgeChecker(EdgeChecker):
     TODO: add checks for CreateDomain, CreateProcessingJob, CreateTrainingJob
     """
 
-    def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[Edge]:
+    def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None,
+                     region_deny_list: Optional[List[str]] = None, scps: Optional[List[List[dict]]] = None) -> List[Edge]:
         """fulfills expected method"""
 
         logger.info('Generating Edges based on SageMaker')
-        result = generate_edges_locally(nodes)
+        result = generate_edges_locally(nodes, scps)
 
         for edge in result:
             logger.info("Found new edge: {}".format(edge.describe_edge()))
@@ -46,7 +47,7 @@ class SageMakerEdgeChecker(EdgeChecker):
         return result
 
 
-def generate_edges_locally(nodes: List[Node]) -> List[Edge]:
+def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] = None) -> List[Edge]:
     """Generates and returns Edge objects. It is possible to use this method if you are operating offline (infra-as-code).
     """
 
@@ -81,7 +82,8 @@ def generate_edges_locally(nodes: List[Node]) -> List[Edge]:
                 node_source,
                 'iam:PassRole',
                 node_destination.arn,
-                conditions
+                conditions,
+                service_control_policy_groups=scps
             )
             if not pass_role_auth:
                 continue  # source node is not authorized to pass the role
@@ -93,7 +95,8 @@ def generate_edges_locally(nodes: List[Node]) -> List[Edge]:
                 node_source,
                 'sagemaker:CreateNotebookInstance',
                 '*',
-                {}
+                {},
+                service_control_policy_groups=scps
             )
 
             if not create_notebook_auth:

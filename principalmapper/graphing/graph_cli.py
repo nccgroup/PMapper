@@ -27,6 +27,7 @@ from principalmapper.graphing import graph_actions
 from principalmapper.graphing.cross_account_edges import get_edges_between_graphs
 from principalmapper.graphing.gathering import get_organizations_data
 from principalmapper.graphing.edge_identification import checker_map
+from principalmapper.querying import query_orgs
 from principalmapper.util import botocore_tools
 from principalmapper.util.storage import get_storage_root
 
@@ -51,6 +52,11 @@ def provide_arguments(parser: ArgumentParser):
         'create',
         description='Creates a Graph object for a given AWS account',
         help='Creates a Graph object for a given AWS account'
+    )
+    create_parser.add_argument(
+        '--ignore-orgs',
+        action='store_true',
+        help='If specified, skips the check for stored AWS Organizations data and ignores any potentially applicable SCPs during the graph creation process'
     )
     region_args_group = create_parser.add_mutually_exclusive_group()
     region_args_group.add_argument(
@@ -119,8 +125,32 @@ def process_arguments(parsed_args: Namespace):
             service_list = service_list_base
         logger.debug('Service list after processing args: {}'.format(service_list))
 
+        # need to know account ID to search potential SCPs
         session = botocore_tools.get_session(parsed_args.profile)
-        graph = graph_actions.create_new_graph(session, service_list, parsed_args.include_regions, parsed_args.exclude_regions)
+
+        scps = None
+        if not parsed_args.ignore_orgs:
+            stsclient = session.create_client('sts')
+            caller_identity = stsclient.get_caller_identity()
+            caller_account = caller_identity['Account']
+            logger.debug("Caller Identity: {}".format(caller_identity))
+
+            org_tree_search_dir = Path(get_storage_root())
+            org_id_pattern = re.compile(r'/o-\w+')
+            for subdir in org_tree_search_dir.iterdir():
+                if org_id_pattern.search(str(subdir)) is not None:
+                    logger.debug('Checking {} to see if account {} is a member'.format(str(subdir), caller_account))
+                    org_tree = OrganizationTree.create_from_dir(str(subdir))
+                    if caller_account in org_tree.accounts:
+                        logger.info('Account {} is a member of Organization {}'.format(caller_account, org_tree.org_id))
+                        if caller_account == org_tree.management_account_id:
+                            logger.info('Account {} is the management account, SCPs do not apply'.format(caller_account))
+                        else:
+                            logger.info('Identifying and applying SCPs for the graphing process')
+                            scps = query_orgs.produce_scp_list_by_account_id(caller_account, org_tree)
+                        break
+
+        graph = graph_actions.create_new_graph(session, service_list, parsed_args.include_regions, parsed_args.exclude_regions, scps)
         graph_actions.print_graph_data(graph)
         graph.store_graph_as_json(os.path.join(get_storage_root(), graph.metadata['account_id']))
 

@@ -32,11 +32,12 @@ logger = logging.getLogger(__name__)
 class IAMEdgeChecker(EdgeChecker):
     """Class for identifying if IAM can be used by IAM principals to gain access to other IAM principals."""
 
-    def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[Edge]:
+    def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None,
+                     region_deny_list: Optional[List[str]] = None, scps: Optional[List[List[dict]]] = None) -> List[Edge]:
         """Fulfills expected method return_edges."""
 
         logger.info('Generating Edges based on IAM')
-        result = generate_edges_locally(nodes)
+        result = generate_edges_locally(nodes, scps)
 
         for edge in result:
             logger.info("Found new edge: {}\n".format(edge.describe_edge()))
@@ -44,7 +45,7 @@ class IAMEdgeChecker(EdgeChecker):
         return result
 
 
-def generate_edges_locally(nodes: List[Node]) -> List[Edge]:
+def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] = None) -> List[Edge]:
     """Generates and returns Edge objects. It is possible to use this method if you are operating offline (infra-as-code).
     """
     result = []
@@ -67,7 +68,8 @@ def generate_edges_locally(nodes: List[Node]) -> List[Edge]:
                     node_source,
                     'iam:CreateAccessKey',
                     node_destination.arn,
-                    {}
+                    {},
+                    service_control_policy_groups=scps
                 )
 
                 if mfa_res:
@@ -80,6 +82,7 @@ def generate_edges_locally(nodes: List[Node]) -> List[Edge]:
                         'iam:DeleteAccessKey',
                         node_destination.arn,
                         {},
+                        service_control_policy_groups=scps
                     )
                     if not auth_res:
                         create_auth_res = False  # can't delete target access key, can't generate a new one
@@ -104,6 +107,7 @@ def generate_edges_locally(nodes: List[Node]) -> List[Edge]:
                         'iam:UpdateLoginProfile',
                         node_destination.arn,
                         {},
+                        service_control_policy_groups=scps
                     )
                 else:
                     pass_auth_res, mfa_res = query_interface.local_check_authorization_handling_mfa(
@@ -111,6 +115,7 @@ def generate_edges_locally(nodes: List[Node]) -> List[Edge]:
                         'iam:CreateLoginProfile',
                         node_destination.arn,
                         {},
+                        service_control_policy_groups=scps
                     )
                 if pass_auth_res:
                     reason = 'can set the password to authenticate as'
@@ -125,6 +130,7 @@ def generate_edges_locally(nodes: List[Node]) -> List[Edge]:
                     'iam:UpdateAssumeRolePolicy',
                     node_destination.arn,
                     {},
+                    service_control_policy_groups=scps
                 )
                 if update_role_res:
                     reason = 'can update the trust document to access'

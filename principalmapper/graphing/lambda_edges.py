@@ -35,7 +35,8 @@ logger = logging.getLogger(__name__)
 class LambdaEdgeChecker(EdgeChecker):
     """Class for identifying if Lambda can be used by IAM principals to gain access to other IAM principals."""
 
-    def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[Edge]:
+    def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None,
+                     region_deny_list: Optional[List[str]] = None, scps: Optional[List[List[dict]]] = None) -> List[Edge]:
         """Fulfills expected method return_edges. If session object is None, runs checks in offline mode."""
 
         logger.info('Pulling data on Lambda functions')
@@ -59,7 +60,7 @@ class LambdaEdgeChecker(EdgeChecker):
                 logger.debug('Exception details: {}'.format(ex))
 
         logger.info('Generating Edges based on Lambda data.')
-        result = generate_edges_locally(nodes, function_list)
+        result = generate_edges_locally(nodes, function_list, scps)
 
         for edge in result:
             logger.info("Found new edge: {}".format(edge.describe_edge()))
@@ -67,7 +68,7 @@ class LambdaEdgeChecker(EdgeChecker):
         return result
 
 
-def generate_edges_locally(nodes: List[Node], function_list: List[dict]) -> List[Edge]:
+def generate_edges_locally(nodes: List[Node], function_list: List[dict], scps: Optional[List[List[dict]]] = None) -> List[Edge]:
     """Generates and returns Edge objects. It is possible to use this method if you are operating offline
     (infra-as-code), but you must provide a `function_list` that is a list of dictionaries that mimic the
     output of calling `lambda:ListFunctions`.
@@ -109,6 +110,7 @@ def generate_edges_locally(nodes: List[Node], function_list: List[dict]) -> List
                 {
                     'iam:PassedToService': 'lambda.amazonaws.com'
                 },
+                service_control_policy_groups=scps
             )
 
             # check that source can create a Lambda function and pass it an execution role
@@ -118,6 +120,7 @@ def generate_edges_locally(nodes: List[Node], function_list: List[dict]) -> List
                     'lambda:CreateFunction',
                     '*',
                     {},
+                    service_control_policy_groups=scps
                 )
                 if can_create_function:
                     if need_mfa_0 or need_mfa_passrole:
@@ -140,12 +143,14 @@ def generate_edges_locally(nodes: List[Node], function_list: List[dict]) -> List
                     'lambda:UpdateFunctionCode',
                     func['FunctionArn'],
                     {},
+                    service_control_policy_groups=scps
                 )
                 can_change_config, need_mfa_2 = query_interface.local_check_authorization_handling_mfa(
                     node_source,
                     'lambda:UpdateFunctionConfiguration',
                     func['FunctionArn'],
                     {},
+                    service_control_policy_groups=scps
                 )
                 func_data.append(
                     (func, can_change_code, can_change_config, need_mfa_passrole or need_mfa_1 or need_mfa_2))

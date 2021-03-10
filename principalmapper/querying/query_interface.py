@@ -175,16 +175,19 @@ def _infer_condition_keys(principal: Node, current_keys: dict) -> dict:
 
 
 def local_check_authorization_handling_mfa(principal: Node, action_to_check: str, resource_to_check: str,
-                                           condition_keys_to_check: dict) -> (bool, bool):
+                                           condition_keys_to_check: dict, resource_policy: Optional[dict] = None,
+                                           resource_owner: Optional[str] = None,
+                                           service_control_policy_groups: Optional[List[List[Policy]]] = None,
+                                           session_policy: Optional[dict] = None) -> (bool, bool):
     """Determine if a node is authorized to make an API call. If the node is an IAM User, it will perform authorization
     checks with and without MFA enabled. It returns a (bool, bool) tuple: if the user was authorized and if MFA was
     required for the authorization.
     """
 
     if ':role/' in principal.arn:  # TODO: aws:MultiFactorAuthPresent pass-through?
-        return local_check_authorization(principal, action_to_check, resource_to_check, condition_keys_to_check), False
+        return local_check_authorization_full(principal, action_to_check, resource_to_check, condition_keys_to_check, resource_policy, resource_owner, service_control_policy_groups, session_policy), False
 
-    if local_check_authorization(principal, action_to_check, resource_to_check, condition_keys_to_check):
+    if local_check_authorization_full(principal, action_to_check, resource_to_check, condition_keys_to_check, resource_policy, resource_owner, service_control_policy_groups, session_policy):
         return True, False
 
     new_condition_keys = copy.deepcopy(condition_keys_to_check)
@@ -193,7 +196,7 @@ def local_check_authorization_handling_mfa(principal: Node, action_to_check: str
     if 'aws:MultiFactorAuthPresent' not in new_condition_keys:
         new_condition_keys.update({'aws:MultiFactorAuthPresent': 'true'})
 
-    if local_check_authorization(principal, action_to_check, resource_to_check, new_condition_keys):
+    if local_check_authorization_full(principal, action_to_check, resource_to_check, new_condition_keys, resource_policy, resource_owner, service_control_policy_groups, session_policy):
         return True, True
 
     return False, False

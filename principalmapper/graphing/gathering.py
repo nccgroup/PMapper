@@ -33,7 +33,8 @@ from typing import List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 
-def create_graph(session: botocore.session.Session, service_list: list, region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> Graph:
+def create_graph(session: botocore.session.Session, service_list: list, region_allow_list: Optional[List[str]] = None,
+                 region_deny_list: Optional[List[str]] = None, scps: Optional[List[List[dict]]] = None) -> Graph:
     """Constructs a Graph object.
 
     Information about the graph as it's built will be written to the IO parameter `output`.
@@ -63,7 +64,14 @@ def create_graph(session: botocore.session.Session, service_list: list, region_a
     update_admin_status(nodes_result)
 
     # Generate edges, generate Edge objects
-    edges_result = edge_identification.obtain_edges(session, service_list, nodes_result, region_allow_list, region_deny_list)
+    edges_result = edge_identification.obtain_edges(
+        session,
+        service_list,
+        nodes_result,
+        region_allow_list,
+        region_deny_list,
+        scps
+    )
 
     # Pull S3, SNS, SQS, and KMS resource policies
     policies_result.extend(get_s3_bucket_policies(session))

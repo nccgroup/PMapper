@@ -33,10 +33,11 @@ logger = logging.getLogger(__name__)
 class STSEdgeChecker(EdgeChecker):
     """Class for identifying if STS can be used by IAM principals to gain access to other IAM principals."""
 
-    def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[Edge]:
+    def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None,
+                     region_deny_list: Optional[List[str]] = None, scps: Optional[List[List[dict]]] = None) -> List[Edge]:
         """Fulfills expected method return_edges. If the session object is None, performs checks in offline-mode"""
 
-        result = generate_edges_locally(nodes)
+        result = generate_edges_locally(nodes, scps)
         logging.info('Generating Edges based on STS')
 
         for edge in result:
@@ -45,7 +46,7 @@ class STSEdgeChecker(EdgeChecker):
         return result
 
 
-def generate_edges_locally(nodes: List[Node]) -> List[Edge]:
+def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] = None) -> List[Edge]:
     """Generates and returns Edge objects. It is possible to use this method if you are operating offline (infra-as-code).
     """
 
@@ -80,7 +81,7 @@ def generate_edges_locally(nodes: List[Node]) -> List[Edge]:
                 continue  # Resource policy must match for sts:AssumeRole, even in same-account scenarios
 
             assume_auth, need_mfa = query_interface.local_check_authorization_handling_mfa(
-                node_source, 'sts:AssumeRole', node_destination.arn, {}
+                node_source, 'sts:AssumeRole', node_destination.arn, {}, service_control_policy_groups=scps
             )
             policy_denies = has_matching_statement(
                 node_source,

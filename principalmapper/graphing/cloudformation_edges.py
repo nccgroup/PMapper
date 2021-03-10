@@ -35,7 +35,8 @@ logger = logging.getLogger(__name__)
 class CloudFormationEdgeChecker(EdgeChecker):
     """Class for identifying if CloudFormation can be used by IAM principals to gain access to other IAM principals."""
 
-    def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[Edge]:
+    def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None,
+                     region_deny_list: Optional[List[str]] = None, scps: Optional[List[List[dict]]] = None) -> List[Edge]:
         """Fulfills expected method return_edges."""
 
         logger.info('Pulling data on CloudFormation stacks.')
@@ -64,14 +65,14 @@ class CloudFormationEdgeChecker(EdgeChecker):
                 logger.debug('Exception details: {}'.format(ex))
 
         logger.info('Generating Edges based on data from CloudFormation.')
-        result = generate_edges_locally(nodes, stack_list)
+        result = generate_edges_locally(nodes, stack_list, scps)
 
         for edge in result:
             logger.info("Found new edge: {}".format(edge.describe_edge()))
         return result
 
 
-def generate_edges_locally(nodes: List[Node], stack_list: List[dict]) -> List[Edge]:
+def generate_edges_locally(nodes: List[Node], stack_list: List[dict], scps: Optional[List[List[dict]]] = None) -> List[Edge]:
     """Generates and returns Edge objects. Works on the assumption that the param `stack_list` is the
     collected outputs from calling `cloudformation:DescribeStacks`. Thus, it is possible to
     create a similar output and feed it to this method if you are operating offline (infra-as-code).
@@ -91,7 +92,7 @@ def generate_edges_locally(nodes: List[Node], stack_list: List[dict]) -> List[Ed
             node_destination.trust_policy,
             'sts:AssumeRole',
             node_destination.arn,
-            {},
+            {}
         )
 
         if sim_result != ResourcePolicyEvalResult.SERVICE_MATCH:
@@ -114,6 +115,7 @@ def generate_edges_locally(nodes: List[Node], stack_list: List[dict]) -> List[Ed
                 {
                     'iam:PassedToService': 'cloudformation.amazonaws.com'
                 },
+                service_control_policy_groups=scps
             )
 
             # See if source can make a new stack and pass the destination role
@@ -123,6 +125,7 @@ def generate_edges_locally(nodes: List[Node], stack_list: List[dict]) -> List[Ed
                     'cloudformation:CreateStack',
                     '*',
                     {'cloudformation:RoleArn': node_destination.arn},
+                    service_control_policy_groups=scps
                 )
                 if can_create:
                     reason = 'can create a stack in CloudFormation to access'
@@ -144,6 +147,7 @@ def generate_edges_locally(nodes: List[Node], stack_list: List[dict]) -> List[Ed
                     'cloudformation:UpdateStack',
                     stack['StackId'],
                     {'cloudformation:RoleArn': node_destination.arn},
+                    service_control_policy_groups=scps
                 )
                 if can_update:
                     reason = 'can update the CloudFormation stack {} to access'.format(
@@ -163,6 +167,7 @@ def generate_edges_locally(nodes: List[Node], stack_list: List[dict]) -> List[Ed
                         'cloudformation:UpdateStack',
                         stack['StackId'],
                         {'cloudformation:RoleArn': node_destination.arn},
+                        service_control_policy_groups=scps
                     )
 
                     if can_update:
@@ -182,6 +187,7 @@ def generate_edges_locally(nodes: List[Node], stack_list: List[dict]) -> List[Ed
                     'cloudformation:CreateChangeSet',
                     stack['StackId'],
                     {'cloudformation:RoleArn': node_destination.arn},
+                    service_control_policy_groups=scps
                 )
                 if not can_make_cs:
                     continue
@@ -191,6 +197,7 @@ def generate_edges_locally(nodes: List[Node], stack_list: List[dict]) -> List[Ed
                     'cloudformation:ExecuteChangeSet',
                     stack['StackId'],
                     {},  # docs say no RoleArn context here
+                    service_control_policy_groups=scps
                 )
 
                 if can_exe_cs:
