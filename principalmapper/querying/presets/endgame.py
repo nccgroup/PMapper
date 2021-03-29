@@ -59,7 +59,7 @@ def handle_preset_query(graph: Graph, tokens: List[str], skip_admins: bool = Fal
 
 
 def compose_endgame_map(graph: Graph, service_to_include: str = '*', skip_admins: bool = False) -> Dict[Policy, List[Node]]:
-    """Given a Graph and a service to look at, compose and return a table that includes the different
+    """Given a Graph and a service to look at, compose and return a map that includes the different
     users/roles versus the resources they're able to open up for world-access."""
 
     result = {}
