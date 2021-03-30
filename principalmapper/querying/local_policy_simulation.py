@@ -1,7 +1,6 @@
 """Utility code for the querying module: creates functions for simulating the authorization of principals making
 API calls to AWS."""
 
-
 #  Copyright (c) NCC Group and Erik Steringer 2019. This file is part of Principal Mapper.
 #
 #      Principal Mapper is free software: you can redistribute it and/or modify
@@ -19,16 +18,17 @@ API calls to AWS."""
 
 import ast
 import datetime as dt
+import functools
+
 import dateutil.parser as dup
 from enum import Enum
 import ipaddress
 import logging
-from typing import List, Dict, Optional, Union
+from typing import List, Dict, Optional, Union, Pattern
 import re
 
 from principalmapper.common import Node, Policy
 from principalmapper.util import arns
-
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,8 @@ def has_matching_statement(principal: Node, effect_value: str, action_to_check: 
     return False
 
 
-def policy_has_matching_statement(policy: Union[Policy, dict], effect_value: str, action_to_check: str, resource_to_check: str,
+def policy_has_matching_statement(policy: Union[Policy, dict], effect_value: str, action_to_check: str,
+                                  resource_to_check: str,
                                   condition_keys_to_check: dict) -> bool:
     """Searches a specific Policy/dict object for a statement with a matching Effect/Action/Resource/Condition"""
 
@@ -239,7 +240,8 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                     if policy_key in context.keys():
                         for context_value in _listify_string(context[policy_key]):
                             if context_value != '':
-                                if not _get_straight_str_match(block, policy_key, condition[block][policy_key], context):
+                                if not _get_straight_str_match(block, policy_key, condition[block][policy_key],
+                                                               context):
                                     return False
             elif block.startswith('ForAnyValue:'):
                 # fail to match unless at least one of the provided context values match
@@ -254,7 +256,8 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                     return False
             else:
                 for policy_context_key in condition[block]:
-                    if not _get_straight_str_match(block, policy_context_key, condition[block][policy_context_key], context):
+                    if not _get_straight_str_match(block, policy_context_key, condition[block][policy_context_key],
+                                                   context):
                         return False
 
         if 'IpAddress' in block:
@@ -280,7 +283,8 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                     return False
             else:
                 for policy_context_key in condition[block]:
-                    if not _get_ipaddress_match(block, policy_context_key, condition[block][policy_context_key], context):
+                    if not _get_ipaddress_match(block, policy_context_key, condition[block][policy_context_key],
+                                                context):
                         return False
 
         if 'Arn' in block:
@@ -811,7 +815,8 @@ def _statement_matches_action(statement: dict, action: str, condition_keys: Opti
                 if _matches_after_expansion(action, item, condition_keys):
                     return True
             else:
-                if action.startswith('SNS') or action.startswith('SQS') or item.startswith('SNS') or item.startswith('SQS'):
+                if action.startswith('SNS') or action.startswith('SQS') or item.startswith('SNS') or item.startswith(
+                        'SQS'):
                     action_parts = action.split(':')
                     item_parts = action.split(':')
                     new_action = '{}:{}'.format(action_parts[0].lower(), action_parts[1])
@@ -830,7 +835,8 @@ def _statement_matches_action(statement: dict, action: str, condition_keys: Opti
                     result = False
                     break
             else:
-                if action.startswith('SNS') or action.startswith('SQS') or item.startswith('SNS') or item.startswith('SQS'):
+                if action.startswith('SNS') or action.startswith('SQS') or item.startswith('SNS') or item.startswith(
+                        'SQS'):
                     action_parts = action.split(':')
                     item_parts = action.split(':')
                     new_action = '{}:{}'.format(action_parts[0].lower(), action_parts[1])
@@ -865,7 +871,25 @@ def _statement_matches_resource(statement: dict, resource: str, condition_keys: 
         return True
 
 
-def _matches_after_expansion(string_to_check: str, string_to_check_against: str, condition_keys: Optional[dict] = None) -> bool:
+@functools.lru_cache(maxsize=2048, typed=True)
+def _compose_pattern(string_to_transform) -> Pattern:
+    """Helper function that transforms a string with potential wildcards (* or ?) into a regular expression.
+    Uses the functools.lru_cache decorator to reduce re-compiling the same value multiple times."""
+    return re.compile(
+        "^{}$".format(
+            string_to_transform \
+                .replace(".", "\\.") \
+                .replace("*", ".*") \
+                .replace("?", ".") \
+                .replace("$", "\\$") \
+                .replace("^", "\\^")
+        ),
+        re.IGNORECASE
+    )
+
+
+def _matches_after_expansion(string_to_check: str, string_to_check_against: str,
+                             condition_keys: Optional[dict] = None) -> bool:
     """Helper function that checks the string_to_check against string_to_check_against.
 
     Handles matching with respect to wildcards, variables.
@@ -882,16 +906,8 @@ def _matches_after_expansion(string_to_check: str, string_to_check_against: str,
             full_key = '${' + k + '}'
             copy_string = copy_string.replace(full_key, v)
 
-    pattern_string = copy_string \
-        .replace(".", "\\.") \
-        .replace("*", ".*") \
-        .replace("?", ".") \
-        .replace("$", "\\$") \
-        .replace("^", "\\^")
-    pattern_string = "^{}$".format(pattern_string)
-
-    # return result of match
-    return re.match(pattern_string, string_to_check, flags=re.IGNORECASE) is not None
+    pattern = _compose_pattern(copy_string)
+    return pattern.match(string_to_check) is not None
 
 
 def _listify_dictionary(target_object: Union[List[Dict], Dict]) -> List[Dict]:

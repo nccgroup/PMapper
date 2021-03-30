@@ -64,22 +64,39 @@ the library code.
 
 Here's a quick example:
 
-```
-$ pmapper --profile skywalker graph create
-[... graph-creation output goes here ...]
-$ pmapper --profile skywalker query -s 'who can do iam:CreateUser'
-[... query output goes here ...]
+```bash
+# Create a graph for the account, accessed through AWS CLI profile "skywalker"
+pmapper --profile skywalker graph create
+# [... graph-creation output goes here ...]
+
+# Run a query to see who can make IAM Users
+$ pmapper --profile skywalker query 'who can do iam:CreateUser'
+# [... query output goes here ...]
+
+# Run a query to see who can launch a big expensive EC2 instance, aside from "admin" users
 $ pmapper --account 000000000000 argquery -s --action 'ec2:RunInstances' --condition 'ec2:InstanceType=c6gd.16xlarge'
-[... query output goes here ...]
+# [... query output goes here ...]
+
+# Run the privilege escalation preset query, skip reporting current "admin" users
 $ pmapper --account 000000000000 query -s 'preset privesc *'
-[... privesc report goes here ...]
+# [... privesc report goes here ...]
+
+# Create an SVG representation of the admins/privescs/inter-principal access
 $ pmapper --account 000000000000 visualize --filetype svg
-[... information output goes here, file created ...]
+# [... information output goes here, file created ...]
 ```
 
 Note the use of `--profile`, which should behave the same as the AWS CLI. Also, later calls with 
 `query`/`argquery`/`visualize` use an `--account` arg which just shortcuts around checking which account to work 
 with (otherwise PMapper makes an API call to determine that).
+
+Here's an example of the visualization:
+
+![](examples/example-viz.png)
+
+And again when using `--only-privesc`:
+
+![](examples/example-privesc-only-viz.svg)
 
 # Contributions
 
