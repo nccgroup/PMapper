@@ -96,8 +96,8 @@ def provide_arguments(parser: ArgumentParser):
     # args for commands fitting the pattern "pmapper graph list ..."
     list_parser = graph_subparser.add_parser(
         'list',
-        description='List the Account IDs and Organization IDs of graphs and org trees stored on this computer',
-        help='List the accounts and organizations stored on this computer'
+        description='List the Account IDs of graphs stored on this computer',
+        help='List the accounts stored on this computer'
     )
 
 

@@ -41,6 +41,7 @@ Available presets:
 * connected (principal|"*") (principal|"*")
 * privesc (principal|"*")
 * clusters (tag key)
+* endgame (service|"*")
 """
 
 
@@ -90,6 +91,7 @@ def query_response(graph: Graph, query: str, skip_admins: bool = False, resource
                 key = components[0]
                 value = '='.join(components[1:])
                 condition.update({key: value})
+            logger.debug('Conditions: {}'.format(condition))
         else:
             condition = {}
 
@@ -123,6 +125,7 @@ def query_response(graph: Graph, query: str, skip_admins: bool = False, resource
                 key = components[0]
                 value = '='.join(components[1:])
                 condition.update({key: value})
+            logger.debug('Conditions: {}'.format(condition))
         else:
             condition = {}
 
