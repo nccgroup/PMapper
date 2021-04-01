@@ -15,8 +15,7 @@
 #      You should have received a copy of the GNU Affero General Public License
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
-import io
-import os
+import logging
 from typing import List, Optional
 
 import botocore.session
@@ -26,9 +25,12 @@ from principalmapper.graphing.cloudformation_edges import CloudFormationEdgeChec
 from principalmapper.graphing.ec2_edges import EC2EdgeChecker
 from principalmapper.graphing.iam_edges import IAMEdgeChecker
 from principalmapper.graphing.lambda_edges import LambdaEdgeChecker
+from principalmapper.graphing.sagemaker_edges import SageMakerEdgeChecker
 from principalmapper.graphing.ssm_edges import SSMEdgeChecker
 from principalmapper.graphing.sts_edges import STSEdgeChecker
-from principalmapper.util.debug_print import dprint
+
+
+logger = logging.getLogger(__name__)
 
 
 # Externally referable dictionary with all the supported edge-checking types
@@ -37,22 +39,22 @@ checker_map = {
     'ec2': EC2EdgeChecker,
     'iam': IAMEdgeChecker,
     'lambda': LambdaEdgeChecker,
+    'sagemaker': SageMakerEdgeChecker,
     'ssm': SSMEdgeChecker,
     'sts': STSEdgeChecker
 }
 
 
 def obtain_edges(session: Optional[botocore.session.Session], checker_list: List[str], nodes: List[Node],
-                 output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
+                 region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None,
+                 scps: Optional[List[List[dict]]] = None) -> List[Edge]:
     """Given a list of nodes and a botocore Session, return a list of edges between those nodes. Only checks
     against services passed in the checker_list param. """
     result = []
-    output.write('Initiating edge checks.\n')
-    dprint(debug, 'Checker map:  {}'.format(checker_map))
-    dprint(debug, 'Checker list: {}'.format(checker_list))
+    logger.info('Initiating edge checks.')
+    logger.debug('Services being checked for edges: {}'.format(checker_list))
     for check in checker_list:
         if check in checker_map:
-            output.write('running edge check for service: {}\n'.format(check))
             checker_obj = checker_map[check](session)
-            result.extend(checker_obj.return_edges(nodes, output, debug))
+            result.extend(checker_obj.return_edges(nodes, region_allow_list, region_deny_list, scps))
     return result

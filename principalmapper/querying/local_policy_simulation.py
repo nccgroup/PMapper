@@ -1,7 +1,6 @@
 """Utility code for the querying module: creates functions for simulating the authorization of principals making
 API calls to AWS."""
 
-
 #  Copyright (c) NCC Group and Erik Steringer 2019. This file is part of Principal Mapper.
 #
 #      Principal Mapper is free software: you can redistribute it and/or modify
@@ -19,71 +18,68 @@ API calls to AWS."""
 
 import ast
 import datetime as dt
+import functools
+
 import dateutil.parser as dup
 from enum import Enum
 import ipaddress
-from typing import List, Dict, Optional, Union
+import logging
+from typing import List, Dict, Optional, Union, Pattern
 import re
 
 from principalmapper.common import Node, Policy
-from principalmapper.util.debug_print import dprint
 from principalmapper.util import arns
 
+logger = logging.getLogger(__name__)
 
-def has_matching_statement(principal: Node, effect_value: str, action_to_check: str,
-                           resource_to_check: str, condition_keys_to_check: dict, debug: bool = False) -> bool:
+
+def has_matching_statement(principal: Node, effect_value: str, action_to_check: str, resource_to_check: str,
+                           condition_keys_to_check: dict) -> bool:
     """Locally determine if a node's attached policies (and group's policies if applicable) has at least one matching
     statement with the given effect. This is the meat of the local policy evaluation.
     """
-    dprint(
-        debug,
-        '   Looking for statement match - effect: {}, action: {}, resource: {}, conditions: {}'.format(
-            effect_value,
-            action_to_check,
-            resource_to_check,
-            condition_keys_to_check
-        )
-    )
 
     for policy in principal.attached_policies:
         if policy_has_matching_statement(policy, effect_value, action_to_check, resource_to_check,
-                                         condition_keys_to_check, debug):
+                                         condition_keys_to_check):
             return True
 
     for group in principal.group_memberships:
         for policy in group.attached_policies:
             if policy_has_matching_statement(policy, effect_value, action_to_check, resource_to_check,
-                                             condition_keys_to_check, debug):
+                                             condition_keys_to_check):
                 return True
 
     return False
 
 
-def policy_has_matching_statement(policy: Policy, effect_value: str, action_to_check: str, resource_to_check: str,
-                                  condition_keys_to_check: dict, debug: bool = False) -> bool:
-    """Searches a specific Policy object"""
+def policy_has_matching_statement(policy: Union[Policy, dict], effect_value: str, action_to_check: str,
+                                  resource_to_check: str,
+                                  condition_keys_to_check: dict) -> bool:
+    """Searches a specific Policy/dict object for a statement with a matching Effect/Action/Resource/Condition"""
 
-    dprint(debug, 'looking at policy named: {}\n'.format(policy.name))
+    if isinstance(policy, Policy):
+        base_obj = policy.policy_doc
+    else:
+        base_obj = policy
 
     # go through each policy_doc
-    for statement in _listify_dictionary(policy.policy_doc['Statement']):
+    for statement in _listify_dictionary(base_obj['Statement']):
         if statement['Effect'] != effect_value:
             continue  # skip if effect doesn't match
-
-        dprint(debug, 'Checking statement: {}\n'.format(str(statement)))
 
         matches_action, matches_resource, matches_condition = False, False, False
 
         # start by checking the action
         if 'Action' in statement:
             for action in _listify_string(statement['Action']):
-                if _matches_after_expansion(action_to_check, action, debug=debug):
+                if _matches_after_expansion(action_to_check, action):
                     matches_action = True
                     break
         else:  # 'NotAction' in statement
             matches_action = True
             for notaction in _listify_string(statement['NotAction']):
-                if _matches_after_expansion(action_to_check, notaction, debug=debug):
+                if _matches_after_expansion(action_to_check, notaction):
                     matches_action = False
                     break  # finish looping
         if not matches_action:
@@ -92,13 +88,13 @@ def policy_has_matching_statement(policy: Policy, effect_value: str, action_to_c
         # if action is good, check resource
         if 'Resource' in statement:
             for resource in _listify_string(statement['Resource']):
-                if _matches_after_expansion(resource_to_check, resource, condition_keys_to_check, debug=debug):
+                if _matches_after_expansion(resource_to_check, resource, condition_keys_to_check):
                     matches_resource = True
                     break
         elif 'NotResource' in statement:  # 'NotResource' in statement
             matches_resource = True
             for notresource in _listify_string(statement['NotResource']):
-                if _matches_after_expansion(resource_to_check, notresource, condition_keys_to_check, debug=debug):
+                if _matches_after_expansion(resource_to_check, notresource, condition_keys_to_check):
                     matches_resource = False
                     break
         else:
@@ -108,7 +104,7 @@ def policy_has_matching_statement(policy: Policy, effect_value: str, action_to_c
 
         # if resource is good, check condition
         if 'Condition' in statement:
-            matches_condition = _get_condition_match(statement['Condition'], condition_keys_to_check, debug)
+            matches_condition = _get_condition_match(statement['Condition'], condition_keys_to_check)
         else:
             matches_condition = True
 
@@ -118,7 +114,7 @@ def policy_has_matching_statement(policy: Policy, effect_value: str, action_to_c
     return False
 
 
-def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], context: Dict, debug: bool = False) -> bool:
+def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], context: Dict) -> bool:
     """
     Internal method. It digs through Null, Bool, DateX, NumericX, StringX conditions and returns false if any of
     them don't match what the context has.
@@ -128,8 +124,6 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
     See: https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_condition_operators.html
     """
     for block in condition.keys():
-        dprint(debug, 'Testing condition field: {}'.format(block))
-
         # String operators
         if 'String' in block:
             # string comparison after expansion
@@ -143,8 +137,7 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                                         block,
                                         policy_key,
                                         condition[block][policy_key],
-                                        {policy_key: context_value},
-                                        debug):
+                                        {policy_key: context_value}):
                                     return False
             elif block.startswith('ForAnyValue:'):
                 # fail to match unless at least one of the provided context values match
@@ -153,14 +146,13 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                     if policy_key in context.keys():
                         for context_value in _listify_string(context[policy_key]):
                             if context_value != '':
-                                if _get_str_match(block, policy_key, condition[block][policy_key], context, debug):
+                                if _get_str_match(block, policy_key, condition[block][policy_key], context):
                                     no_match = False
                 if no_match:
                     return False
             else:
                 for policy_context_key in condition[block]:
-                    if not _get_str_match(block, policy_context_key, condition[block][policy_context_key], context,
-                                          debug):
+                    if not _get_str_match(block, policy_context_key, condition[block][policy_context_key], context):
                         return False
 
         if 'Numeric' in block:
@@ -171,7 +163,7 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                     if policy_key in context.keys():
                         for context_value in _listify_string(context[policy_key]):
                             if context_value != '':
-                                if not _get_num_match(block, policy_key, condition[block][policy_key], context, debug):
+                                if not _get_num_match(block, policy_key, condition[block][policy_key], context):
                                     return False
             elif block.startswith('ForAnyValue:'):
                 # fail to match unless at least one of the provided context values match
@@ -180,14 +172,13 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                     if policy_key in context.keys():
                         for context_value in _listify_string(context[policy_key]):
                             if context_value != '':
-                                if _get_num_match(block, policy_key, condition[block][policy_key], context, debug):
+                                if _get_num_match(block, policy_key, condition[block][policy_key], context):
                                     no_match = False
                 if no_match:
                     return False
             else:
                 for policy_context_key in condition[block]:
-                    if not _get_num_match(block, policy_context_key, condition[block][policy_context_key], context,
-                                          debug):
+                    if not _get_num_match(block, policy_context_key, condition[block][policy_context_key], context):
                         return False
 
         if 'Date' in block:
@@ -198,7 +189,7 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                     if policy_key in context.keys():
                         for context_value in _listify_string(context[policy_key]):
                             if context_value != '':
-                                if not _get_date_match(block, policy_key, condition[block][policy_key], context, debug):
+                                if not _get_date_match(block, policy_key, condition[block][policy_key], context):
                                     return False
             elif block.startswith('ForAnyValue:'):
                 # fail to match unless at least one of the provided context values match
@@ -207,14 +198,13 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                     if policy_key in context.keys():
                         for context_value in _listify_string(context[policy_key]):
                             if context_value != '':
-                                if _get_date_match(block, policy_key, condition[block][policy_key], context, debug):
+                                if _get_date_match(block, policy_key, condition[block][policy_key], context):
                                     no_match = False
                 if no_match:
                     return False
             else:
                 for policy_context_key in condition[block]:
-                    if not _get_date_match(block, policy_context_key, condition[block][policy_context_key], context,
-                                           debug):
+                    if not _get_date_match(block, policy_context_key, condition[block][policy_context_key], context):
                         return False
 
         if 'Bool' in block:
@@ -225,8 +215,7 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                     if policy_key in context.keys():
                         for context_value in _listify_string(context[policy_key]):
                             if context_value != '':
-                                if not _get_bool_match(block, policy_key, condition[block][policy_key], context,
-                                                       debug):
+                                if not _get_bool_match(block, policy_key, condition[block][policy_key], context):
                                     return False
             elif block.startswith('ForAnyValue:'):
                 # fail to match unless at least one of the provided context values match
@@ -235,15 +224,13 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                     if policy_key in context.keys():
                         for context_value in _listify_string(context[policy_key]):
                             if context_value != '':
-                                if _get_bool_match(block, policy_key, condition[block][policy_key], context,
-                                                   debug):
+                                if _get_bool_match(block, policy_key, condition[block][policy_key], context):
                                     no_match = False
                 if no_match:
                     return False
             else:
                 for policy_context_key in condition[block]:
-                    if not _get_bool_match(block, policy_context_key, condition[block][policy_context_key],
-                                           context, debug):
+                    if not _get_bool_match(block, policy_context_key, condition[block][policy_context_key], context):
                         return False
         if 'BinaryEquals' in block:
             # straight string comparison
@@ -253,8 +240,8 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                     if policy_key in context.keys():
                         for context_value in _listify_string(context[policy_key]):
                             if context_value != '':
-                                if not _get_straight_str_match(block, policy_key, condition[block][policy_key], context,
-                                                               debug):
+                                if not _get_straight_str_match(block, policy_key, condition[block][policy_key],
+                                                               context):
                                     return False
             elif block.startswith('ForAnyValue:'):
                 # fail to match unless at least one of the provided context values match
@@ -263,15 +250,14 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                     if policy_key in context.keys():
                         for context_value in _listify_string(context[policy_key]):
                             if context_value != '':
-                                if _get_straight_str_match(block, policy_key, condition[block][policy_key], context,
-                                                           debug):
+                                if _get_straight_str_match(block, policy_key, condition[block][policy_key], context):
                                     no_match = False
                 if no_match:
                     return False
             else:
                 for policy_context_key in condition[block]:
                     if not _get_straight_str_match(block, policy_context_key, condition[block][policy_context_key],
-                                                   context, debug):
+                                                   context):
                         return False
 
         if 'IpAddress' in block:
@@ -282,8 +268,7 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                     if policy_key in context.keys():
                         for context_value in _listify_string(context[policy_key]):
                             if context_value != '':
-                                if not _get_ipaddress_match(block, policy_key, condition[block][policy_key], context,
-                                                            debug):
+                                if not _get_ipaddress_match(block, policy_key, condition[block][policy_key], context):
                                     return False
             elif block.startswith('ForAnyValue:'):
                 # fail to match unless at least one of the provided context values match
@@ -292,15 +277,14 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                     if policy_key in context.keys():
                         for context_value in _listify_string(context[policy_key]):
                             if context_value != '':
-                                if _get_ipaddress_match(block, policy_key, condition[block][policy_key], context,
-                                                        debug):
+                                if _get_ipaddress_match(block, policy_key, condition[block][policy_key], context):
                                     no_match = False
                 if no_match:
                     return False
             else:
                 for policy_context_key in condition[block]:
                     if not _get_ipaddress_match(block, policy_context_key, condition[block][policy_context_key],
-                                                context, debug):
+                                                context):
                         return False
 
         if 'Arn' in block:
@@ -311,7 +295,7 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                     if policy_key in context.keys():
                         for context_value in _listify_string(context[policy_key]):
                             if context_value != '':
-                                if not _get_arn_match(block, policy_key, condition[block][policy_key], context, debug):
+                                if not _get_arn_match(block, policy_key, condition[block][policy_key], context):
                                     return False
             elif block.startswith('ForAnyValue:'):
                 # fail to match if none of the provided context values match
@@ -320,14 +304,13 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                     if policy_key in context.keys():
                         for context_value in _listify_string(context[policy_key]):
                             if context_value != '':
-                                if _get_arn_match(block, policy_key, condition[block][policy_key], context, debug):
+                                if _get_arn_match(block, policy_key, condition[block][policy_key], context):
                                     no_match = False
                 if no_match:
                     return False
             else:
                 for policy_context_key in condition[block]:
-                    if not _get_arn_match(block, policy_context_key, condition[block][policy_context_key], context,
-                                          debug):
+                    if not _get_arn_match(block, policy_context_key, condition[block][policy_context_key], context):
                         return False
 
         # handle Null, ForAllValues:Null, ForAnyValue:Null
@@ -338,7 +321,7 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                     if policy_key in context.keys():
                         for context_value in _listify_string(context[policy_key]):
                             if context_value != '':
-                                if not _get_null_match(policy_key, condition[block][policy_key], context, debug):
+                                if not _get_null_match(policy_key, condition[block][policy_key], context):
                                     return False
             elif block.startswith('ForAnyValue:'):
                 # fail to match unless at least one of the provided context values match
@@ -347,20 +330,19 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                     if policy_key in context.keys():
                         for context_value in _listify_string(context[policy_key]):
                             if context_value != '':
-                                if _get_null_match(policy_key, condition[block][policy_key], context, debug):
+                                if _get_null_match(policy_key, condition[block][policy_key], context):
                                     no_match = False
                 if no_match:
                     return False
             else:
                 for policy_context_key in condition[block]:
-                    if not _get_null_match(policy_context_key, condition[block][policy_context_key], context, debug):
+                    if not _get_null_match(policy_context_key, condition[block][policy_context_key], context):
                         return False
 
     return True
 
 
-def _get_str_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict,
-                   debug: bool = False):
+def _get_str_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict) -> bool:
     """Helper method for dealing with String* conditions, including: StringEquals, StringNotEquals,
     StringEqualsIgnoreCase, StringNotEqualsIgnoreCase, StringLike, StringNotLike
 
@@ -374,10 +356,6 @@ def _get_str_match(block: str, policy_key: str, policy_value: Union[str, List[st
 
     Many thanks to https://stackoverflow.com/a/29247821 for helping this code on this journey.
     """
-
-    dprint(debug, 'Checking {} for value {} with context {}, condition element {}'.format(
-        policy_key, policy_value, context, block
-    ))
 
     if_exists_op = 'IfExists' in block
 
@@ -440,17 +418,12 @@ def _expand_str_and_compare(pattern: str, input_value: str) -> bool:
     return re.match(pattern_string, input_value, flags=re.UNICODE) is not None
 
 
-def _get_num_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict,
-                   debug: bool = False) -> bool:
+def _get_num_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict) -> bool:
     """Helper method for dealing with Numeric* conditions, including: NumericEquals, NumericNotEquals,
     NumericLessThan, NumericLessThanEquals, NumericGreaterThan, NumericGreaterThanEquals
 
     Parses the string inputs into numbers before doing comparisons.
     """
-
-    dprint(debug, 'Checking {} for value {} with context {}, condition element {}'.format(
-        policy_key, policy_value, context, block
-    ))
 
     if_exists_op = 'IfExists' in block
 
@@ -496,15 +469,10 @@ def _get_num_match(block: str, policy_key: str, policy_value: Union[str, List[st
         return False
 
 
-def _get_bool_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict,
-                    debug: bool = False) -> bool:
+def _get_bool_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict) -> bool:
     """Helper method for dealing with Bool. For 'true' policy values, returns True if context has 'true' as a value. For
     'false' policy values, returns True if context has value that's not 'true'. Returns False if no context value.
     """
-
-    dprint(debug, 'Checking {} for value {} with context {}, condition element {}'.format(
-        policy_key, policy_value, context, block
-    ))
 
     if_exists_op = 'IfExists' in block
 
@@ -521,15 +489,11 @@ def _get_bool_match(block: str, policy_key: str, policy_value: Union[str, List[s
     return False
 
 
-def _get_straight_str_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict,
-                            debug: bool = False) -> bool:
+def _get_straight_str_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict) -> bool:
     """Helper method for dealing with BinaryEquals
 
     Does a straight string comparison to search for a match.
     """
-    dprint(debug, 'Checking {} for value {} with context {}, condition element {}'.format(
-        policy_key, policy_value, context, block
-    ))
 
     # can knock this out up here
     if policy_key not in context:
@@ -543,16 +507,12 @@ def _get_straight_str_match(block: str, policy_key: str, policy_value: Union[str
     return False
 
 
-def _get_ipaddress_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict,
-                         debug: bool = False) -> bool:
+def _get_ipaddress_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict) -> bool:
     """Helper method for dealing with *IpAddress conditions: IpAddress, NotIpAddress
 
     Parses the policy value as an IPvXNetwork, then the context value as an IPvXAddress, then uses
     the `in` operator to determine a match.
     """
-    dprint(debug, 'Checking {} for value {} with context {}, condition element {}'.format(
-        policy_key, policy_value, context, block
-    ))
 
     if_exists_op = 'IfExists' in block
 
@@ -580,17 +540,13 @@ def _get_ipaddress_match(block: str, policy_key: str, policy_value: Union[str, L
         return True
 
 
-def _get_date_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict,
-                    debug: bool = False) -> bool:
+def _get_date_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict) -> bool:
     """Helper method for dealing with Date* conditions: DateEquals, DateNotEquals, DateGreaterThan,
     DateGreaterThanEquals, DateLessThan, DateLessThanEquals.
 
     Parses values by distinguishing between epoch values and ISO 8601/RFC 3339 datetimestamps. Assumes
     the timezone is UTC when not specified.
     """
-    dprint(debug, 'Checking {} for value {} with context {}, condition element {}'.format(
-        policy_key, policy_value, context, block
-    ))
 
     if_exists_op = 'IfExists' in block
 
@@ -650,12 +606,8 @@ def _convert_timestamp_to_datetime_obj(timestamp: str):
         return dt.datetime.fromtimestamp(float(timestamp), dt.timezone.utc)  # TODO: concern around float imprecision
 
 
-def _get_arn_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict,
-                   debug: bool = False) -> bool:
+def _get_arn_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict) -> bool:
     """Helper method for dealing with Arn* conditions: ArnEquals, ArnLike, ArnNotEquals, ArnNotLike"""
-    dprint(debug, 'Checking {} for value {} with context {}, condition element {}'.format(
-        policy_key, policy_value, context, block
-    ))
 
     if_exists_op = 'IfExists' in block
 
@@ -666,7 +618,7 @@ def _get_arn_match(block: str, policy_key: str, policy_value: Union[str, List[st
             for context_value in _listify_string(context[policy_key]):
                 if not arns.validate_arn(context_value):
                     return False  # policy simulator behavior: reject if provided value isn't a legit ARN
-                if _matches_after_expansion(context_value, value, debug=debug):
+                if _matches_after_expansion(context_value, value):
                     return False
         else:
             if policy_key not in context:
@@ -674,7 +626,7 @@ def _get_arn_match(block: str, policy_key: str, policy_value: Union[str, List[st
             for context_value in _listify_string(context[policy_key]):
                 if not arns.validate_arn(context_value):
                     continue  # skip invalid arns
-                if _matches_after_expansion(context_value, value, debug=debug):
+                if _matches_after_expansion(context_value, value):
                     return True
 
     # Made it through the loops without an answer, give default response
@@ -684,9 +636,8 @@ def _get_arn_match(block: str, policy_key: str, policy_value: Union[str, List[st
         return False
 
 
-def _get_null_match(policy_key: str, policy_value: Union[str, List[str]], context: Dict, debug: bool = False) -> bool:
+def _get_null_match(policy_key: str, policy_value: Union[str, List[str]], context: Dict) -> bool:
     """Helper method for dealing with Null conditions"""
-    dprint(debug, 'Checking {} for value {} with context {}'.format(policy_key, policy_value, context))
     for value in _listify_string(policy_value):
         if value == 'true':  # key is expected not to be in context, or empty
             if policy_key not in context or context[policy_key] == '':
@@ -697,83 +648,18 @@ def _get_null_match(policy_key: str, policy_value: Union[str, List[str]], contex
     return False
 
 
-def resource_policy_has_matching_statement_for_principal(principal: Node, resource_policy: dict, effect_value: str,
-                                                         action_to_check: str, resource_to_check: str,
-                                                         condition_keys_to_check: dict, debug: bool = False) -> bool:
-    """Locally determine if a node is permitted by a resource policy for a given action/resource/condition"""
-    dprint(debug, 'local resource policy check - principal: {}, effect: {}, action: {}, resource: {}, conditions: {}, '
-                  'resource_policy: {}'.format(principal.arn, effect_value, action_to_check, resource_to_check,
-                                               condition_keys_to_check, resource_policy))
-
-    for statement in _listify_dictionary(resource_policy['Statement']):
-        if statement['Effect'] != effect_value:
-            continue
-        matches_principal, matches_action, matches_resource, matches_condition = False, False, False, False
-        if 'Principal' in statement:  # should be a dictionary
-            if 'AWS' in statement['Principal']:
-                if _principal_matches_in_statement(principal, _listify_string(statement['Principal']['AWS'])):
-                    matches_principal = True
-        else:  # 'NotPrincipal' in statement:
-            matches_principal = True
-            if 'AWS' in statement['NotPrincipal']:
-                if _principal_matches_in_statement(principal, _listify_string(statement['NotPrincipal']['AWS'])):
-                    matches_principal = False
-
-        if not matches_principal:
-            continue
-
-        # if principal is good, proceed to check the Action
-        if 'Action' in statement:
-            for action in _listify_string(statement['Action']):
-                matches_action = _matches_after_expansion(action_to_check, action, debug=debug)
-                break
-        else:  # 'NotAction' in statement
-            matches_action = True
-            for notaction in _listify_string(statement['NotAction']):
-                if _matches_after_expansion(action_to_check, notaction, debug=debug):
-                    matches_action = False
-                    break  # finish looping
-        if not matches_action:
-            continue
-
-        # if action is good, proceed to check resource
-        if 'Resource' in statement:
-            for resource in _listify_string(statement['Resource']):
-                if _matches_after_expansion(resource_to_check, resource, debug=debug):
-                    matches_resource = True
-                    break
-        elif 'NotResource' in statement:
-            matches_resource = True
-            for notresource in _listify_string(statement['NotResource']):
-                if _matches_after_expansion(resource_to_check, notresource, debug=debug):
-                    matches_resource = False
-                    break
-        else:  # no resource element (seen in IAM role trust policies), treat as a match
-            matches_resource = True
-
-        # if resource is good, check condition
-        matches_condition = True  # TODO: handle this in local evaluation
-
-        if matches_principal and matches_action and matches_resource and matches_condition:
-            return True
-
-    return False
-
-
 def resource_policy_matching_statements(node_or_service: Union[Node, str], resource_policy: dict,
-                                        action_to_check: str, resource_to_check: str, condition_keys_to_check: dict,
-                                        debug: bool = False) -> list:
+                                        action_to_check: str, resource_to_check: str,
+                                        condition_keys_to_check: dict) -> list:
     """Returns if a resource policy has a matching statement for a given service (ec2.amazonaws.com for example)."""
-
-    dprint(debug, 'local resource policy check - service: {}, action: {}, resource: {}, conditions: {}, '
-                  'resource_policy: {}'.format(node_or_service, action_to_check, resource_to_check,
-                                               condition_keys_to_check, resource_policy))
 
     results = []
 
     for statement in _listify_dictionary(resource_policy['Statement']):
         matches_principal, matches_action, matches_resource, matches_condition = False, False, False, False
         if 'Principal' in statement:  # should be a dictionary
+            if statement['Principal'] == '*':
+                matches_principal = True
             if isinstance(node_or_service, Node):
                 if 'AWS' in statement['Principal']:
                     if _principal_matches_in_statement(node_or_service, _listify_string(statement['Principal']['AWS'])):
@@ -785,7 +671,7 @@ def resource_policy_matching_statements(node_or_service: Union[Node, str], resou
         else:  # 'NotPrincipal' in statement:
             matches_principal = True
             if isinstance(node_or_service, Node):
-                if 'AWS' in statement['Principal']:
+                if 'AWS' in statement['NotPrincipal']:
                     if _principal_matches_in_statement(node_or_service, _listify_string(statement['Principal']['AWS'])):
                         matches_principal = False
             else:
@@ -796,37 +682,21 @@ def resource_policy_matching_statements(node_or_service: Union[Node, str], resou
         if not matches_principal:
             continue
 
-        # if principal is good, proceed to check the Action
-        if 'Action' in statement:
-            for action in _listify_string(statement['Action']):
-                matches_action = _matches_after_expansion(action_to_check, action, debug=debug)
-                break
-        else:  # 'NotAction' in statement
-            matches_action = True
-            for notaction in _listify_string(statement['NotAction']):
-                if _matches_after_expansion(action_to_check, notaction, debug=debug):
-                    matches_action = False
-                    break  # finish looping
+        # if principal is good, proceed to check the Action, process depending on prefix
+        matches_action = _statement_matches_action(statement, action_to_check, condition_keys_to_check, True)
         if not matches_action:
             continue
 
         # if action is good, proceed to check resource
-        if 'Resource' in statement:
-            for resource in _listify_string(statement['Resource']):
-                if _matches_after_expansion(resource_to_check, resource, debug=debug):
-                    matches_resource = True
-                    break
-        elif 'NotResource' in statement:
-            matches_resource = True
-            for notresource in _listify_string(statement['NotResource']):
-                if _matches_after_expansion(resource_to_check, notresource, debug=debug):
-                    matches_resource = False
-                    break
-        else:  # no resource element (seen in IAM role trust policies), treat as a match
-            matches_resource = True
+        matches_resource = _statement_matches_resource(statement, resource_to_check, condition_keys_to_check)
+        if not matches_resource:
+            continue
 
         # if resource is good, check condition
-        matches_condition = True  # TODO: implement local condition check in policy/statement loop
+        if 'Condition' in statement:
+            matches_condition = _get_condition_match(statement['Condition'], condition_keys_to_check)
+        else:
+            matches_condition = True
 
         if matches_principal and matches_action and matches_resource and matches_condition:
             results.append(statement)
@@ -853,45 +723,41 @@ class ResourcePolicyEvalResult(Enum):
 
 
 def resource_policy_authorization(node_or_service: Union[Node, str], resource_owner: str, resource_policy: dict,
-                                  action_to_check: str, resource_to_check: str, condition_keys_to_check: dict,
-                                  debug: bool) -> ResourcePolicyEvalResult:
+                                  action_to_check: str, resource_to_check: str,
+                                  condition_keys_to_check: dict) -> ResourcePolicyEvalResult:
     """Returns a ResourcePolicyEvalResult for a given request, based on the resource policy."""
-    dprint(debug, "Local resource policy authorization check: Principal {}, Action {}, Resource {}, Condition Keys {}, "
-                  "Resource Owner {}".format(node_or_service, action_to_check, resource_to_check,
-                                             condition_keys_to_check, resource_owner))
 
     matching_statements = resource_policy_matching_statements(node_or_service, resource_policy, action_to_check,
-                                                              resource_to_check, condition_keys_to_check, debug)
+                                                              resource_to_check, condition_keys_to_check)
     if len(matching_statements) == 0:
         return ResourcePolicyEvalResult.NO_MATCH
+
+    # handle denies outright
+    for statement in matching_statements:
+        if statement['Effect'] == 'Deny':
+            return ResourcePolicyEvalResult.DENY_MATCH
 
     # handle nodes (IAM Users or Roles)
     if isinstance(node_or_service, Node):
         # if in a different account, check for denies and wrap it up
         if arns.get_account_id(node_or_service.arn) != resource_owner:
-            for statement in matching_statements:
-                if statement['Effect'] == 'Deny':
-                    return ResourcePolicyEvalResult.DENY_MATCH
             return ResourcePolicyEvalResult.DIFF_ACCOUNT_MATCH
 
         else:
-            # messy part: find denies, then determine if we send back ROOT or NODE match
-            for statement in matching_statements:
-                if statement['Effect'] == 'Deny':
-                    return ResourcePolicyEvalResult.DENY_MATCH
-
             node_match = False
             for statement in matching_statements:
                 if 'NotPrincipal' in statement:
                     # NotPrincipal means a node match (tested with S3)
                     node_match = True
+                elif isinstance(statement['Principal'], str) and statement['Principal'] == '*':
+                    # Case: "Principal": "*"
+                    node_match = True
                 else:
-                    for principal in _listify_string(statement['Principal']):
-                        if node_or_service.arn == principal:
-                            node_match = True
-                        if node_or_service.id_value == principal:
-                            node_match = True  # 'AIDA.*' and co. can match here
-
+                    # dig through 'AWS' element of Principal for node-matching
+                    if 'AWS' in statement['Principal']:
+                        for aws_principal in _listify_string(statement['Principal']['AWS']):
+                            if node_or_service.arn == aws_principal:
+                                node_match = True
             if node_match:
                 return ResourcePolicyEvalResult.NODE_MATCH
             else:
@@ -918,36 +784,116 @@ def _principal_matches_in_statement(principal: Node, aws_principal_field: list):
     return False
 
 
-def policies_include_matching_allow_action(principal: Node, action_to_check: str, debug: bool = False) -> bool:
+def policies_include_matching_allow_action(principal: Node, action_to_check: str) -> bool:
     """Helper function for online-testing. Does a 'light' scan of a principal's policies to determine if any of
     their statements have an Allow statement with a matching action. Helps reduce unecessary API calls to
     iam:SimulatePrincipalPolicy.
+
+    **NOTE:** Not something being used right now, given that all policy evaluation is local
     """
-    dprint(debug, 'optimization check, determine if {} could even possibly call {}'.format(
-        principal.arn, action_to_check
-    ))
+
     for policy in principal.attached_policies:
         for statement in _listify_dictionary(policy.policy_doc['Statement']):
             if statement['Effect'] != 'Allow':
                 continue
             if 'Action' in statement:
                 for action in _listify_string(statement['Action']):
-                    if _matches_after_expansion(action_to_check, action, debug=debug):
+                    if _matches_after_expansion(action_to_check, action):
                         return True
             else:  # 'NotAction' in statement
                 return True  # so broad that we'd need to simulate to make sure
     return False
 
 
+def _statement_matches_action(statement: dict, action: str, condition_keys: Optional[dict] = None,
+                              is_resource_policy_check: bool = False) -> bool:
+    """Helper function, returns True if the given action is in the given policy statement"""
+    exempted_services = ('sns', 'sqs')
+    if 'Action' in statement:
+        for item in _listify_string(statement['Action']):
+            if not is_resource_policy_check:
+                if _matches_after_expansion(action, item, condition_keys):
+                    return True
+            else:
+                if action.startswith('SNS') or action.startswith('SQS') or item.startswith('SNS') or item.startswith(
+                        'SQS'):
+                    action_parts = action.split(':')
+                    item_parts = action.split(':')
+                    new_action = '{}:{}'.format(action_parts[0].lower(), action_parts[1])
+                    new_item = '{}:{}'.format(item_parts[0].lower(), item_parts[1])
+                    if _matches_after_expansion(new_action, new_item, condition_keys):
+                        return True
+                else:
+                    if _matches_after_expansion(action, item, condition_keys):
+                        return True
+        return False
+    elif 'NotAction' in statement:
+        result = True
+        for item in _listify_string(statement['NotAction']):
+            if not is_resource_policy_check:
+                if _matches_after_expansion(action, item, condition_keys):
+                    result = False
+                    break
+            else:
+                if action.startswith('SNS') or action.startswith('SQS') or item.startswith('SNS') or item.startswith(
+                        'SQS'):
+                    action_parts = action.split(':')
+                    item_parts = action.split(':')
+                    new_action = '{}:{}'.format(action_parts[0].lower(), action_parts[1])
+                    new_item = '{}:{}'.format(item_parts[0].lower(), item_parts[1])
+                    if _matches_after_expansion(new_action, new_item, condition_keys):
+                        result = False
+                        break
+                else:
+                    if _matches_after_expansion(action, item, condition_keys):
+                        result = False
+                        break
+        return result
+    else:
+        return True
+
+
+def _statement_matches_resource(statement: dict, resource: str, condition_keys: Optional[dict] = None) -> bool:
+    """Helper function, returns True if the given resource is in the given policy statement"""
+    if 'Resource' in statement:
+        for item in _listify_string(statement['Resource']):
+            if _matches_after_expansion(resource, item, condition_keys):
+                return True
+        return False
+    elif 'NotResource' in statement:
+        result = True
+        for item in _listify_string(statement['NotResource']):
+            if _matches_after_expansion(resource, item, condition_keys):
+                result = False
+                break
+        return result
+    else:
+        return True
+
+
+@functools.lru_cache(maxsize=2048, typed=True)
+def _compose_pattern(string_to_transform) -> Pattern:
+    """Helper function that transforms a string with potential wildcards (* or ?) into a regular expression.
+    Uses the functools.lru_cache decorator to reduce re-compiling the same value multiple times."""
+    return re.compile(
+        "^{}$".format(
+            string_to_transform \
+                .replace(".", "\\.") \
+                .replace("*", ".*") \
+                .replace("?", ".") \
+                .replace("$", "\\$") \
+                .replace("^", "\\^")
+        ),
+        re.IGNORECASE
+    )
+
+
 def _matches_after_expansion(string_to_check: str, string_to_check_against: str,
-                             condition_keys: Optional[dict] = None, debug: bool = False) -> bool:
+                             condition_keys: Optional[dict] = None) -> bool:
     """Helper function that checks the string_to_check against string_to_check_against.
 
     Handles matching with respect to wildcards, variables.
     """
-    dprint(debug, 'Checking for post-expansion match.\n   string to check: {}\n   '.format(string_to_check) +
-           'string to check against: {}\n'.format(string_to_check_against) +
-           '   condition_keys: {}'.format(condition_keys))
 
     # regexify string_to_check_against
     # handles use of ${} var substitution, wildcards (*), and periods (.)
@@ -960,17 +906,8 @@ def _matches_after_expansion(string_to_check: str, string_to_check_against: str,
             full_key = '${' + k + '}'
             copy_string = copy_string.replace(full_key, v)
 
-    pattern_string = copy_string \
-        .replace(".", "\\.") \
-        .replace("*", ".*") \
-        .replace("?", ".") \
-        .replace("$", "\\$") \
-        .replace("^", "\\^")
-    pattern_string = "^{}$".format(pattern_string)
-    dprint(debug, '   post-processed pattern_string: {}'.format(pattern_string))
-
-    # return result of match
-    return re.match(pattern_string, string_to_check, flags=re.IGNORECASE) is not None
+    pattern = _compose_pattern(copy_string)
+    return pattern.match(string_to_check) is not None
 
 
 def _listify_dictionary(target_object: Union[List[Dict], Dict]) -> List[Dict]:

@@ -16,8 +16,9 @@
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 import io
+import logging
 import os
-from typing import List
+from typing import List, Optional
 
 from principalmapper.common import Edge, Node
 from principalmapper.graphing.edge_checker import EdgeChecker
@@ -26,84 +27,100 @@ from principalmapper.querying.local_policy_simulation import resource_policy_aut
 from principalmapper.util import arns
 
 
+logger = logging.getLogger(__name__)
+
+
 class STSEdgeChecker(EdgeChecker):
     """Class for identifying if STS can be used by IAM principals to gain access to other IAM principals."""
 
-    def return_edges(self, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
+    def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None,
+                     region_deny_list: Optional[List[str]] = None, scps: Optional[List[List[dict]]] = None) -> List[Edge]:
         """Fulfills expected method return_edges. If the session object is None, performs checks in offline-mode"""
-        result = []
-        for node_source in nodes:
-            for node_destination in nodes:
-                # skip self-access checks
-                if node_source == node_destination:
-                    continue
 
-                # check if source is an admin, if so it can access destination but this is not tracked via an Edge
-                if node_source.is_admin:
-                    continue
+        result = generate_edges_locally(nodes, scps)
+        logging.info('Generating Edges based on STS')
 
-                # check if source can call sts:AssumeRole to access the destination if destination is a role
-                if ':role/' in node_destination.arn:
-                    # Check against resource policy
-                    sim_result = resource_policy_authorization(
-                        node_source,
-                        arns.get_account_id(node_source.arn),
-                        node_destination.trust_policy,
-                        'sts:AssumeRole',
-                        node_destination.arn,
-                        {},
-                        debug
-                    )
-
-                    if sim_result == ResourcePolicyEvalResult.DENY_MATCH:
-                        continue  # Node was explicitly denied from assuming the role
-
-                    if sim_result == ResourcePolicyEvalResult.NO_MATCH:
-                        continue  # Resource policy must match for sts:AssumeRole, even in same-account scenarios
-
-                    assume_auth, need_mfa = query_interface.local_check_authorization_handling_mfa(
-                        node_source, 'sts:AssumeRole', node_destination.arn, {}, debug
-                    )
-                    policy_denies = has_matching_statement(
-                        node_source,
-                        'Deny',
-                        'sts:AssumeRole',
-                        node_destination.arn,
-                        {},
-                        debug
-                    )
-                    policy_denies_mfa = has_matching_statement(
-                        node_source,
-                        'Deny',
-                        'sts:AssumeRole',
-                        node_destination.arn,
-                        {
-                            'aws:MultiFactorAuthAge': '1',
-                            'aws:MultiFactorAuthPresent': 'true'
-                        },
-                        debug
-                    )
-
-                    if assume_auth:
-                        if need_mfa:
-                            reason = '(requires MFA) can access via sts:AssumeRole'
-                        else:
-                            reason = 'can access via sts:AssumeRole'
-                        new_edge = Edge(
-                            node_source,
-                            node_destination,
-                            reason
-                        )
-                        output.write('Found new edge: {}\n'.format(new_edge.describe_edge()))
-                        result.append(new_edge)
-                    elif not (policy_denies_mfa and policy_denies) and sim_result == ResourcePolicyEvalResult.NODE_MATCH:
-                        # testing same-account scenario, so NODE_MATCH will override a lack of an allow from iam policy
-                        new_edge = Edge(
-                            node_source,
-                            node_destination,
-                            'can access via sts:AssumeRole'
-                        )
-                        output.write('Found new edge: {}\n'.format(new_edge.describe_edge()))
-                        result.append(new_edge)
+        for edge in result:
+            logger.info("Found new edge: {}".format(edge.describe_edge()))
 
         return result
+
+
+def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] = None) -> List[Edge]:
+    """Generates and returns Edge objects. It is possible to use this method if you are operating offline (infra-as-code).
+    """
+
+    result = []
+    for node_destination in nodes:
+        if ':role/' not in node_destination.arn:
+            continue  # skip non-roles
+
+        for node_source in nodes:
+            # skip self-access checks
+            if node_source == node_destination:
+                continue
+
+            # check if source is an admin, if so it can access destination but this is not tracked via an Edge
+            if node_source.is_admin:
+                continue
+
+            # Check against resource policy
+            sim_result = resource_policy_authorization(
+                node_source,
+                arns.get_account_id(node_source.arn),
+                node_destination.trust_policy,
+                'sts:AssumeRole',
+                node_destination.arn,
+                {},
+            )
+
+            if sim_result == ResourcePolicyEvalResult.DENY_MATCH:
+                continue  # Node was explicitly denied from assuming the role
+
+            if sim_result == ResourcePolicyEvalResult.NO_MATCH:
+                continue  # Resource policy must match for sts:AssumeRole, even in same-account scenarios
+
+            assume_auth, need_mfa = query_interface.local_check_authorization_handling_mfa(
+                node_source, 'sts:AssumeRole', node_destination.arn, {}, service_control_policy_groups=scps
+            )
+            policy_denies = has_matching_statement(
+                node_source,
+                'Deny',
+                'sts:AssumeRole',
+                node_destination.arn,
+                {},
+            )
+            policy_denies_mfa = has_matching_statement(
+                node_source,
+                'Deny',
+                'sts:AssumeRole',
+                node_destination.arn,
+                {
+                    'aws:MultiFactorAuthAge': '1',
+                    'aws:MultiFactorAuthPresent': 'true'
+                },
+            )
+
+            if assume_auth:
+                if need_mfa:
+                    reason = '(requires MFA) can access via sts:AssumeRole'
+                else:
+                    reason = 'can access via sts:AssumeRole'
+                new_edge = Edge(
+                    node_source,
+                    node_destination,
+                    reason,
+                    'AssumeRole'
+                )
+                result.append(new_edge)
+            elif not (policy_denies_mfa and policy_denies) and sim_result == ResourcePolicyEvalResult.NODE_MATCH:
+                # testing same-account scenario, so NODE_MATCH will override a lack of an allow from iam policy
+                new_edge = Edge(
+                    node_source,
+                    node_destination,
+                    'can access via sts:AssumeRole',
+                    'AssumeRole'
+                )
+                result.append(new_edge)
+
+    return result

@@ -1,7 +1,7 @@
 ---
 name: Bug Report
 about: Report issues that causes the script to fail to execute
-
+labels: bug
 ---
 
 **Describe the bug**

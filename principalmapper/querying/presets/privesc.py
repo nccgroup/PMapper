@@ -23,12 +23,11 @@ from typing import List
 
 from principalmapper.common import Edge, Node, Graph
 from principalmapper.querying.query_utils import get_search_list
-from principalmapper.util.debug_print import dprint
 
 
-def handle_preset_query(graph: Graph, tokens: List[str], skip_admins: bool = False, output: io.StringIO = os.devnull,
-                        debug: bool = False) -> None:
-    """Handles a human-readable query that's been chunked into tokens, and writes the result to output."""
+def handle_preset_query(graph: Graph, tokens: List[str], skip_admins: bool = False) -> None:
+    """Handles a human-readable query that's been chunked into tokens, and prints the result."""
+
     # Get the nodes we're determining can privesc or not
     target = tokens[2]
     nodes = []
@@ -36,14 +35,34 @@ def handle_preset_query(graph: Graph, tokens: List[str], skip_admins: bool = Fal
         nodes.extend(graph.nodes)
     else:
         nodes.append(graph.get_node_by_searchable_name(target))
-    write_privesc_results(graph, nodes, skip_admins, output, debug)
+    print_privesc_results(graph, nodes, skip_admins)
 
 
-def write_privesc_results(graph: Graph, nodes: List[Node], skip_admins: bool = False, output: io.StringIO = os.devnull,
-                          debug: bool = False) -> None:
+def print_privesc_results(graph: Graph, nodes: List[Node], skip_admins: bool = False) -> None:
     """Handles a privesc query and writes the result to output."""
     for node in nodes:
-        dprint(debug, 'Looking at principal {}'.format(node.searchable_name()))
+        if skip_admins and node.is_admin:
+            continue  # skip admins
+
+        if node.is_admin:
+            print('{} is an administrative principal'.format(node.searchable_name()))
+            continue
+
+        privesc, edge_list = can_privesc(graph, node)
+        if privesc:
+            end_of_list = edge_list[-1].destination
+            # the node can access this admin node through the current edge list, print this info out
+            print('{} can escalate privileges by accessing the administrative principal {}:'.format(
+                node.searchable_name(), end_of_list.searchable_name()))
+            for edge in edge_list:
+                print('   {}'.format(edge.describe_edge()))
+
+
+def write_privesc_results(graph: Graph, nodes: List[Node], skip_admins: bool, output: io.StringIO) -> None:
+    """Handles a privesc query and writes the result to output.
+
+    **Change, v1.1.x:** The `output` param is no longer optional. The `skip_admins` param is no longer optional."""
+    for node in nodes:
         if skip_admins and node.is_admin:
             continue  # skip admins
 
@@ -51,7 +70,7 @@ def write_privesc_results(graph: Graph, nodes: List[Node], skip_admins: bool = F
             output.write('{} is an administrative principal\n'.format(node.searchable_name()))
             continue
 
-        privesc, edge_list = can_privesc(graph, node, debug)
+        privesc, edge_list = can_privesc(graph, node)
         if privesc:
             end_of_list = edge_list[-1].destination
             # the node can access this admin node through the current edge list, print this info out
@@ -61,7 +80,7 @@ def write_privesc_results(graph: Graph, nodes: List[Node], skip_admins: bool = F
                 output.write('   {}\n'.format(edge.describe_edge()))
 
 
-def can_privesc(graph: Graph, node: Node, debug: bool = False) -> (bool, List[Edge]):
+def can_privesc(graph: Graph, node: Node) -> (bool, List[Edge]):
     """Method for determining if a given Node in a Graph can escalate privileges.
 
     Returns a bool, List[Edge] tuple. The bool indicates if there is a privesc risk, and the List[Edge] component

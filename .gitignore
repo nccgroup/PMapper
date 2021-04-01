@@ -15,4 +15,4 @@
 *.idea*
 
 # Ignore venv
-/venv/*
+/venv*

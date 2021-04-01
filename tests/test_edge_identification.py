@@ -15,6 +15,7 @@
 #      You should have received a copy of the GNU Affero General Public License
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
+import logging
 import unittest
 
 from principalmapper.common.graphs import Graph
@@ -25,6 +26,7 @@ from tests.build_test_graphs import build_playground_graph
 
 
 class TestEdgeIdentification(unittest.TestCase):
+
     def test_playground_assume_role(self):
         graph = build_playground_graph()
         jump_user_node = graph.get_node_by_searchable_name('user/jumpuser')

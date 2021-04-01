@@ -15,6 +15,7 @@
 #      You should have received a copy of the GNU Affero General Public License
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
+import logging
 import os
 import os.path
 import sys
@@ -22,32 +23,38 @@ import sys
 import botocore.session
 from principalmapper.common import Graph
 from principalmapper.graphing import gathering
-from principalmapper.util.debug_print import dprint
-from principalmapper.util.storage import get_storage_root
+from principalmapper.util.storage import get_default_graph_path
 from typing import List, Optional
 
 
-def create_new_graph(session: botocore.session.Session, service_list: List[str], debug=False) -> Graph:
-    """Wraps around principalmapper.graphing.gathering.create_graph(...), specifying to print data to stdout. This
-    fulfills `pmapper graph --create`.
+logger = logging.getLogger(__name__)
+
+
+def create_new_graph(session: botocore.session.Session, service_list: List[str],
+                     region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None,
+                     scps: Optional[List[List[dict]]] = None) -> Graph:
+    """Wraps around principalmapper.graphing.gathering.create_graph(...) This fulfills `pmapper graph create`.
     """
 
-    return gathering.create_graph(session, service_list, sys.stdout, debug)
+    return gathering.create_graph(session, service_list, region_allow_list, region_deny_list, scps)
 
 
 def print_graph_data(graph: Graph) -> None:
     """Given a Graph object, prints a small amount of information about the Graph. This fulfills
-    `pmapper graph --display`, and also gets ran after `pmapper graph --create`.
+    `pmapper graph display`, and also gets ran after `pmapper graph --create`.
     """
     print('Graph Data for Account:  {}'.format(graph.metadata['account_id']))
+    if 'org-id' in graph.metadata:
+        print('  Organization: {}'.format(graph.metadata['org-id']))
+        print('  OU Path:      {}'.format(graph.metadata['org-path']))
     admin_count = 0
     for node in graph.nodes:
         if node.is_admin:
             admin_count += 1
-    print('# of Nodes:              {} ({} admins)'.format(len(graph.nodes), admin_count))
-    print('# of Edges:              {}'.format(len(graph.edges)))
-    print('# of Groups:             {}'.format(len(graph.groups)))
-    print('# of (tracked) Policies: {}'.format(len(graph.policies)))
+    print('  # of Nodes:              {} ({} admins)'.format(len(graph.nodes), admin_count))
+    print('  # of Edges:              {}'.format(len(graph.edges)))
+    print('  # of Groups:             {}'.format(len(graph.groups)))
+    print('  # of (tracked) Policies: {}'.format(len(graph.policies)))
 
 
 def get_graph_from_disk(location: str) -> Graph:
@@ -58,19 +65,19 @@ def get_graph_from_disk(location: str) -> Graph:
     return Graph.create_graph_from_local_disk(location)
 
 
-def get_existing_graph(session: Optional[botocore.session.Session], account: Optional[str], debug=False) -> Graph:
+def get_existing_graph(session: Optional[botocore.session.Session], account: Optional[str]) -> Graph:
     """Returns a Graph object stored on-disk in a standard location (per-OS, using the get_storage_root utility function
     in principalmapper.util.storage). Uses the session/account parameter to choose the directory from under the
     standard location.
     """
     if account is not None:
-        dprint(debug, 'Loading account data based on parameter --account')
-        graph = get_graph_from_disk(os.path.join(get_storage_root(), account))
+        logger.debug('Loading graph based on given account id: {}'.format(account))
+        graph = get_graph_from_disk(get_default_graph_path(account))
     elif session is not None:
-        dprint(debug, 'Loading account data using a botocore session object')
         stsclient = session.create_client('sts')
         response = stsclient.get_caller_identity()
-        graph = get_graph_from_disk(os.path.join(get_storage_root(), response['Account']))
+        logger.debug('Loading graph based on sts:GetCallerIdentity result: {}'.format(response['Account']))
+        graph = get_graph_from_disk(os.path.join(get_default_graph_path(response['Account'])))
     else:
         raise ValueError('One of the parameters `account` or `session` must not be None')
     return graph

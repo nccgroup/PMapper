@@ -17,6 +17,7 @@
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 import json
+import logging
 import os
 import os.path
 from typing import Optional
@@ -31,10 +32,13 @@ from principalmapper.common.nodes import Node
 from principalmapper.common.policies import Policy
 
 
+logger = logging.getLogger(__name__)
+
+
 class Graph(object):
     """The basic Graph object: contains nodes, edges, policies, and groups. Also includes code for saving and loading
     Graph data to/from files stored on-disk. The actual attributes of each graph/node/edge/policy/group object
-    will remain the same across the same major/minor version of Principal Mapper, so a graph generated in v1.0.0
+    will remain the same across the same major+minor version of Principal Mapper, so a graph generated in v1.0.0
     should be loadable in v1.0.1, but not v1.1.0.
     """
 
@@ -122,6 +126,7 @@ class Graph(object):
         Validates, using metadata, that the version of Principal Mapper that created the graph is the same
         major/minor version of the current version of Principal Mapper. Raises a ValueError otherwise.
         """
+        logger.debug('Loading Graph object from {}'.format(root_directory))
         rootpath = root_directory
         if not os.path.exists(rootpath):
             raise ValueError('Did not find file at: {}'.format(rootpath))
@@ -176,14 +181,23 @@ class Graph(object):
                     if policy_ref['arn'] == policy.arn and policy_ref['name'] == policy.name:
                         node_policies.append(policy)
                         break
+            # match permission boundaries
+            node_permission_boundary = node['permissions_boundary']
+            if node_permission_boundary is not None:
+                # find policy by arn/name and load
+                for policy in policies:
+                    if policy.name == node_permission_boundary['name'] and policy.arn == node_permission_boundary['arn']:
+                        node_permission_boundary = policy
+                        break
+
             for group in groups:
                 if group.arn in node['group_memberships']:
                     group_memberships.append(group)
-                    break
             nodes.append(Node(arn=node['arn'], id_value=node['id_value'], attached_policies=node_policies,
                               group_memberships=group_memberships, trust_policy=node['trust_policy'],
                               instance_profile=node['instance_profile'], num_access_keys=node['access_keys'],
-                              active_password=node['active_password'], is_admin=node['is_admin']))
+                              active_password=node['active_password'], is_admin=node['is_admin'],
+                              permissions_boundary=node_permission_boundary, has_mfa=node['has_mfa'], tags=node['tags']))
 
         with open(edgesfilepath) as f:
             unresolved_edges = json.load(f)
@@ -199,6 +213,7 @@ class Graph(object):
                     destination = node
                 if source is not None and destination is not None:
                     break
-            edges.append(Edge(source=source, destination=destination, reason=edge['reason']))
+            edges.append(Edge(source=source, destination=destination, reason=edge['reason'],
+                              short_reason=edge['short_reason']))
 
         return Graph(nodes=nodes, edges=edges, policies=policies, groups=groups, metadata=metadata)

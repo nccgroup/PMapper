@@ -27,9 +27,8 @@ class Policy(object):
         Expects an ARN with either :user/, :role/, :group/, or :policy/ in it (tracked as managed or inline this way)
         Expects a dictionary for the policy document parameter, so you must parse the JSON beforehand
         """
-        if arn is None or \
-                (':user/' not in arn and ':role/' not in arn and ':group/' not in arn and ':policy/' not in arn):
-            raise ValueError('The parameter arn must be a string representing a principal or policy ARN')
+        if arn is None:
+            raise ValueError('The parameter arn must be a string with an ARN for a principal, policy, or resource')
         if policy_doc is None or not isinstance(policy_doc, dict):
             raise ValueError('Policy objects must be constructed with a dictionary policy_doc parameter')
 

@@ -16,7 +16,6 @@
 #      You should have received a copy of the GNU Affero General Public License
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
-from principalmapper.common.nodes import Node
 from principalmapper.util import arns
 
 
@@ -25,18 +24,21 @@ class Edge(object):
     the source Node is able to access the destination Node.
     """
 
-    def __init__(self, source: Node, destination: Node, reason: str):
+    def __init__(self, source, destination, reason: str, short_reason: str):
         """Constructor"""
         if source is None:
             raise ValueError('Edges must have a source Node object')
         if destination is None:
             raise ValueError('Edges must have a destination Node object')
         if reason is None:
-            raise ValueError('Edges must be constructed with a reason parameter (str object)')
+            raise ValueError('Edges must be constructed with a reason parameter (str)')
+        if short_reason is None:
+            raise ValueError('Edges must be constructed with a short_reason parameter (str)')
 
         self.source = source
         self.destination = destination
         self.reason = reason
+        self.short_reason = short_reason
 
     def describe_edge(self) -> str:
         """Returns a human-readable string explaining the edge"""
@@ -51,5 +53,6 @@ class Edge(object):
         return {
             'source': self.source.arn,
             'destination': self.destination.arn,
-            'reason': self.reason
+            'reason': self.reason,
+            'short_reason': self.short_reason
         }

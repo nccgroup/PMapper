@@ -16,6 +16,7 @@
 #      You should have received a copy of the GNU Affero General Public License
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
+import logging
 import unittest
 
 from principalmapper.common.graphs import Graph
@@ -37,10 +38,10 @@ class ConstructorTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             Node(arn='arn:aws:iam::000000000000:group/notauser', id_value='AIDA00000000000000000', attached_policies=[],
                  group_memberships=[], trust_policy=None, instance_profile=None, num_access_keys=0,
-                 active_password=False, is_admin=False)
+                 active_password=False, is_admin=False, permissions_boundary=None, has_mfa=False, tags={})
         try:
             Node(arn='arn:aws:iam::000000000000:user/auser', id_value='AIDA00000000000000001', attached_policies=[],
                  group_memberships=[], trust_policy=None, instance_profile=None, num_access_keys=0,
-                 active_password=False, is_admin=False)
+                 active_password=False, is_admin=False, permissions_boundary=None, has_mfa=False, tags={})
         except Exception as ex:
             self.fail('Unexpected error: ' + str(ex))

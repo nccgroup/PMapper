@@ -17,38 +17,38 @@
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 import pydot
+from typing import List
 
-from principalmapper.common import Graph
+from principalmapper.common import Graph, Node, Edge
 from principalmapper.querying.presets.privesc import can_privesc
+from principalmapper.visualizing import graphml_writer, graphviz_writer
 
 
 def handle_request(graph: Graph, path: str, file_format: str) -> None:
     """Meat of the graph_writer.py module, writes graph data in a given file-format to the given path."""
-    # Load graph data into pydot
-    pydg = pydot.Dot(
-        graph_type='digraph',
-        graph_name='Principal Mapper Visualization: {}'.format(graph.metadata['account_id']),
-        overlap='scale',
-        layout='neato',
-        concentrate='true',
-        splines='true'
-    )
-    pyd_nd = {}
 
-    for node in graph.nodes:
-        if node.is_admin:
-            color = '#BFEFFF'
-        elif can_privesc(graph, node)[0]:
-            color = '#FADBD8'
-        else:
-            color = 'white'
+    # adding extra branch to handle new GraphML format
+    if file_format == 'graphml':
+        return graphml_writer.write_standard_graphml(graph, path)
 
-        pyd_nd[node] = pydot.Node(node.searchable_name(), style='filled', fillcolor=color, shape='box')
-        pydg.add_node(pyd_nd[node])
+    elif file_format in ('svg', 'png', 'dot'):
+        return graphviz_writer.write_standard_graphviz(graph, path, file_format)
 
-    for edge in graph.edges:
-        if not edge.source.is_admin:
-            pydg.add_edge(pydot.Edge(pyd_nd[edge.source], pyd_nd[edge.destination]))
+    else:
+        raise ValueError('Unexpected value for parameter `file_format`')
 
-    # and draw
-    pydg.write(path, format=file_format)
+
+def draw_privesc_paths(graph: Graph, path: str, file_format: str) -> None:
+    """Draws a graph using Graphviz (dot) with a specific set of nodes and edges to highlight admins and privilege
+    escalation paths."""
+
+    # adding extra branch to handle new GraphML format
+    if file_format == 'graphml':
+        return graphml_writer.write_privesc_graphml(graph, path)
+
+    elif file_format in ('svg', 'png', 'dot'):
+        return graphviz_writer.write_privesc_graphviz(graph, path, file_format)
+
+    else:
+        raise ValueError('Unexpected value for parameter `file_format`')
+

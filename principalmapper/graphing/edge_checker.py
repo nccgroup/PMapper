@@ -18,7 +18,7 @@
 
 import io
 import os
-from typing import List
+from typing import List, Optional
 
 import botocore.session
 
@@ -31,10 +31,14 @@ class EdgeChecker(object):
     def __init__(self, session: botocore.session.Session):
         self.session = session
 
-    def return_edges(self, nodes: List[Node], output: io.StringIO = os.devnull, debug: bool = False) -> List[Edge]:
-        """Expect subclasses to override. Given a list of nodes, the EdgeChecker should be able to use its session
+    def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None,
+                     region_deny_list: Optional[List[str]] = None, scps: Optional[List[List[dict]]] = None) -> List[Edge]:
+        """Subclasses shall override this method. Given a list of nodes, the EdgeChecker should be able to use its session
         object in order to make clients and call the AWS API to resolve information about the account. Then,
         with this information, it should return a list of edges between the passed nodes.
+
+        The region allow/deny lists are mutually-exclusive (i.e. at least one of which has the value None) lists of
+        allowed/denied regions to pull data from.
         """
         raise NotImplementedError('The return_edges method should not be called from EdgeChecker, but rather from an '
                                   'object that subclasses EdgeChecker')
