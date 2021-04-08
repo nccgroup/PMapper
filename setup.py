@@ -35,7 +35,7 @@ setup(
     author_email='erik.steringer@nccgroup.com',
     scripts=[],
     include_package_data=True,
-    packages=find_packages(),
+    packages=find_packages(exclude=("tests", )),
     package_data={},
     python_requires='>=3.5, <4',  # assume Python 4 will break
     install_requires=['botocore', 'packaging', 'python-dateutil', 'pydot'],

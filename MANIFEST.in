@@ -1,3 +1,6 @@
-include LICENSE README.md example-viz.png
+include LICENSE
+include README.md
+include examples/example-viz.png
+include examples/example-privesc-only-viz.svg
 recursive-exclude * *.pyc
-prune tests*
+prune tests
