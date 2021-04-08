@@ -127,6 +127,45 @@ class LocalResourcePolicyEvalTests(unittest.TestCase):
             )
         )
 
+        # A user from another account
+        other_account_node = Node(
+            'arn:aws:iam::999999999999:role/test_other',
+            'ARIA00',
+            [
+                Policy(
+                    'arn:aws:iam::999999999999:role/test_other',
+                    'inline1',
+                    {
+                        'Version': '2012-10-17',
+                        'Statement': [{
+                            'Effect': 'Allow',
+                            'Action': 'sts:AssumeRole',
+                            'Resource': '*'
+                        }]
+                    }
+                )
+            ],
+            [],
+            {},
+            [],
+            0,
+            False,
+            False,
+            None,
+            False,
+            None
+        )
+        self.assertFalse(
+            local_check_authorization_full(
+                other_account_node,
+                'sts:AssumeRole',
+                'arn:aws:iam::000000000000:role/test1',
+                {},
+                trust_doc_1,
+                '000000000000'
+            )
+        )
+
     def test_match_action_resource_policy_elements(self):
         """Test if we're correctly testing Action/Resource elements in resource policies"""
         bucket_policy_1 = {

@@ -84,6 +84,8 @@ def gen_privesc_findings(graph: Graph) -> List[Finding]:
     node_path_list = []
 
     for node in graph.nodes:
+        if node.is_admin:
+            continue  # skip current admins
         privesc_res, edge_list = can_privesc(graph, node)
         if privesc_res:
             node_path_list.append((node, edge_list))

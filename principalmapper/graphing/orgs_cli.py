@@ -103,7 +103,7 @@ def process_arguments(parsed_args: Namespace):
         org_tree = get_organizations_data(session)
         logger.info('Generated initial organization data for {}'.format(org_tree.org_id))
 
-        # create the account -> OU path map and apply to all accounts (same as org_update operation)
+        # create the account -> OU path map and apply to all accounts (same as orgs update operation)
         account_ou_map = _map_account_ou_paths(org_tree)
         logger.debug('account_ou_map: {}'.format(account_ou_map))
         _update_accounts_with_ou_path_map(org_tree.org_id, account_ou_map, get_storage_root())
@@ -121,7 +121,7 @@ def process_arguments(parsed_args: Namespace):
             except Exception as ex:
                 logger.warning('Unable to load a Graph object for account {}, possibly because it is not mapped yet. '
                                'Please map all accounts and then update the Organization Tree '
-                               '(`pmapper graph org_update`).'.format(account))
+                               '(`pmapper graph orgs update`).'.format(account))
                 logger.debug(str(ex))
 
         for graph_obj_a in graph_objs:
@@ -161,7 +161,7 @@ def process_arguments(parsed_args: Namespace):
             except Exception as ex:
                 logger.warning('Unable to load a Graph object for account {}, possibly because it is not mapped yet. '
                                'Please map all accounts and then update the Organization Tree '
-                               '(`pmapper graph org_update`).'.format(account))
+                               '(`pmapper graph orgs update`).'.format(account))
                 logger.debug(str(ex))
 
         for graph_obj_a in graph_objs:
@@ -264,5 +264,5 @@ def _update_accounts_with_ou_path_map(org_id: str, account_ou_map: dict, root_di
         else:
             logger.debug(
                 'Account {} of organization {} does not have a Graph. You will need to update the '
-                'organization data at a later point (`pmapper graph org_update`).'.format(account.account_id, org_id)
+                'organization data at a later point (`pmapper graph orgs update`).'.format(account.account_id, org_id)
             )  # warning gets thrown up by caller, no need to reiterate

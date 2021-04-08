@@ -41,13 +41,16 @@ class QueryResult(object):
     def print_result(self, action_param: str, resource_param: str):
         """Prints information about the QueryResult object to stdout."""
         if self.allowed:
-            if isinstance(self.edge_list, Node) and self.edge_list == self.node:
-                # node is an Admin but can't directly call the action
-                print('{} IS authorized to call action {} for resource {} THRU its admin privileges'.format(
-                    self.node.searchable_name(), action_param, resource_param
-                ))
+            if isinstance(self.edge_list, Node):
+                if self.edge_list == self.node:
+                    # node is an Admin but can't directly call the action
+                    print('{} CAN BECOME authorized to call action {} for resource {} THRU its admin privileges'.format(
+                        self.node.searchable_name(), action_param, resource_param
+                    ))
+                else:
+                    raise ValueError('Improperly-generated QueryResult object: edge_list is a Node but not the input Node')
 
-            if len(self.edge_list) == 0:
+            elif len(self.edge_list) == 0:
                 # node itself is auth'd
                 print('{} IS authorized to call action {} for resource {}'.format(
                     self.node.searchable_name(), action_param, resource_param
