@@ -284,6 +284,11 @@ def local_check_authorization_full(principal: Node, action_to_check: str, resour
             logger.debug('Explicit Deny: Principal\'s attached policies.')
             return False
 
+    for iam_group in principal.group_memberships:
+        for policy in iam_group.attached_policies:
+            if policy_has_matching_statement(policy, 'Deny', action_to_check, resource_to_check, conditions_keys_copy):
+                logger.debug('Explicit Deny: Principal\'s IAM Group policies')
+
     if service_control_policy_groups is not None:
         for service_control_policy_group in service_control_policy_groups:
             for service_control_policy in service_control_policy_group:
@@ -362,6 +367,12 @@ def local_check_authorization_full(principal: Node, action_to_check: str, resour
     for policy in principal.attached_policies:
         if policy_has_matching_statement(policy, 'Allow', action_to_check, resource_to_check, conditions_keys_copy):
             return True  # already did Deny statement checks, so we're done
+
+    # Check principal's IAM Groups policies
+    for iam_group in principal.group_memberships:
+        for policy in iam_group.attached_policies:
+            if policy_has_matching_statement(policy, 'Allow', action_to_check, resource_to_check, conditions_keys_copy):
+                return True  # already did Deny statement checks, so we're done
 
     logger.debug('Implicit Deny: Principal\'s Attached Policies')
     return False
