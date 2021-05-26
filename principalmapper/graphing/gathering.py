@@ -73,11 +73,12 @@ def create_graph(session: botocore.session.Session, service_list: list, region_a
         scps
     )
 
-    # Pull S3, SNS, SQS, and KMS resource policies
+    # Pull S3, SNS, SQS, KMS, and Secrets Manager resource policies
     policies_result.extend(get_s3_bucket_policies(session))
     policies_result.extend(get_sns_topic_policies(session, region_allow_list, region_deny_list))
     policies_result.extend(get_sqs_queue_policies(session, caller_identity['Account'], region_allow_list, region_deny_list))
     policies_result.extend(get_kms_key_policies(session, region_allow_list, region_deny_list))
+    policies_result.extend(get_secrets_manager_policies(session, region_allow_list, region_deny_list))
 
     return Graph(nodes_result, edges_result, policies_result, groups_result, metadata)
 
@@ -324,8 +325,8 @@ def get_kms_key_policies(session: botocore.session.Session, region_allow_list: O
 
 
 def get_sns_topic_policies(session: botocore.session.Session, region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[Policy]:
-    """Using a botocore Session object, return a list of Policy objects representing the key policies of each
-    KMS key in this account.
+    """Using a botocore Session object, return a list of Policy objects representing the topic policies of each
+    SNS topic in this account.
 
     The region allow/deny lists are mutually-exclusive (i.e. at least one of which has the value None) lists of
     allowed/denied regions to pull data from.
@@ -360,8 +361,8 @@ def get_sns_topic_policies(session: botocore.session.Session, region_allow_list:
 
 
 def get_sqs_queue_policies(session: botocore.session.Session, account_id: str, region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[Policy]:
-    """Using a botocore Session object, return a list of Policy objects representing the key policies of each
-    KMS key in this account.
+    """Using a botocore Session object, return a list of Policy objects representing the queue policies of each
+    SQS queue in this account.
 
     The region allow/deny lists are mutually-exclusive (i.e. at least one of which has the value None) lists of
     allowed/denied regions to pull data from.
@@ -404,6 +405,62 @@ def get_sqs_queue_policies(session: botocore.session.Session, account_id: str, r
                     logger.info('Queue {} does not have a bucket policy, adding a "stub" policy instead.'.format(queue_name))
         except botocore.exceptions.ClientError as ex:
             logger.info('Unable to search SQS in region {} for queues. The region may be disabled, or the current principal may not be authorized to access the service. Continuing.'.format(sqs_region))
+            logger.debug('Exception was: {}'.format(ex))
+
+    return result
+
+
+def get_secrets_manager_policies(session: botocore.session.Session, region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[Policy]:
+    """Using a botocore Session object, return a list of Policy objects representing the resource policies
+    of the secrets in AWS Secrets Manager.
+
+    The region allow/deny lists are mutually-exclusive (i.e. at least one of which has the value None) lists of
+    allowed/denied regions to pull data from.
+    """
+    result = []
+
+    # Iterate through all regions of Secrets Manager where possible
+    for sm_region in get_regions_to_search(session, 'secretsmanager', region_allow_list, region_deny_list):
+        try:
+            # Grab the ARNs of the secrets in this region
+            secret_arns = []
+            smclient = session.create_client('secretsmanager', region_name=sm_region)
+            list_secrets_paginator = smclient.get_paginator('list_secrets')
+            for page in list_secrets_paginator.paginate():
+                if 'SecretList' in page:
+                    for entry in page['SecretList']:
+                        if 'PrimaryRegion' in entry and entry['PrimaryRegion'] != sm_region:
+                            continue  # skip things we're supposed to find in other regions
+                        secret_arns.append(entry['ARN'])
+
+            # Grab resource policies for each secret
+            for secret_arn in secret_arns:
+                sm_response = smclient.get_resource_policy(SecretId=secret_arn)
+
+                # verify that it is in the response and not None/empty
+                if 'ResourcePolicy' in sm_response and sm_response['ResourcePolicy']:
+                    sm_policy_doc = json.loads(sm_response['ResourcePolicy'])
+                    result.append(Policy(
+                        secret_arn,
+                        sm_response['Name'],
+                        sm_policy_doc
+                    ))
+                    logger.info('Storing the resource policy for secret {}'.format(secret_arn))
+                else:
+                    result.append(Policy(
+                        secret_arn,
+                        sm_response['Name'],
+                        {
+                            "Statement": [],
+                            "Version": "2012-10-17"
+                        }
+                    ))
+                    logger.info('Secret {} does not have a resource policy, inserting a "stub" policy instead'.format(secret_arn))
+
+        except botocore.exceptions.ClientError as ex:
+            logger.info('Unable to search Secrets Manager in region {} for secrets. The region may be disabled, or '
+                        'the current principal may not be authorized to access the service. '
+                        'Continuing.'.format(sm_region))
             logger.debug('Exception was: {}'.format(ex))
 
     return result

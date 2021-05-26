@@ -128,7 +128,7 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
                 mfa_needed = True
 
             if create_instance_res:
-                if iprofile is not '*':
+                if iprofile != '*':
                     reason = 'can use EC2 to run an instance with an existing instance profile to access'
                 else:
                     reason = 'can use EC2 to run an instance with a newly created instance profile to access'
@@ -164,7 +164,7 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
                     service_control_policy_groups=scps
                 )
 
-                if iprofile is not '*':
+                if iprofile != '*':
                     reason = 'can use EC2 to run an instance and then associate an existing instance profile to ' \
                              'access'
                 else:

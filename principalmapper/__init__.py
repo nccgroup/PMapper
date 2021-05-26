@@ -15,4 +15,4 @@
 #      You should have received a copy of the GNU Affero General Public License
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
-__version__ = '1.1.1'
+__version__ = '1.1.2'

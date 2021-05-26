@@ -21,10 +21,10 @@ import os.path
 import json
 import logging
 
-from principalmapper.common import OrganizationTree
+from principalmapper.common import OrganizationTree, Policy
 from principalmapper.graphing import graph_actions
 from principalmapper.querying import query_utils, query_actions, query_orgs
-from principalmapper.util import botocore_tools
+from principalmapper.util import botocore_tools, arns
 from principalmapper.util.storage import get_storage_root
 
 logger = logging.getLogger(__name__)
@@ -88,13 +88,26 @@ def process_arguments(parsed_args: Namespace):
     logger.debug('Querying against graph {}'.format(graph.metadata['account_id']))
 
     if parsed_args.with_resource_policy:
-        resource_policy = query_utils.pull_cached_resource_policy_by_arn(graph.policies, arn=None, query=parsed_args.query)
+        resource_policy = query_utils.pull_cached_resource_policy_by_arn(
+            graph.policies,
+            arn=None,
+            query=parsed_args.query
+        )
     elif parsed_args.resource_policy_text:
         resource_policy = json.loads(parsed_args.resource_policy_text)
     else:
         resource_policy = None
 
     resource_owner = parsed_args.resource_owner
+    if resource_policy is not None:
+        if resource_owner is None:
+            if arns.get_service(resource_policy.arn) == 's3':
+                raise ValueError('Must supply resource owner (--resource-owner) when including S3 bucket policies '
+                                 'in a query')
+            else:
+                resource_owner = arns.get_account_id(resource_policy.arn)
+        if isinstance(resource_policy, Policy):
+            resource_policy = resource_policy.policy_doc
 
     if parsed_args.scps:
         if 'org-id' in graph.metadata and 'org-path' in graph.metadata:
