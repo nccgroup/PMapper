@@ -21,7 +21,9 @@
                 "secretsmanager:ListSecrets",
                 "secretsmanager:GetResourcePolicy",
                 "cloudformation:DescribeStacks",
-                "lambda:ListFunctions"
+                "lambda:ListFunctions",
+                "codebuild:ListProjects",
+                "codebuild:BatchGetProjects"
             ],
             "Resource": "*"
         }
