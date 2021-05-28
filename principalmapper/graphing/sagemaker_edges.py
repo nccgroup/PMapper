@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 class SageMakerEdgeChecker(EdgeChecker):
     """Class for identifying if Amazon SageMaker can be used by IAM principals to access other principals.
 
-    TODO: add checks for CreateDomain, CreateProcessingJob, CreateTrainingJob
+    TODO: add checks for CreateDomain and related operations
     """
 
     def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None,
@@ -78,7 +78,7 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
 
             mfa_needed = False
             conditions = {'iam:PassedToService': 'sagemaker.amazonaws.com'}
-            pass_role_auth, needs_mfa = query_interface.local_check_authorization_handling_mfa(
+            pass_role_auth, pass_needs_mfa = query_interface.local_check_authorization_handling_mfa(
                 node_source,
                 'iam:PassRole',
                 node_destination.arn,
@@ -88,9 +88,6 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
             if not pass_role_auth:
                 continue  # source node is not authorized to pass the role
 
-            if needs_mfa:
-                mfa_needed = True
-
             create_notebook_auth, needs_mfa = query_interface.local_check_authorization_handling_mfa(
                 node_source,
                 'sagemaker:CreateNotebookInstance',
@@ -99,18 +96,45 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
                 service_control_policy_groups=scps
             )
 
-            if not create_notebook_auth:
-                continue  # source node is not authorized to launch the sagemaker notebook
+            if create_notebook_auth:
+                new_edge = Edge(
+                    node_source,
+                    node_destination,
+                    '(MFA required) can use SageMaker to launch a notebook and access' if pass_needs_mfa or needs_mfa else 'can use SageMaker to launch a notebook and access',
+                    'SageMaker'
+                )
+                result.append(new_edge)
 
-            if needs_mfa:
-                mfa_needed = True
-
-            new_edge = Edge(
+            create_training_auth, needs_mfa = query_interface.local_check_authorization_handling_mfa(
                 node_source,
-                node_destination,
-                '(MFA required) can use SageMaker to launch a notebook and access' if mfa_needed else 'can use SageMaker to launch a notebook and access',
-                'SageMaker'
+                'sagemaker:CreateTrainingJob',
+                '*',
+                {},
+                service_control_policy_groups=scps
             )
-            result.append(new_edge)
+
+            if create_training_auth:
+                result.append(Edge(
+                    node_source,
+                    node_destination,
+                    '(MFA required) can use SageMaker to create a training job and access' if pass_needs_mfa or needs_mfa else 'can use SageMaker to create a training job and access',
+                    'SageMaker'
+                ))
+
+            create_processing_auth, needs_mfa = query_interface.local_check_authorization_handling_mfa(
+                node_source,
+                'sagemaker:CreateProcessingJob',
+                '*',
+                {},
+                service_control_policy_groups=scps
+            )
+
+            if create_processing_auth:
+                result.append(Edge(
+                    node_source,
+                    node_destination,
+                    '(MFA required) can use SageMaker to create a processing job and access' if pass_needs_mfa or needs_mfa else 'can use SageMaker to create a processing job and access',
+                    'SageMaker'
+                ))
 
     return result

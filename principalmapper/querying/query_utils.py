@@ -80,7 +80,7 @@ def is_connected(graph: Graph, source: Node, destination: Node) -> bool:
     return False
 
 
-def pull_cached_resource_policy_by_arn(policies: List[Policy], arn: Optional[str], query: str = None) -> dict:
+def pull_cached_resource_policy_by_arn(policies: List[Policy], arn: Optional[str], query: str = None) -> Policy:
     """Function that pulls a resource policy that's cached on-disk.
 
     Raises ValueError if it is not able to be retrieved.
@@ -111,12 +111,14 @@ def pull_cached_resource_policy_by_arn(policies: List[Policy], arn: Optional[str
         search_arn = arn
     elif service == 'kms':
         search_arn = arn
+    elif service == 'secretsmanager':
+        search_arn = arn
     else:
         raise NotImplementedError('Service policies for {} are not (currently) cached.'.format(service))
 
     for policy in policies:
         if search_arn == policy.arn:
-            return policy.policy_doc
+            return policy
 
     raise ValueError('Unable to locate a cached policy for resource {}'.format(arn))
 

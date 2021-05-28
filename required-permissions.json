@@ -1,0 +1,32 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "PMapperPerms",
+            "Effect": "Allow",
+            "Action": [
+                "iam:List*",
+                "iam:Get*",
+                "organizations:List*",
+                "organizations:Describe*",
+                "s3:ListAllMyBuckets",
+                "s3:ListBucket",
+                "s3:GetBucketPolicy",
+                "kms:ListKeys",
+                "kms:GetKeyPolicy",
+                "sns:ListTopics",
+                "sns:GetTopicAttributes",
+                "sqs:ListQueues",
+                "sqs:GetQueueAttributes",
+                "secretsmanager:ListSecrets",
+                "secretsmanager:GetResourcePolicy",
+                "cloudformation:DescribeStacks",
+                "lambda:ListFunctions",
+                "codebuild:ListProjects",
+                "codebuild:BatchGetProjects",
+                "autoscaling:DescribeLaunchConfigurations"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
