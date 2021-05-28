@@ -23,7 +23,8 @@
                 "cloudformation:DescribeStacks",
                 "lambda:ListFunctions",
                 "codebuild:ListProjects",
-                "codebuild:BatchGetProjects"
+                "codebuild:BatchGetProjects",
+                "autoscaling:DescribeLaunchConfigurations"
             ],
             "Resource": "*"
         }

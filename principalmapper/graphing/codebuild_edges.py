@@ -84,16 +84,17 @@ class CodeBuildEdgeChecker(EdgeChecker):
 
 def _gen_resource_tag_conditions(tag_list: List[dict]):
     condition_result = {
-        'aws:TagKeys': []
+        # 'aws:TagKeys': []
     }
     for tag in tag_list:
         condition_result.update({
             'aws:ResourceTag/{}'.format(tag['Key']): tag['Value']
         })
-        condition_result.update({
-            'aws:RequestTag/{}'.format(tag['Key']): tag['Value']
-        })
-        condition_result['aws:TagKeys'].append(tag['Key'])
+        # TODO: make sure we're handling RequestTag and TagKeys correctly
+        # condition_result.update({
+        #     'aws:RequestTag/{}'.format(tag['Key']): tag['Value']
+        # })
+        # condition_result['aws:TagKeys'].append(tag['Key'])
     return condition_result
 
 

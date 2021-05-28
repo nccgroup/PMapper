@@ -21,6 +21,7 @@ from typing import List, Optional
 import botocore.session
 
 from principalmapper.common import Edge, Node
+from principalmapper.graphing.autoscaling_edges import AutoScalingEdgeChecker
 from principalmapper.graphing.cloudformation_edges import CloudFormationEdgeChecker
 from principalmapper.graphing.codebuild_edges import CodeBuildEdgeChecker
 from principalmapper.graphing.ec2_edges import EC2EdgeChecker
@@ -36,6 +37,7 @@ logger = logging.getLogger(__name__)
 
 # Externally referable dictionary with all the supported edge-checking types
 checker_map = {
+    'autoscaling': AutoScalingEdgeChecker,
     'cloudformation': CloudFormationEdgeChecker,
     'codebuild': CodeBuildEdgeChecker,
     'ec2': EC2EdgeChecker,
