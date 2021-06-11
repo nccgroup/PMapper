@@ -672,7 +672,7 @@ def resource_policy_matching_statements(node_or_service: Union[Node, str], resou
             matches_principal = True
             if isinstance(node_or_service, Node):
                 if 'AWS' in statement['NotPrincipal']:
-                    if _principal_matches_in_statement(node_or_service, _listify_string(statement['Principal']['AWS'])):
+                    if _principal_matches_in_statement(node_or_service, _listify_string(statement['NotPrincipal']['AWS'])):
                         matches_principal = False
             else:
                 if 'Service' in statement['NotPrincipal']:
@@ -775,6 +775,8 @@ def _principal_matches_in_statement(principal: Node, aws_principal_field: list):
         elif principal.id_value == value:
             return True
         elif arns.get_account_id(principal.arn) == value:
+            return True
+        elif value == '*':
             return True
         else:
             principal_root_str = 'arn:{}:iam::{}:root'.format(arns.get_partition(principal.arn),
