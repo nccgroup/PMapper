@@ -29,6 +29,11 @@ def _grab_policies_and_traverse(org_nodes: List[OrganizationNode], parts, index,
         if org_node.ou_id != parts[index]:
             continue
         else:
+            # ASSUMPTION: all OUs/Accounts in an org HAVE to have at least one policy when SCPs are enabled, so this
+            # catches the alternative and does an early return of None. None is interpreted by querying mechanisms
+            # as meaning SCPs are NOT considered during authorization
+            if len(org_node.scps) == 0:
+                return None
             result.append([x.policy_doc for x in org_node.scps])
             if parts[index + 1] == '':
                 for account in org_node.accounts:

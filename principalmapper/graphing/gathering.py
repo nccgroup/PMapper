@@ -402,7 +402,7 @@ def get_sqs_queue_policies(session: botocore.session.Session, account_id: str, r
                             "Version": "2012-10-17"
                         }
                     ))
-                    logger.info('Queue {} does not have a bucket policy, adding a "stub" policy instead.'.format(queue_name))
+                    logger.info('Queue {} does not have a queue policy, adding a "stub" policy instead.'.format(queue_name))
         except botocore.exceptions.ClientError as ex:
             logger.info('Unable to search SQS in region {} for queues. The region may be disabled, or the current principal may not be authorized to access the service. Continuing.'.format(sqs_region))
             logger.debug('Exception was: {}'.format(ex))

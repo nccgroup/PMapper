@@ -17,7 +17,7 @@
 
 import json
 import logging
-from typing import List, Optional
+from typing import List, Optional, Union
 import re
 
 import botocore.session
@@ -80,11 +80,13 @@ def is_connected(graph: Graph, source: Node, destination: Node) -> bool:
     return False
 
 
-def pull_cached_resource_policy_by_arn(policies: List[Policy], arn: Optional[str], query: str = None) -> Policy:
-    """Function that pulls a resource policy that's cached on-disk.
+def pull_cached_resource_policy_by_arn(graph: Graph, arn: Optional[str], query: str = None) -> Union[Policy, dict]:
+    """Function that pulls a resource policy that's cached on-disk from the given Graph object.
+
+    Returns either a Policy object or a dictionary representing the resource policy. Caller is responsible
+    for checking before sending it along to other components.
 
     Raises ValueError if it is not able to be retrieved.
-    Returns the dict, not the Policy object.
     """
     if query is not None:
         if arn is not None:
@@ -98,13 +100,18 @@ def pull_cached_resource_policy_by_arn(policies: List[Policy], arn: Optional[str
         raise ValueError('Resource component from query must not have wildcard (? or *) when evaluating '
                          'resource policies.')
 
+    logger.debug('Looking for cached policy for {}'.format(arn))
+
     # manipulate the ARN as needed
     service = arns.get_service(arn)
     if service == 's3':
         # we only need the ARN of the bucket
         search_arn = 'arn:{}:s3:::{}'.format(arns.get_partition(arn), arns.get_resource(arn).split('/')[0])
     elif service == 'iam':
-        search_arn = arn
+        # special case: trust policies
+        role_name = arns.get_resource(arn).split('/')[-1]  # get the last part of :role/path/to/role_name
+        role_node = graph.get_node_by_searchable_name('role/{}'.format(role_name))
+        return role_node.trust_policy
     elif service == 'sns':
         search_arn = arn
     elif service == 'sqs':
@@ -116,7 +123,7 @@ def pull_cached_resource_policy_by_arn(policies: List[Policy], arn: Optional[str
     else:
         raise NotImplementedError('Service policies for {} are not (currently) cached.'.format(service))
 
-    for policy in policies:
+    for policy in graph.policies:
         if search_arn == policy.arn:
             return policy
 
