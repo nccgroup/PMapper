@@ -18,7 +18,8 @@
 import logging
 import unittest
 
-from principalmapper.querying.local_policy_simulation import _matches_after_expansion, _statement_matches_action, _statement_matches_resource
+from principalmapper.querying.local_policy_simulation import _matches_after_expansion, _statement_matches_action, _statement_matches_resource, _get_condition_match
+from principalmapper.util.case_insensitive_dict import CaseInsensitiveDict
 
 
 class TestLocalPolicyStatementMatching(unittest.TestCase):
@@ -77,13 +78,37 @@ class TestLocalPolicyStatementMatching(unittest.TestCase):
         self.assertFalse(_statement_matches_resource(statement_2, 'arn:aws:s3:::000000000000/win',
                                                      {'aws:SourceAccount': '000000000000'}))
 
+    def test_condition_matching(self):
+        condition_1 = {
+            'IpAddress': {
+                'aws:SourceIp': '128.223.0.0/16'
+            }
+        }
+        self.assertTrue(
+            _get_condition_match(
+                condition_1,
+                CaseInsensitiveDict({
+                    'aws:SourceIp': '128.223.0.1'
+                })
+            )
+        )
+        self.assertTrue(
+            _get_condition_match(
+                condition_1,
+                CaseInsensitiveDict({
+                    'aws:sourceip': '128.223.0.1'
+                })
+            ),
+            'Condition keys are supposed to be case-insensitive'
+        )
+
 
 class TestLocalPolicyVariableExpansions(unittest.TestCase):
     def test_var_expansion(self):
         self.assertTrue(_matches_after_expansion(
             'arn:aws:iam::000000000000:user/test',
             'arn:aws:iam::000000000000:user/${aws:username}',
-            {'aws:username': 'test'}
+            CaseInsensitiveDict({'aws:username': 'test'})
         ))
 
     def test_asterisk_expansion(self):

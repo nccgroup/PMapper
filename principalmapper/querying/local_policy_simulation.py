@@ -29,12 +29,13 @@ import re
 
 from principalmapper.common import Node, Policy
 from principalmapper.util import arns
+from principalmapper.util.case_insensitive_dict import CaseInsensitiveDict
 
 logger = logging.getLogger(__name__)
 
 
 def has_matching_statement(principal: Node, effect_value: str, action_to_check: str, resource_to_check: str,
-                           condition_keys_to_check: dict) -> bool:
+                           condition_keys_to_check: CaseInsensitiveDict) -> bool:
     """Locally determine if a node's attached policies (and group's policies if applicable) has at least one matching
     statement with the given effect. This is the meat of the local policy evaluation.
     """
@@ -55,7 +56,7 @@ def has_matching_statement(principal: Node, effect_value: str, action_to_check: 
 
 def policy_has_matching_statement(policy: Union[Policy, dict], effect_value: str, action_to_check: str,
                                   resource_to_check: str,
-                                  condition_keys_to_check: dict) -> bool:
+                                  condition_keys_to_check: CaseInsensitiveDict) -> bool:
     """Searches a specific Policy/dict object for a statement with a matching Effect/Action/Resource/Condition"""
 
     if isinstance(policy, Policy):
@@ -114,7 +115,7 @@ def policy_has_matching_statement(policy: Union[Policy, dict], effect_value: str
     return False
 
 
-def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], context: Dict) -> bool:
+def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], context: CaseInsensitiveDict) -> bool:
     """
     Internal method. It digs through Null, Bool, DateX, NumericX, StringX conditions and returns false if any of
     them don't match what the context has.
@@ -137,7 +138,7 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
                                         block,
                                         policy_key,
                                         condition[block][policy_key],
-                                        {policy_key: context_value}):
+                                        CaseInsensitiveDict({policy_key: context_value})):
                                     return False
             elif block.startswith('ForAnyValue:'):
                 # fail to match unless at least one of the provided context values match
@@ -342,19 +343,28 @@ def _get_condition_match(condition: Dict[str, Dict[str, Union[str, List]]], cont
     return True
 
 
-def _get_str_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict) -> bool:
+def _get_str_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: CaseInsensitiveDict) -> bool:
     """Helper method for dealing with String* conditions, including: StringEquals, StringNotEquals,
     StringEqualsIgnoreCase, StringNotEqualsIgnoreCase, StringLike, StringNotLike
 
-    Observed policy simulator behavior for *IgnoreCase: if I compare the following, it returns denied:
+    Observed policy simulator behavior for Unicode: if I compare the following, it returns denied:
 
     * ê <- 'LATIN SMALL LETTER E WITH CIRCUMFLEX'
     * ê <- 'LATIN SMALL LETTER E' + 'COMBINING CIRCUMFLEX ACCENT'
 
-    So even though they're the "same" they end up not matching. Just using casefold() on the strings is enough to match
-    the policy simulator behavior without having to dip into the insanity of unicode.
+    So even though they're the "same" they end up not matching.
 
-    Many thanks to https://stackoverflow.com/a/29247821 for helping this code on this journey.
+    Observed policy simulator behavior for capitalization: if I compare the following, it returns denied:
+
+    * ß
+    * ss
+
+    So even though they're the "same" after casefolding (str casefold method) they end up not matching.
+
+    Just using lower() on the strings is enough to match the policy simulator behavior without having to dip into the
+    insanity of unicode.
+
+    Many thanks to https://stackoverflow.com/a/45745761 for the extra information.
     """
 
     if_exists_op = 'IfExists' in block
@@ -365,7 +375,7 @@ def _get_str_match(block: str, policy_key: str, policy_value: Union[str, List[st
         for value in _listify_string(policy_value):
             for context_value in _listify_string(context[policy_key]):
                 if 'IgnoreCase' in block:
-                    if value.casefold() == context_value.casefold():
+                    if value.lower() == context_value.lower():
                         return True
                 else:
                     if value == context_value:
@@ -385,7 +395,7 @@ def _get_str_match(block: str, policy_key: str, policy_value: Union[str, List[st
         for value in _listify_string(policy_value):
             for context_value in _listify_string(context[policy_key]):
                 if 'IgnoreCase' in block:
-                    if value.casefold() == context_value.casefold():
+                    if value.lower() == context_value.lower():
                         return False
                 else:
                     if value == context_value:
@@ -418,7 +428,7 @@ def _expand_str_and_compare(pattern: str, input_value: str) -> bool:
     return re.match(pattern_string, input_value, flags=re.UNICODE) is not None
 
 
-def _get_num_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict) -> bool:
+def _get_num_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: CaseInsensitiveDict) -> bool:
     """Helper method for dealing with Numeric* conditions, including: NumericEquals, NumericNotEquals,
     NumericLessThan, NumericLessThanEquals, NumericGreaterThan, NumericGreaterThanEquals
 
@@ -469,7 +479,7 @@ def _get_num_match(block: str, policy_key: str, policy_value: Union[str, List[st
         return False
 
 
-def _get_bool_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict) -> bool:
+def _get_bool_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: CaseInsensitiveDict) -> bool:
     """Helper method for dealing with Bool. For 'true' policy values, returns True if context has 'true' as a value. For
     'false' policy values, returns True if context has value that's not 'true'. Returns False if no context value.
     """
@@ -489,7 +499,7 @@ def _get_bool_match(block: str, policy_key: str, policy_value: Union[str, List[s
     return False
 
 
-def _get_straight_str_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict) -> bool:
+def _get_straight_str_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: CaseInsensitiveDict) -> bool:
     """Helper method for dealing with BinaryEquals
 
     Does a straight string comparison to search for a match.
@@ -507,7 +517,7 @@ def _get_straight_str_match(block: str, policy_key: str, policy_value: Union[str
     return False
 
 
-def _get_ipaddress_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict) -> bool:
+def _get_ipaddress_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: CaseInsensitiveDict) -> bool:
     """Helper method for dealing with *IpAddress conditions: IpAddress, NotIpAddress
 
     Parses the policy value as an IPvXNetwork, then the context value as an IPvXAddress, then uses
@@ -540,7 +550,7 @@ def _get_ipaddress_match(block: str, policy_key: str, policy_value: Union[str, L
         return True
 
 
-def _get_date_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict) -> bool:
+def _get_date_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: CaseInsensitiveDict) -> bool:
     """Helper method for dealing with Date* conditions: DateEquals, DateNotEquals, DateGreaterThan,
     DateGreaterThanEquals, DateLessThan, DateLessThanEquals.
 
@@ -606,7 +616,7 @@ def _convert_timestamp_to_datetime_obj(timestamp: str):
         return dt.datetime.fromtimestamp(float(timestamp), dt.timezone.utc)  # TODO: concern around float imprecision
 
 
-def _get_arn_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: dict) -> bool:
+def _get_arn_match(block: str, policy_key: str, policy_value: Union[str, List[str]], context: CaseInsensitiveDict) -> bool:
     """Helper method for dealing with Arn* conditions: ArnEquals, ArnLike, ArnNotEquals, ArnNotLike"""
 
     if_exists_op = 'IfExists' in block
@@ -636,7 +646,7 @@ def _get_arn_match(block: str, policy_key: str, policy_value: Union[str, List[st
         return False
 
 
-def _get_null_match(policy_key: str, policy_value: Union[str, List[str]], context: Dict) -> bool:
+def _get_null_match(policy_key: str, policy_value: Union[str, List[str]], context: CaseInsensitiveDict) -> bool:
     """Helper method for dealing with Null conditions"""
     for value in _listify_string(policy_value):
         if value == 'true':  # key is expected not to be in context, or empty
@@ -650,7 +660,7 @@ def _get_null_match(policy_key: str, policy_value: Union[str, List[str]], contex
 
 def resource_policy_matching_statements(node_or_service: Union[Node, str], resource_policy: dict,
                                         action_to_check: str, resource_to_check: str,
-                                        condition_keys_to_check: dict) -> list:
+                                        condition_keys_to_check: CaseInsensitiveDict) -> list:
     """Returns if a resource policy has a matching statement for a given service (ec2.amazonaws.com for example)."""
 
     results = []
@@ -724,7 +734,7 @@ class ResourcePolicyEvalResult(Enum):
 
 def resource_policy_authorization(node_or_service: Union[Node, str], resource_owner: str, resource_policy: dict,
                                   action_to_check: str, resource_to_check: str,
-                                  condition_keys_to_check: dict) -> ResourcePolicyEvalResult:
+                                  condition_keys_to_check: CaseInsensitiveDict) -> ResourcePolicyEvalResult:
     """Returns a ResourcePolicyEvalResult for a given request, based on the resource policy."""
 
     matching_statements = resource_policy_matching_statements(node_or_service, resource_policy, action_to_check,
@@ -807,7 +817,7 @@ def policies_include_matching_allow_action(principal: Node, action_to_check: str
     return False
 
 
-def _statement_matches_action(statement: dict, action: str, condition_keys: Optional[dict] = None,
+def _statement_matches_action(statement: dict, action: str, condition_keys: Optional[CaseInsensitiveDict] = None,
                               is_resource_policy_check: bool = False) -> bool:
     """Helper function, returns True if the given action is in the given policy statement"""
     exempted_services = ('sns', 'sqs')
@@ -855,7 +865,7 @@ def _statement_matches_action(statement: dict, action: str, condition_keys: Opti
         return True
 
 
-def _statement_matches_resource(statement: dict, resource: str, condition_keys: Optional[dict] = None) -> bool:
+def _statement_matches_resource(statement: dict, resource: str, condition_keys: Optional[CaseInsensitiveDict] = None) -> bool:
     """Helper function, returns True if the given resource is in the given policy statement"""
     if 'Resource' in statement:
         for item in _listify_string(statement['Resource']):
@@ -891,7 +901,7 @@ def _compose_pattern(string_to_transform) -> Pattern:
 
 
 def _matches_after_expansion(string_to_check: str, string_to_check_against: str,
-                             condition_keys: Optional[dict] = None) -> bool:
+                             condition_keys: Optional[CaseInsensitiveDict] = None) -> bool:
     """Helper function that checks the string_to_check against string_to_check_against.
 
     Handles matching with respect to wildcards, variables.
