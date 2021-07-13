@@ -734,11 +734,16 @@ class ResourcePolicyEvalResult(Enum):
 
 def resource_policy_authorization(node_or_service: Union[Node, str], resource_owner: str, resource_policy: dict,
                                   action_to_check: str, resource_to_check: str,
-                                  condition_keys_to_check: CaseInsensitiveDict) -> ResourcePolicyEvalResult:
+                                  condition_keys_to_check: Union[dict, CaseInsensitiveDict]) -> ResourcePolicyEvalResult:
     """Returns a ResourcePolicyEvalResult for a given request, based on the resource policy."""
 
+    if isinstance(condition_keys_to_check, dict):
+        prepped_condition_keys = CaseInsensitiveDict(condition_keys_to_check)
+    else:
+        prepped_condition_keys = condition_keys_to_check
+
     matching_statements = resource_policy_matching_statements(node_or_service, resource_policy, action_to_check,
-                                                              resource_to_check, condition_keys_to_check)
+                                                              resource_to_check, prepped_condition_keys)
     if len(matching_statements) == 0:
         return ResourcePolicyEvalResult.NO_MATCH
 
