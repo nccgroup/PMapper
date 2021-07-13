@@ -56,6 +56,7 @@ def print_connected_results(graph: Graph, source_nodes: List[Node], dest_nodes: 
                 print('{} is able to access {}:'.format(snode.searchable_name(), dnode.searchable_name()))
                 for edge in path:
                     print('   {}'.format(edge.describe_edge()))
+                print()
 
 
 def write_connected_results(graph: Graph, source_nodes: List[Node], dest_nodes: List[Node], skip_admins: bool = False,

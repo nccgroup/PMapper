@@ -43,9 +43,9 @@ class Edge(object):
     def describe_edge(self) -> str:
         """Returns a human-readable string explaining the edge"""
         return "{} {} {}".format(
-            arns.get_resource(self.source.arn),
+            self.source.searchable_name(),
             self.reason,
-            arns.get_resource(self.destination.arn)
+            self.destination.searchable_name()
         )
 
     def to_dictionary(self) -> dict:

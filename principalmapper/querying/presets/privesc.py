@@ -56,6 +56,7 @@ def print_privesc_results(graph: Graph, nodes: List[Node], skip_admins: bool = F
                 node.searchable_name(), end_of_list.searchable_name()))
             for edge in edge_list:
                 print('   {}'.format(edge.describe_edge()))
+            print()
 
 
 def write_privesc_results(graph: Graph, nodes: List[Node], skip_admins: bool, output: io.StringIO) -> None:

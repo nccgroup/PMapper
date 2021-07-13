@@ -171,6 +171,7 @@ def query_response(graph: Graph, query: str, skip_admins: bool = False, resource
     for query_result, action, resource in result:
         if query_result.allowed or include_unauthorized:
             query_result.print_result(action, resource)
+            print()
 
 
 def handle_preset(graph: Graph, query: str, skip_admins: bool = False) -> None:
@@ -308,3 +309,4 @@ def argquery_response(graph: Graph, principal_param: Optional[str], action_param
     for query_result in result:
         if query_result.allowed or include_unauthorized:
             query_result.print_result(action_param, resource_param)
+            print()
