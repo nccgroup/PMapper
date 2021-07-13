@@ -60,6 +60,7 @@ class LambdaEdgeChecker(EdgeChecker):
                 logger.debug('Exception details: {}'.format(ex))
 
         logger.info('Generating Edges based on Lambda data.')
+        logger.debug('Identified {} Lambda functions for processing'.format(len(function_list)))
         result = generate_edges_locally(nodes, function_list, scps)
 
         for edge in result:
@@ -87,7 +88,7 @@ def generate_edges_locally(nodes: List[Node], function_list: List[dict], scps: O
             node_destination.trust_policy,
             'sts:AssumeRole',
             node_destination.arn,
-            {},
+            {}
         )
 
         if sim_result != ResourcePolicyEvalResult.SERVICE_MATCH:
@@ -173,6 +174,7 @@ def generate_edges_locally(nodes: List[Node], function_list: List[dict], scps: O
                             reason,
                             'Lambda'
                         )
+                        result.append(new_edge)
                         break
 
             # check that source can modify a Lambda function and pass it another execution role
@@ -192,6 +194,7 @@ def generate_edges_locally(nodes: List[Node], function_list: List[dict], scps: O
                         reason,
                         'Lambda'
                     )
+                    result.append(new_edge)
                     break
 
     return result

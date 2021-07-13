@@ -19,7 +19,7 @@
 import copy
 import hashlib
 import logging
-from typing import Tuple
+from typing import Dict, Tuple, Any, Union
 
 from principalmapper.common import Graph, Edge
 from principalmapper.querying import query_utils
@@ -29,10 +29,11 @@ from principalmapper.util import arns
 
 
 logger = logging.getLogger(__name__)
+_UODict = Union[Dict[str, Any], CaseInsensitiveDict]
 
 
 def search_authorization_for(graph: Graph, principal: Node, action_to_check: str, resource_to_check: str,
-                             condition_keys_to_check: dict) -> QueryResult:
+                             condition_keys_to_check: _UODict) -> QueryResult:
     """Determines if the passed principal, or any principals it can access, can perform a given action for a
     given resource/condition."""
 
@@ -52,7 +53,7 @@ def search_authorization_for(graph: Graph, principal: Node, action_to_check: str
 
 
 def search_authorization_full(graph: Graph, principal: Node, action_to_check: str, resource_to_check: str,
-                              condition_keys_to_check: dict, resource_policy: Optional[dict] = None,
+                              condition_keys_to_check: _UODict, resource_policy: Optional[dict] = None,
                               resource_owner: Optional[str] = None, service_control_policies: List[List[Policy]] = None,
                               session_policy: Optional[dict] = None) -> QueryResult:
     """Determines if the passed principal, or any principals it can access, can perform a given action for a
@@ -88,7 +89,7 @@ def search_authorization_full(graph: Graph, principal: Node, action_to_check: st
 def search_authorization_across_accounts(graph_scp_pairs: List[Tuple[Graph, Optional[List[List[Policy]]]]],
                                          inter_account_edges: List[Edge], principal: Node,
                                          action_to_check: str, resource_to_check: str,
-                                         condition_keys_to_check: dict, resource_policy: Optional[dict] = None,
+                                         condition_keys_to_check: _UODict, resource_policy: Optional[dict] = None,
                                          resource_owner: Optional[str] = None,
                                          session_policy: Optional[dict] = None) -> QueryResult:
     """Determines if the passed principal, or any principals it can access, can perform a given action for a
@@ -133,14 +134,29 @@ def search_authorization_across_accounts(graph_scp_pairs: List[Tuple[Graph, Opti
     return QueryResult(False, [], principal)
 
 
-def _infer_condition_keys(principal: Node, current_keys: dict) -> dict:
+def _prepare_condition_context(original_dict: _UODict) -> CaseInsensitiveDict:
+    """Returns a CaseInsensitiveDict with the given dictionary contents, while also performing a sanity check
+    to ensure that there are no duplicate keys in the provided context."""
+
+    if len(original_dict) != len(set([x.lower() for x in original_dict.keys()])):
+        raise ValueError('Detected a duplicate context key/value pair. Ensure that there are no duplicate context '
+                         'keys, case-insensitive.')
+
+    return CaseInsensitiveDict(original_dict)
+
+
+def _infer_condition_keys(principal: Node, current_keys: CaseInsensitiveDict) -> CaseInsensitiveDict:
     """Returns a dictionary with global condition context keys we can infer are set based on the input Node being
     checked. We exclude setting keys that are already set in current_keys.
 
     Using information from https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_condition-keys.html
+
+    Changes in v1.1.3:
+        * Changed param current_keys type to CaseInsensitiveDict
+        * Changed return type to CaseInsensitiveDict
     """
 
-    result = {}
+    result = CaseInsensitiveDict()
 
     # Date and Time: aws:CurrentTime and aws:EpochTime
     # TODO: Examine if using datetime.isoformat() is good enough to avoid bugs
@@ -158,6 +174,7 @@ def _infer_condition_keys(principal: Node, current_keys: dict) -> dict:
     if ':user/' in principal.arn and 'aws:username' not in current_keys:
         result['aws:username'] = principal.searchable_name().split('/')[1]
 
+    # assumes API requests are made via secure channel (HTTPS)
     if 'aws:SecureTransport' not in current_keys:
         result['aws:SecureTransport'] = 'true'
 
@@ -167,6 +184,7 @@ def _infer_condition_keys(principal: Node, current_keys: dict) -> dict:
     if 'aws:PrincipalArn' not in current_keys:
         result['aws:PrincipalArn'] = principal.arn
 
+    # NOTE: tag keys are checked for case-insensitive equality already, no worries about collisions
     for tag_key, tag_value in principal.tags.items():
         if 'aws:PrincipalTag/{}'.format(tag_key) not in current_keys:
             result['aws:PrincipalTag/{}'.format(tag_key)] = tag_value
@@ -175,7 +193,7 @@ def _infer_condition_keys(principal: Node, current_keys: dict) -> dict:
 
 
 def local_check_authorization_handling_mfa(principal: Node, action_to_check: str, resource_to_check: str,
-                                           condition_keys_to_check: dict, resource_policy: Optional[dict] = None,
+                                           condition_keys_to_check: _UODict, resource_policy: Optional[dict] = None,
                                            resource_owner: Optional[str] = None,
                                            service_control_policy_groups: Optional[List[List[Policy]]] = None,
                                            session_policy: Optional[dict] = None) -> (bool, bool):
@@ -191,19 +209,20 @@ def local_check_authorization_handling_mfa(principal: Node, action_to_check: str
         return True, False
 
     new_condition_keys = copy.deepcopy(condition_keys_to_check)
-    if 'aws:MultiFactorAuthAge' not in new_condition_keys:
-        new_condition_keys.update({'aws:MultiFactorAuthAge': '1'})
-    if 'aws:MultiFactorAuthPresent' not in new_condition_keys:
-        new_condition_keys.update({'aws:MultiFactorAuthPresent': 'true'})
+    prepped_condition_keys = _prepare_condition_context(new_condition_keys)
+    if 'aws:MultiFactorAuthAge' not in prepped_condition_keys:
+        prepped_condition_keys.update({'aws:MultiFactorAuthAge': '1'})
+    if 'aws:MultiFactorAuthPresent' not in prepped_condition_keys:
+        prepped_condition_keys.update({'aws:MultiFactorAuthPresent': 'true'})
 
-    if local_check_authorization_full(principal, action_to_check, resource_to_check, new_condition_keys, resource_policy, resource_owner, service_control_policy_groups, session_policy):
+    if local_check_authorization_full(principal, action_to_check, resource_to_check, prepped_condition_keys, resource_policy, resource_owner, service_control_policy_groups, session_policy):
         return True, True
 
     return False, False
 
 
 def local_check_authorization(principal: Node, action_to_check: str, resource_to_check: str,
-                              condition_keys_to_check: dict) -> bool:
+                              condition_keys_to_check: _UODict) -> bool:
     """Determine if a node is authorized to make an API call. It will perform a local evaluation of the attached
     IAM policies to determine authorization.
 
@@ -212,7 +231,8 @@ def local_check_authorization(principal: Node, action_to_check: str, resource_to
     """
 
     conditions_keys_copy = copy.deepcopy(condition_keys_to_check)
-    conditions_keys_copy.update(_infer_condition_keys(principal, conditions_keys_copy))
+    prepped_condition_keys = _prepare_condition_context(conditions_keys_copy)
+    prepped_condition_keys.update(_infer_condition_keys(principal, prepped_condition_keys))
 
     logger.debug('Testing authorization for Principal: {}, Action: {}, Resource: {}, Conditions: {}'.format(
         principal.arn,
@@ -224,24 +244,24 @@ def local_check_authorization(principal: Node, action_to_check: str, resource_to
     # Handle permission boundaries if applicable
     if principal.permissions_boundary is not None:
         if policy_has_matching_statement(principal.permissions_boundary, 'Deny', action_to_check, resource_to_check,
-                                         conditions_keys_copy):
+                                         prepped_condition_keys):
             return False
         if not policy_has_matching_statement(principal.permissions_boundary, 'Allow', action_to_check, resource_to_check,
-                                             conditions_keys_copy):
+                                             prepped_condition_keys):
             return False
 
     # must have a matching Allow statement, otherwise it's an implicit deny
     if not has_matching_statement(principal, 'Allow', action_to_check, resource_to_check,
-                                  conditions_keys_copy):
+                                  prepped_condition_keys):
         return False
 
     # must not have a matching Deny statement, otherwise it's an explicit deny
     return not has_matching_statement(principal, 'Deny', action_to_check, resource_to_check,
-                                      conditions_keys_copy)
+                                      prepped_condition_keys)
 
 
 def local_check_authorization_full(principal: Node, action_to_check: str, resource_to_check: str,
-                                   condition_keys_to_check: dict, resource_policy: Optional[dict] = None,
+                                   condition_keys_to_check: _UODict, resource_policy: Optional[dict] = None,
                                    resource_owner: Optional[str] = None,
                                    service_control_policy_groups: Optional[List[List[Policy]]] = None,
                                    session_policy: Optional[dict] = None) -> bool:
@@ -265,7 +285,8 @@ def local_check_authorization_full(principal: Node, action_to_check: str, resour
         raise ValueError('Must specify the AWS Account ID of the owner of the resource when specifying a resource policy')
 
     conditions_keys_copy = copy.deepcopy(condition_keys_to_check)
-    conditions_keys_copy.update(_infer_condition_keys(principal, conditions_keys_copy))
+    prepped_condition_keys = _prepare_condition_context(conditions_keys_copy)
+    prepped_condition_keys.update(_infer_condition_keys(principal, prepped_condition_keys))
 
     logger.debug(
         'Testing authorization for: principal: {}, action: {}, resource: {}, conditions: {}, Resource Policy: {}, SCPs: {}, Session Policy: {}'.format(
@@ -280,36 +301,36 @@ def local_check_authorization_full(principal: Node, action_to_check: str, resour
 
     # Check all policies for a matching deny
     for policy in principal.attached_policies:
-        if policy_has_matching_statement(policy, 'Deny', action_to_check, resource_to_check, conditions_keys_copy):
+        if policy_has_matching_statement(policy, 'Deny', action_to_check, resource_to_check, prepped_condition_keys):
             logger.debug('Explicit Deny: Principal\'s attached policies.')
             return False
 
     for iam_group in principal.group_memberships:
         for policy in iam_group.attached_policies:
-            if policy_has_matching_statement(policy, 'Deny', action_to_check, resource_to_check, conditions_keys_copy):
+            if policy_has_matching_statement(policy, 'Deny', action_to_check, resource_to_check, prepped_condition_keys):
                 logger.debug('Explicit Deny: Principal\'s IAM Group policies')
 
     if service_control_policy_groups is not None:
         for service_control_policy_group in service_control_policy_groups:
             for service_control_policy in service_control_policy_group:
-                if policy_has_matching_statement(service_control_policy, 'Deny', action_to_check, resource_to_check, conditions_keys_copy):
+                if policy_has_matching_statement(service_control_policy, 'Deny', action_to_check, resource_to_check, prepped_condition_keys):
                     logger.debug('Explicit Deny: SCPs')
                     return False
 
     if resource_policy is not None:
-        rp_matching_statements = resource_policy_matching_statements(principal, resource_policy, action_to_check, resource_to_check, conditions_keys_copy)
+        rp_matching_statements = resource_policy_matching_statements(principal, resource_policy, action_to_check, resource_to_check, prepped_condition_keys)
         for statement in rp_matching_statements:
             if statement['Effect'] == 'Deny':
                 logger.debug('Explicit Deny: Resource Policy')
                 return False
 
     if session_policy is not None:
-        if policy_has_matching_statement(session_policy, 'Deny', action_to_check, resource_to_check, conditions_keys_copy):
+        if policy_has_matching_statement(session_policy, 'Deny', action_to_check, resource_to_check, prepped_condition_keys):
             logger.debug('Explict Deny: Session policy')
             return False
 
     if principal.permissions_boundary is not None:
-        if policy_has_matching_statement(principal.permissions_boundary, 'Deny', action_to_check, resource_to_check, conditions_keys_copy):
+        if policy_has_matching_statement(principal.permissions_boundary, 'Deny', action_to_check, resource_to_check, prepped_condition_keys):
             logger.debug('Explicit Deny: Permission Boundary')
             return False
 
@@ -321,7 +342,7 @@ def local_check_authorization_full(principal: Node, action_to_check: str, resour
             scp_group_result = False
             for service_control_policy in service_control_policy_group:
                 if policy_has_matching_statement(service_control_policy, 'Allow', action_to_check, resource_to_check,
-                                                 conditions_keys_copy):
+                                                 prepped_condition_keys):
                     scp_group_result = True
                     break
 
@@ -331,7 +352,7 @@ def local_check_authorization_full(principal: Node, action_to_check: str, resour
 
     # Check resource policy
     if resource_policy is not None:
-        rp_auth_result = resource_policy_authorization(principal, resource_owner, resource_policy, action_to_check, resource_to_check, conditions_keys_copy)
+        rp_auth_result = resource_policy_authorization(principal, resource_owner, resource_policy, action_to_check, resource_to_check, prepped_condition_keys)
         if arns.get_account_id(principal.arn) == resource_owner:
             # resource is owned by account
             if arns.get_service(resource_to_check) in ('iam', 'kms'):  # TODO: tuple or list?
@@ -353,25 +374,25 @@ def local_check_authorization_full(principal: Node, action_to_check: str, resour
 
     # Check permission boundary
     if principal.permissions_boundary is not None:
-        if not policy_has_matching_statement(principal.permissions_boundary, 'Allow', action_to_check, resource_to_check, conditions_keys_copy):
+        if not policy_has_matching_statement(principal.permissions_boundary, 'Allow', action_to_check, resource_to_check, prepped_condition_keys):
             logger.debug('Implicit Deny: Permission Boundary')
             return False
 
     # Check session policy
     if session_policy is not None:
-        if not policy_has_matching_statement(session_policy, 'Allow', action_to_check, resource_to_check, conditions_keys_copy):
+        if not policy_has_matching_statement(session_policy, 'Allow', action_to_check, resource_to_check, prepped_condition_keys):
             logger.debug('Implicit Deny: Session Policy')
             return False
 
     # Check principal's policies
     for policy in principal.attached_policies:
-        if policy_has_matching_statement(policy, 'Allow', action_to_check, resource_to_check, conditions_keys_copy):
+        if policy_has_matching_statement(policy, 'Allow', action_to_check, resource_to_check, prepped_condition_keys):
             return True  # already did Deny statement checks, so we're done
 
     # Check principal's IAM Groups policies
     for iam_group in principal.group_memberships:
         for policy in iam_group.attached_policies:
-            if policy_has_matching_statement(policy, 'Allow', action_to_check, resource_to_check, conditions_keys_copy):
+            if policy_has_matching_statement(policy, 'Allow', action_to_check, resource_to_check, prepped_condition_keys):
                 return True  # already did Deny statement checks, so we're done
 
     logger.debug('Implicit Deny: Principal\'s Attached Policies')

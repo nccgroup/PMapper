@@ -651,7 +651,7 @@ class LocalQueryingTests(unittest.TestCase):
                 'dynamodb:GetItem',
                 'arn:aws:dynamodb:us-west-2:000000000000:table/Thread',
                 {
-                    'dynamodb:Attributes': ['ID', 'Message', 'Tags']
+                    'dynamodb:attributes': ['ID', 'Message', 'Tags']
                 }
             )
         )
@@ -661,7 +661,7 @@ class LocalQueryingTests(unittest.TestCase):
                 'dynamodb:GetItem',
                 'arn:aws:dynamodb:us-west-2:000000000000:table/Thread',
                 {
-                    'dynamodb:Attributes': ['ID', 'Message']
+                    'dynamodb:attributes': ['ID', 'Message']
                 }
             )
         )

@@ -88,7 +88,7 @@ def _gen_resource_tag_conditions(tag_list: List[dict]):
     }
     for tag in tag_list:
         condition_result.update({
-            'aws:ResourceTag/{}'.format(tag['Key']): tag['Value']
+            'aws:ResourceTag/{}'.format(tag['key']): tag['value']
         })
         # TODO: make sure we're handling RequestTag and TagKeys correctly
         # condition_result.update({

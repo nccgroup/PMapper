@@ -89,7 +89,7 @@ def process_arguments(parsed_args: Namespace):
 
     if parsed_args.with_resource_policy:
         resource_policy = query_utils.pull_cached_resource_policy_by_arn(
-            graph.policies,
+            graph,
             arn=None,
             query=parsed_args.query
         )
