@@ -20,6 +20,7 @@ from typing import List, Dict
 
 from principalmapper.common import Graph, Policy, Node
 from principalmapper.querying import query_interface
+from principalmapper.util.case_insensitive_dict import CaseInsensitiveDict
 
 _service_resource_exposure_map = {
     's3': {
@@ -37,6 +38,10 @@ _service_resource_exposure_map = {
     'kms': {
         'pattern': re.compile(r"^arn:aws:kms:[a-z0-9-]+:[0-9]+:key/.*"),
         'actions': ['kms:PutKeyPolicy']
+    },
+    'secretsmanager': {
+        'pattern': re.compile(r"^arn:aws:secretsmanager:[a-z0-9-]+:[0-9]+:.*"),
+        'actions': ['secretsmanager:PutResourcePolicy']
     }
 }
 
@@ -50,7 +55,7 @@ def handle_preset_query(graph: Graph, tokens: List[str], skip_admins: bool = Fal
 
     * "preset"
     * "endgame"
-    * <service> : (*|s3|sns|sqs|kms)
+    * <service> : (*|s3|sns|sqs|kms|secretsmanager)
     """
     endgame_map = compose_endgame_map(graph, tokens[2], skip_admins)
     for policy, nodes in endgame_map.items():
@@ -74,7 +79,7 @@ def compose_endgame_map(graph: Graph, service_to_include: str = '*', skip_admins
                         node_confirmed = False
 
                         if 'conditions' not in node.cache:
-                            node.cache['conditions'] = query_interface._infer_condition_keys(node, {})
+                            node.cache['conditions'] = query_interface._infer_condition_keys(node, CaseInsensitiveDict())
 
                         if (not skip_admins) or (not node.is_admin):
                             for action in definition['actions']:
