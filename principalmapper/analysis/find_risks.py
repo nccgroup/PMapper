@@ -447,6 +447,21 @@ def gen_admin_users_without_mfa_finding(graph: Graph) -> List[Finding]:
     return result
 
 
+def gen_resources_with_potential_confused_deputies(graph: Graph) -> List[Finding]:
+    """Generates findings related to AWS resources that allow access to AWS services (via resource policy)
+    that may not correctly verify which AWS account is the true source of a request that
+    affects the given resource.
+
+    Primarily works by inspecting resource policies and making sure that access is guarded
+    with a condition using aws:SourceAccount."""
+
+    result = []
+
+    raise NotImplementedError
+
+    return result
+
+
 def print_report(report: Report) -> None:
     """Given a report, uses print() to print out their contents in a Markdown format."""
 

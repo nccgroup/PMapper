@@ -23,25 +23,28 @@ import re
 from typing import Optional, List
 
 from principalmapper.common import Graph
-from principalmapper.querying.presets import privesc, connected, clusters, endgame
+from principalmapper.querying.presets import privesc, connected, clusters, endgame, serviceaccess
 from principalmapper.querying.query_interface import search_authorization_for, search_authorization_full
 from principalmapper.util import arns
 
 
 logger = logging.getLogger(__name__)
 
-_query_help_string = """Querying Help:
+_query_help_string = """QUERY HELP:
+
 First form:
    can <Principal> do <Action> [with <Resource [when <ConditionA> [and <ConditionB>...]]]
 Second form:
    who can do <Action> [with <Resource> [when <ConditionA> [and <ConditionB>...]]]
 Third form:
    preset <preset args>
+
 Available presets:
-* connected (principal|"*") (principal|"*")
-* privesc (principal|"*")
-* clusters (tag key)
-* endgame (service|"*")
+    * connected (principal|"*") (principal|"*")
+    * privesc (principal|"*")
+    * clusters (tag key)
+    * endgame (service|"*")
+    * serviceaccess
 """
 
 
@@ -54,7 +57,7 @@ def query_response(graph: Graph, query: str, skip_admins: bool = False, resource
     # Parse
     tokens = re.split(r'\s+', query, flags=re.UNICODE)
     logger.debug('Query tokens: {}'.format(tokens))
-    if len(tokens) < 3:
+    if len(tokens) < 2:
         _print_query_help()
         return
 
@@ -178,13 +181,27 @@ def handle_preset(graph: Graph, query: str, skip_admins: bool = False) -> None:
     """Interprets, executes, and outputs the result to a preset query."""
     tokens = re.split(r'\s+', query, flags=re.UNICODE)
     if tokens[1] == 'privesc':
+        if len(tokens) < 3:
+            _print_query_help()
+            return
         privesc.handle_preset_query(graph, tokens, skip_admins)
     elif tokens[1] == 'connected':
+        if len(tokens) < 4:
+            _print_query_help()
+            return
         connected.handle_preset_query(graph, tokens, skip_admins)
     elif tokens[1] == 'clusters':
+        if len(tokens) < 3:
+            _print_query_help()
+            return
         clusters.handle_preset_query(graph, tokens, skip_admins)
     elif tokens[1] == 'endgame':
+        if len(tokens) < 3:
+            _print_query_help()
+            return
         endgame.handle_preset_query(graph, tokens, skip_admins)
+    elif tokens[1] == 'serviceaccess':
+        serviceaccess.handle_preset_query(graph, tokens, skip_admins)
     else:
         _print_query_help()
         return
@@ -256,8 +273,11 @@ def argquery(graph: Graph, principal_param: Optional[str], action_param: Optiona
                 raise ValueError('For the endgame preset query, the --resource parameter must be set.')
 
             endgame.handle_preset_query(graph, ['', '', resource_param], skip_admins)
+        elif preset_param == 'serviceaccess':
+            serviceaccess.handle_preset_query(graph, [], skip_admins)
         else:
-            raise ValueError('Parameter for "preset" is not valid. Expected values: "privesc", "connected", or "clusters".')
+            raise ValueError('Parameter for "preset" is not valid. Expected values: "privesc", "connected", '
+                             '"clusters", "endgame", or "serviceaccess".')
 
     else:
         argquery_response(graph, principal_param, action_param, resource_param, condition_param, skip_admins,
