@@ -61,7 +61,7 @@ def create_graph(session: botocore.session.Session, service_list: list, region_a
     policies_result = results['policies']
 
     # Determine which nodes are admins and update node objects
-    update_admin_status(nodes_result)
+    update_admin_status(nodes_result, scps)
 
     # Generate edges, generate Edge objects
     edges_result = edge_identification.obtain_edges(
@@ -722,7 +722,7 @@ def get_policies_and_fill_out(iamclient, nodes: List[Node], groups: List[Group])
     return result
 
 
-def update_admin_status(nodes: List[Node]) -> None:
+def update_admin_status(nodes: List[Node], scps: Optional[List[List[dict]]] = None) -> None:
     """Given a list of nodes, goes through and updates each node's is_admin data."""
     logger.info('Determining which principals have administrative privileges')
     for node in nodes:
@@ -734,7 +734,8 @@ def update_admin_status(nodes: List[Node]) -> None:
             action = 'iam:PutUserPolicy'
         else:  # node_type == 'role'
             action = 'iam:PutRolePolicy'
-        if query_interface.local_check_authorization_handling_mfa(node, action, node.arn, {})[0]:
+        if query_interface.local_check_authorization_handling_mfa(node, action, node.arn, {},
+                                                                  service_control_policy_groups=scps)[0]:
             node.is_admin = True
             continue
 
@@ -744,17 +745,20 @@ def update_admin_status(nodes: List[Node]) -> None:
         else:
             action = 'iam:AttachRolePolicy'
         condition_keys = {'iam:PolicyARN': 'arn:aws:iam::aws:policy/AdministratorAccess'}
-        if query_interface.local_check_authorization_handling_mfa(node, action, node.arn, condition_keys)[0]:
+        if query_interface.local_check_authorization_handling_mfa(node, action, node.arn, condition_keys,
+                                                                  service_control_policy_groups=scps)[0]:
             node.is_admin = True
             continue
 
         # check if node can create a role and attach the AdministratorAccess policy or an inline policy
         if query_interface.local_check_authorization_handling_mfa(node, 'iam:CreateRole', '*', {})[0]:
             if query_interface.local_check_authorization_handling_mfa(node, 'iam:AttachRolePolicy', '*',
-                                                                      condition_keys)[0]:
+                                                                      condition_keys,
+                                                                      service_control_policy_groups=scps)[0]:
                 node.is_admin = True
                 continue
-            if query_interface.local_check_authorization_handling_mfa(node, 'iam:PutRolePolicy', '*', condition_keys)[0]:
+            if query_interface.local_check_authorization_handling_mfa(node, 'iam:PutRolePolicy', '*', condition_keys,
+                                                                      service_control_policy_groups=scps)[0]:
                 node.is_admin = True
                 continue
 
@@ -762,24 +766,28 @@ def update_admin_status(nodes: List[Node]) -> None:
         for attached_policy in node.attached_policies:
             if attached_policy.arn != node.arn:
                 if query_interface.local_check_authorization_handling_mfa(node, 'iam:CreatePolicyVersion',
-                                                                          attached_policy.arn, {})[0]:
+                                                                          attached_policy.arn, {},
+                                                                          service_control_policy_groups=scps)[0]:
                     node.is_admin = True
                     continue
 
         # check if node is a user, and if it can attach or modify any of its groups's policies
         if node_type == 'user':
             for group in node.group_memberships:
-                if query_interface.local_check_authorization_handling_mfa(node, 'iam:PutGroupPolicy', group.arn, {})[0]:
+                if query_interface.local_check_authorization_handling_mfa(node, 'iam:PutGroupPolicy', group.arn, {},
+                                                                          service_control_policy_groups=scps)[0]:
                     node.is_admin = True
                     break  # break the loop through groups
                 if query_interface.local_check_authorization_handling_mfa(node, 'iam:AttachGroupPolicy', group.arn,
-                                                                          condition_keys)[0]:
+                                                                          condition_keys,
+                                                                          service_control_policy_groups=scps)[0]:
                     node.is_admin = True
                     break  # as above
                 for attached_policy in group.attached_policies:
                     if attached_policy.arn != group.arn:
                         if query_interface.local_check_authorization_handling_mfa(node, 'iam:CreatePolicyVersion',
-                                                                                  attached_policy.arn, {})[0]:
+                                                                                  attached_policy.arn, {},
+                                                                                  service_control_policy_groups=scps)[0]:
                             node.is_admin = True
                             break  # break the loop through policies
                 if node.is_admin:
