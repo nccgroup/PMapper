@@ -92,7 +92,7 @@ def process_arguments(parsed_args: Namespace):
 
         # filter the args first
         if parsed_args.account is not None:
-            print('Cannot specify offline-mode param `--account` when calling `pmapper graph orgs create`. If you have '
+            print('Cannot specify offline-mode param `--account` when calling `pmapper orgs create`. If you have '
                   'credentials for a specific account to graph, you can use those credentials similar to how the '
                   'AWS CLI works (environment variables, profiles, EC2 instance metadata). In the case of using '
                   'a profile, use the `--profile [PROFILE]` argument before specifying the `orgs` subcommand.')
@@ -121,7 +121,7 @@ def process_arguments(parsed_args: Namespace):
             except Exception as ex:
                 logger.warning('Unable to load a Graph object for account {}, possibly because it is not mapped yet. '
                                'Please map all accounts and then update the Organization Tree '
-                               '(`pmapper graph orgs update`).'.format(account))
+                               '(`pmapper orgs update --org $ORG_ID`).'.format(account))
                 logger.debug(str(ex))
 
         for graph_obj_a in graph_objs:
@@ -161,7 +161,7 @@ def process_arguments(parsed_args: Namespace):
             except Exception as ex:
                 logger.warning('Unable to load a Graph object for account {}, possibly because it is not mapped yet. '
                                'Please map all accounts and then update the Organization Tree '
-                               '(`pmapper graph orgs update`).'.format(account))
+                               '(`pmapper orgs update --org $ORG_ID`).'.format(account))
                 logger.debug(str(ex))
 
         for graph_obj_a in graph_objs:
@@ -264,5 +264,5 @@ def _update_accounts_with_ou_path_map(org_id: str, account_ou_map: dict, root_di
         else:
             logger.debug(
                 'Account {} of organization {} does not have a Graph. You will need to update the '
-                'organization data at a later point (`pmapper graph orgs update`).'.format(account.account_id, org_id)
+                'organization data at a later point (`pmapper orgs update --org $ORG_ID`).'.format(account.account_id, org_id)
             )  # warning gets thrown up by caller, no need to reiterate
