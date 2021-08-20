@@ -13,15 +13,16 @@
 #      You should have received a copy of the GNU Affero General Public License
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import pydot
 
 from principalmapper.common import Graph, Node, Edge
 from principalmapper.querying.presets.privesc import can_privesc
+from principalmapper.querying.presets.serviceaccess import compose_service_access_map
 
 
-def write_standard_graphviz(graph: Graph, filepath: str, file_format: str) -> None:
+def write_standard_graphviz(graph: Graph, filepath: str, file_format: str, with_services: Optional[bool] = False) -> None:
     """The function to generate the standard visualization with a Graphviz-generated file: this is all the nodes
     with the admins/privesc highlights in blue/red respectively."""
 
@@ -36,6 +37,7 @@ def write_standard_graphviz(graph: Graph, filepath: str, file_format: str) -> No
     )
     pyd_nd = {}
 
+    # Draw standard nodes and edges: users/roles
     for node in graph.nodes:
         if node.is_admin:
             color = '#BFEFFF'
@@ -50,6 +52,17 @@ def write_standard_graphviz(graph: Graph, filepath: str, file_format: str) -> No
     for edge in graph.edges:
         if not edge.source.is_admin:
             pydg.add_edge(pydot.Edge(pyd_nd[edge.source], pyd_nd[edge.destination]))
+
+    # draw service nodes and edges
+    if with_services:
+        sam = compose_service_access_map(graph)
+        for service in sam.keys():
+            pyd_nd[service] = pydot.Node(service, style='filled', fillcolor='#DDFFDD')
+            pydg.add_node(pyd_nd[service])
+
+        for service, node_list in sam.items():
+            for node in node_list:
+                pydg.add_edge(pydot.Edge(pyd_nd[service], pyd_nd[node]))
 
     # and draw
     pydg.write(filepath, format=file_format)
