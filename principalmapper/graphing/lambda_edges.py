@@ -136,8 +136,9 @@ def generate_edges_locally(nodes: List[Node], function_list: List[dict], scps: O
                         'Lambda'
                     )
                     result.append(new_edge)
+                    continue  # TODO: reexamine if it is appropriate to skip the next checks, which can be O(n^2) in some accounts
 
-            func_data = []  # List[Tuple[dict, bool, bool, bool]]
+            func_data = []  # List[Tuple[dict, bool, bool]]
             for func in function_list:
                 can_change_code, need_mfa_1 = query_interface.local_check_authorization_handling_mfa(
                     node_source,
@@ -146,18 +147,12 @@ def generate_edges_locally(nodes: List[Node], function_list: List[dict], scps: O
                     {},
                     service_control_policy_groups=scps
                 )
-                can_change_config, need_mfa_2 = query_interface.local_check_authorization_handling_mfa(
-                    node_source,
-                    'lambda:UpdateFunctionConfiguration',
-                    func['FunctionArn'],
-                    {},
-                    service_control_policy_groups=scps
-                )
+
                 func_data.append(
-                    (func, can_change_code, can_change_config, need_mfa_passrole or need_mfa_1 or need_mfa_2))
+                    (func, can_change_code, need_mfa_passrole or need_mfa_1))
 
             # check that source can modify a Lambda function and use its existing role
-            for func, can_change_code, can_change_config, need_mfa in func_data:
+            for func, can_change_code, need_mfa in func_data:
                 if node_destination.arn == func['Role']:
                     if can_change_code:
                         if need_mfa:
@@ -177,10 +172,16 @@ def generate_edges_locally(nodes: List[Node], function_list: List[dict], scps: O
                         result.append(new_edge)
                         break
 
-            # check that source can modify a Lambda function and pass it another execution role
-            for func, can_change_code, can_change_config, need_mfa in func_data:
+                can_change_config, need_mfa_2 = query_interface.local_check_authorization_handling_mfa(
+                    node_source,
+                    'lambda:UpdateFunctionConfiguration',
+                    func['FunctionArn'],
+                    {},
+                    service_control_policy_groups=scps
+                )
+
                 if can_change_config and can_change_code and can_pass_role:
-                    if need_mfa:
+                    if need_mfa or need_mfa_2:
                         reason = '(requires MFA) can use Lambda to edit an existing function ({}) to access'.format(
                             func['FunctionArn']
                         )
