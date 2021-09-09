@@ -28,13 +28,14 @@ dictionary objects with the format:
 
 import datetime as dt
 import json
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import principalmapper
 from principalmapper.analysis.finding import Finding
 from principalmapper.analysis.report import Report
 from principalmapper.common import Graph, Node, Edge
 from principalmapper.querying import query_interface
+from principalmapper.querying.local_policy_simulation import resource_policy_authorization, ResourcePolicyEvalResult
 from principalmapper.querying.presets.privesc import can_privesc
 from principalmapper.util import arns
 
@@ -457,7 +458,60 @@ def gen_resources_with_potential_confused_deputies(graph: Graph) -> List[Finding
 
     result = []
 
-    raise NotImplementedError
+    resource_service_action_map = {
+        's3': {
+            'serverlessrepo.amazonaws.com': [
+                's3:GetObject'
+            ]
+        }
+    }
+
+    affected_policies = []  # type: List[Tuple[str, str, str]]
+    for resource_type in resource_service_action_map.keys():
+        for policy in graph.policies:
+            if arns.get_service(policy.arn) == resource_type:
+                for service, action_list in resource_service_action_map[resource_type].items():
+                    available_actions = []
+                    for action in action_list:
+                        rpa_result = resource_policy_authorization(
+                            service,
+                            graph.metadata['account_id'],
+                            policy.policy_doc,
+                            action,
+                            policy.arn,
+                            {
+                                'aws:SourceAccount': '000000000000'
+                            }
+                        )
+                        if rpa_result.SERVICE_MATCH:
+                            available_actions.append(action)
+                    if len(available_actions) > 0:
+                        affected_policies.append(
+                            (policy.arn, service, ' | '.join(available_actions))
+                        )
+
+    if len(affected_policies) > 0:
+        desc_list_str = '\n'.join(['* With service {}, the resource {} for the action(s): {}'.format(y, x, z) for x, y, z in affected_policies])
+        result.append(
+            Finding(
+                'Resources With A Potential Confused-Deputy Risk',
+                'Medium',
+                'Depending on the affected resources and services, an attacker may be able to execute read or write '
+                'operations on the resources from another AWS account.',
+                'In AWS, certain services will create and use resources in the customer\'s own AWS account. This may '
+                'be controlled using a resource policy that grants access to the service that created the resource '
+                'in the customer\'s AWS account. However, some services require customers to use the '
+                '`${aws:SourceAccount}` condition context key to control access to the account resource from the '
+                'service. In other words, to prevent the service from accessing the resource on the behalf of '
+                'another customer, the resource needs a resource policy that allow-lists the true "source" of a '
+                'request.\n\n'
+                'The following AWS services and resources could allow an external account to potentially gain '
+                'read/write access to the resources:\n\n' + desc_list_str,
+                'Update the resource policy for all affected resources, and ensure that all statements granting '
+                'access to AWS services check against the `${aws:SourceAccount}` condition context key when '
+                'appropriate.'
+            )
+        )
 
     return result
 
