@@ -139,7 +139,7 @@ def generate_edges_locally(nodes: List[Node], stack_list: List[dict], scps: Opti
 
             relevant_stacks = []  # we'll reuse this for *ChangeSet
             for stack in stack_list:
-                if 'RoleArn' in stack:
+                if 'RoleARN' in stack:
                     if stack['RoleARN'] == node_destination.arn:
                         relevant_stacks.append(stack)
 

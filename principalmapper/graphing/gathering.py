@@ -58,7 +58,6 @@ def create_graph(session: botocore.session.Session, service_list: list, region_a
 
     if client_args_map is None:
         client_args_map = {}
-    logger.debug(client_args_map)
 
     stsargs = client_args_map.get('sts', {})
     stsclient = session.create_client('sts', **stsargs)
