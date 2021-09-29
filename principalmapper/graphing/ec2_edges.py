@@ -35,7 +35,8 @@ class EC2EdgeChecker(EdgeChecker):
     """Class for identifying if EC2 can be used by IAM principals to gain access to other IAM principals."""
 
     def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None,
-                     region_deny_list: Optional[List[str]] = None, scps: Optional[List[List[dict]]] = None) -> List[Edge]:
+                     region_deny_list: Optional[List[str]] = None, scps: Optional[List[List[dict]]] = None,
+                     client_args_map: Optional[dict] = None) -> List[Edge]:
         """Fulfills expected method return_edges."""
 
         logger.info('Generating Edges based on EC2.')

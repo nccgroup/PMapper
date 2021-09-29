@@ -58,6 +58,16 @@ def provide_arguments(parser: ArgumentParser):
         action='store_true',
         help='If specified, skips the check for stored AWS Organizations data and ignores any potentially applicable SCPs during the graph creation process'
     )
+
+    # create cmd args for commands where we pull data other than from the AWS APIs
+    # TODO: add args for Scout Suite, etc. here
+    alt_data_source_group = create_parser.add_mutually_exclusive_group()
+    alt_data_source_group.add_argument(
+        '--localstack-endpoint',
+        help='The HTTP(S) endpoint for a running instance of LocalStack'
+    )
+
+    # create cmd args for including/excluding regions
     region_args_group = create_parser.add_mutually_exclusive_group()
     region_args_group.add_argument(
         '--include-regions',
@@ -126,11 +136,17 @@ def process_arguments(parsed_args: Namespace):
         logger.debug('Service list after processing args: {}'.format(service_list))
 
         # need to know account ID to search potential SCPs
-        session = botocore_tools.get_session(parsed_args.profile)
+        if parsed_args.localstack_endpoint is not None:
+            session = botocore_tools.get_session(parsed_args.profile, {'endpoint_url': parsed_args.localstack_endpoint})
+        else:
+            session = botocore_tools.get_session(parsed_args.profile)
 
         scps = None
         if not parsed_args.ignore_orgs:
-            stsclient = session.create_client('sts')
+            if parsed_args.localstack_endpoint is not None:
+                stsclient = session.create_client('sts', endpoint_url=parsed_args.localstack_endpoint)
+            else:
+                stsclient = session.create_client('sts')
             caller_identity = stsclient.get_caller_identity()
             caller_account = caller_identity['Account']
             logger.debug("Caller Identity: {}".format(caller_identity))
@@ -150,7 +166,18 @@ def process_arguments(parsed_args: Namespace):
                             scps = query_orgs.produce_scp_list_by_account_id(caller_account, org_tree)
                         break
 
-        graph = graph_actions.create_new_graph(session, service_list, parsed_args.include_regions, parsed_args.exclude_regions, scps)
+        if parsed_args.localstack_endpoint is not None:
+            full_service_list = ('autoscaling', 'cloudformation', 'codebuild', 'ec2', 'iam', 'kms', 'lambda',
+                                 'sagemaker', 's3', 'ssm', 'secretsmanager', 'sns', 'sts', 'sqs')
+
+            client_args_map = {
+                x: {'endpoint_url': parsed_args.localstack_endpoint} for x in full_service_list
+            }
+        else:
+            client_args_map = None
+
+        graph = graph_actions.create_new_graph(session, service_list, parsed_args.include_regions,
+                                               parsed_args.exclude_regions, scps, client_args_map)
         graph_actions.print_graph_data(graph)
         graph.store_graph_as_json(os.path.join(get_storage_root(), graph.metadata['account_id']))
 

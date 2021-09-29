@@ -36,15 +36,19 @@ class LambdaEdgeChecker(EdgeChecker):
     """Class for identifying if Lambda can be used by IAM principals to gain access to other IAM principals."""
 
     def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None,
-                     region_deny_list: Optional[List[str]] = None, scps: Optional[List[List[dict]]] = None) -> List[Edge]:
+                     region_deny_list: Optional[List[str]] = None, scps: Optional[List[List[dict]]] = None,
+                     client_args_map: Optional[dict] = None) -> List[Edge]:
         """Fulfills expected method return_edges. If session object is None, runs checks in offline mode."""
 
         logger.info('Pulling data on Lambda functions')
+
+        lambdaargs = client_args_map.get('lambda', {})
+
         lambda_clients = []
         if self.session is not None:
             lambda_regions = botocore_tools.get_regions_to_search(self.session, 'lambda', region_allow_list, region_deny_list)
             for region in lambda_regions:
-                lambda_clients.append(self.session.create_client('lambda', region_name=region))
+                lambda_clients.append(self.session.create_client('lambda', region_name=region, **lambdaargs))
 
         # grab existing lambda functions
         function_list = []

@@ -24,7 +24,7 @@ import botocore.session
 logger = logging.getLogger(__name__)
 
 
-def get_session(profile_arg: Optional[str]) -> botocore.session.Session:
+def get_session(profile_arg: Optional[str], stsargs: Optional[dict] = None) -> botocore.session.Session:
     """Returns a botocore Session object taking into consideration Env-vars, etc.
 
     Tries to follow order from: https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html
@@ -35,7 +35,13 @@ def get_session(profile_arg: Optional[str]) -> botocore.session.Session:
     else:  # pull from environment vars / metadata
         result = botocore.session.get_session()
 
-    stsclient = result.create_client('sts')
+    # handles args for creating the STS client
+    if stsargs is None:
+        processed_stsargs = {}
+    else:
+        processed_stsargs = stsargs
+
+    stsclient = result.create_client('sts', **processed_stsargs)
     stsclient.get_caller_identity()  # raises error if it's not workable
     return result
 
