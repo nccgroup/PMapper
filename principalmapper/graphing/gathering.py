@@ -248,6 +248,16 @@ def get_nodes_groups_and_policies(iamclient) -> dict:
             access_keys_data = iamclient.list_access_keys(UserName=user_name)
             node.access_keys = len(access_keys_data['AccessKeyMetadata'])
             # logger.debug('Access Key Count for {}: {}'.format(user_name, len(access_keys_data['AccessKeyMetadata'])))
+            # Grab password data and update node
+            try:
+                login_profile_data = iamclient.get_login_profile(UserName=user_name)
+                if 'LoginProfile' in login_profile_data:
+                    node.active_password = True
+            except Exception as ex:
+                if 'NoSuchEntity' in str(ex):
+                    node.active_password = False  # expecting this
+                else:
+                    raise ex
 
     logger.info('Gathering MFA virtual device information')
     mfa_paginator = iamclient.get_paginator('list_virtual_mfa_devices')
