@@ -92,7 +92,7 @@ def process_arguments(parsed_args: Namespace):
 
         # filter the args first
         if parsed_args.account is not None:
-            print('Cannot specify offline-mode param `--account` when calling `pmapper graph orgs create`. If you have '
+            print('Cannot specify offline-mode param `--account` when calling `pmapper orgs create`. If you have '
                   'credentials for a specific account to graph, you can use those credentials similar to how the '
                   'AWS CLI works (environment variables, profiles, EC2 instance metadata). In the case of using '
                   'a profile, use the `--profile [PROFILE]` argument before specifying the `orgs` subcommand.')
