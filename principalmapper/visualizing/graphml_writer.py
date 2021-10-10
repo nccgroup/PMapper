@@ -17,14 +17,15 @@
 
 from xml.dom import minidom
 import xml.etree.ElementTree as ET
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 
 import principalmapper
 from principalmapper.common import Edge, Node, Graph
 from principalmapper.querying.presets.privesc import can_privesc
+from principalmapper.querying.presets.serviceaccess import compose_service_access_map
 
 
-def write_standard_graphml(graph: Graph, filepath: str) -> None:
+def write_standard_graphml(graph: Graph, filepath: str, with_services: Optional[bool] = False) -> None:
     """The function to generate the standard visualization with a GraphML file: this is all the nodes with the
     admins/privesc highlights in blue/red respectively."""
 
@@ -37,8 +38,14 @@ def write_standard_graphml(graph: Graph, filepath: str) -> None:
         else:
             node_color_mapping[node] = 'white'
 
+    if with_services:
+        sam = compose_service_access_map(graph)
+    else:
+        sam = None
+
+
     result = ET.ElementTree(ET.Element(None))
-    generate_graphml(node_color_mapping, graph.edges, result)
+    generate_graphml(node_color_mapping, graph.edges, result, sam)
     result.write(filepath, 'utf-8', True)
 
 
@@ -58,7 +65,7 @@ def write_privesc_graphml(graph: Graph, filepath: str) -> None:
     result.write(filepath, 'utf-8', True)
 
 
-def generate_graphml(nodes_and_color: Dict[Node, Optional[str]], edges: List[Edge], element_tree: ET.ElementTree) -> None:
+def generate_graphml(nodes_and_color: Dict[Union[Node, str], Optional[str]], edges: List[Edge], element_tree: ET.ElementTree, service_data: Optional[Dict[str, List[Node]]] = None) -> None:
     """This function modifies the given element tree to add the passed node/edge data/attributes.
 
     The nodes_and_color dictionary should have the nodes to draw in the graph mapping to a color to draw the
@@ -137,6 +144,20 @@ def generate_graphml(nodes_and_color: Dict[Node, Optional[str]], edges: List[Edg
         graph_element.append(node_element)
         node_counter += 1
 
+    if service_data is not None:
+        for service in service_data.keys():
+            node_id = 'n{}'.format(node_counter)
+            node_id_mapping[service] = node_id
+            node_element = ET.Element('node', {'id': node_id})
+            node_label_subelement = ET.Element('data', {'key': 'd1'})
+            node_label_subelement.text = service
+            node_element.append(node_label_subelement)
+            node_color_subelement = ET.Element('data', {'key': 'd0'})
+            node_color_subelement.text = 'green'
+            node_element.append(node_color_subelement)
+            graph_element.append(node_element)
+            node_counter += 1
+
     # go through each edge and append an <edge> element to the <graph> element's children
     edge_counter = 0
     for edge in edges:
@@ -156,4 +177,24 @@ def generate_graphml(nodes_and_color: Dict[Node, Optional[str]], edges: List[Edg
         edge_element.append(edge_label_subelement)
         graph_element.append(edge_element)
         edge_counter += 1
+
+    if service_data is not None:
+        for service, node_list in service_data.items():
+            for role_node in node_list:
+                if role_node not in node_id_mapping:
+                    continue
+                edge_id = 'e{}'.format(edge_counter)
+                edge_element = ET.Element(
+                    'edge',
+                    {
+                        'id': edge_id,
+                        'source': node_id_mapping[service],
+                        'target': node_id_mapping[role_node]
+                    }
+                )
+                edge_label_subelement = ET.Element('data', {'key': 'd2'})
+                edge_label_subelement.text = 'SERVICE_ACCESS'
+                edge_element.append(edge_label_subelement)
+                graph_element.append(edge_element)
+                edge_counter += 1
 

@@ -17,22 +17,22 @@
 #      along with Principal Mapper.  If not, see <https://www.gnu.org/licenses/>.
 
 import pydot
-from typing import List
+from typing import List, Optional
 
 from principalmapper.common import Graph, Node, Edge
 from principalmapper.querying.presets.privesc import can_privesc
 from principalmapper.visualizing import graphml_writer, graphviz_writer
 
 
-def handle_request(graph: Graph, path: str, file_format: str) -> None:
+def handle_request(graph: Graph, path: str, file_format: str, with_services: Optional[bool] = False) -> None:
     """Meat of the graph_writer.py module, writes graph data in a given file-format to the given path."""
 
     # adding extra branch to handle new GraphML format
     if file_format == 'graphml':
-        return graphml_writer.write_standard_graphml(graph, path)
+        return graphml_writer.write_standard_graphml(graph, path, with_services)
 
     elif file_format in ('svg', 'png', 'dot'):
-        return graphviz_writer.write_standard_graphviz(graph, path, file_format)
+        return graphviz_writer.write_standard_graphviz(graph, path, file_format, with_services)
 
     else:
         raise ValueError('Unexpected value for parameter `file_format`')
