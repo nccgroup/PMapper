@@ -34,7 +34,8 @@ logger = logging.getLogger(__name__)
 
 
 def create_graph(session: botocore.session.Session, service_list: list, region_allow_list: Optional[List[str]] = None,
-                 region_deny_list: Optional[List[str]] = None, scps: Optional[List[List[dict]]] = None) -> Graph:
+                 region_deny_list: Optional[List[str]] = None, scps: Optional[List[List[dict]]] = None,
+                 client_args_map: Optional[dict] = None) -> Graph:
     """Constructs a Graph object.
 
     Information about the graph as it's built will be written to the IO parameter `output`.
@@ -43,9 +44,24 @@ def create_graph(session: botocore.session.Session, service_list: list, region_a
     allowed/denied regions to pull data from. Note that we don't do the same allow/deny list parameters for the
     service list, because that is a fixed property of what pmapper supports as opposed to an unknown/uncontrolled
     list of regions that AWS supports.
+
+    The `client_args_map` is either None (default) or a dictionary containing a mapping of service -> keyword args for
+    when the client is created for the service. For example, if you want to specify a different endpoint URL
+    when calling IAM, your map should look like:
+
+    ```
+    client_args_map = {'iam': {'endpoint_url': 'http://localhost:4456'}}
+    ```
+
+    Later on, when calling create_client('iam', ...) the map will be added via kwargs
     """
 
-    stsclient = session.create_client('sts')
+    if client_args_map is None:
+        client_args_map = {}
+
+    stsargs = client_args_map.get('sts', {})
+    stsclient = session.create_client('sts', **stsargs)
+    logger.debug(stsclient.meta.endpoint_url)
     caller_identity = stsclient.get_caller_identity()
     logger.debug("Caller Identity: {}".format(caller_identity['Arn']))
     metadata = {
@@ -53,7 +69,8 @@ def create_graph(session: botocore.session.Session, service_list: list, region_a
         'pmapper_version': principalmapper.__version__
     }
 
-    iamclient = session.create_client('iam')
+    iamargs = client_args_map.get('iam', {})
+    iamclient = session.create_client('iam', **iamargs)
 
     results = get_nodes_groups_and_policies(iamclient)
     nodes_result = results['nodes']
@@ -61,7 +78,7 @@ def create_graph(session: botocore.session.Session, service_list: list, region_a
     policies_result = results['policies']
 
     # Determine which nodes are admins and update node objects
-    update_admin_status(nodes_result)
+    update_admin_status(nodes_result, scps)
 
     # Generate edges, generate Edge objects
     edges_result = edge_identification.obtain_edges(
@@ -70,15 +87,19 @@ def create_graph(session: botocore.session.Session, service_list: list, region_a
         nodes_result,
         region_allow_list,
         region_deny_list,
-        scps
+        scps,
+        client_args_map
     )
 
     # Pull S3, SNS, SQS, KMS, and Secrets Manager resource policies
-    policies_result.extend(get_s3_bucket_policies(session))
-    policies_result.extend(get_sns_topic_policies(session, region_allow_list, region_deny_list))
-    policies_result.extend(get_sqs_queue_policies(session, caller_identity['Account'], region_allow_list, region_deny_list))
-    policies_result.extend(get_kms_key_policies(session, region_allow_list, region_deny_list))
-    policies_result.extend(get_secrets_manager_policies(session, region_allow_list, region_deny_list))
+    try:
+        policies_result.extend(get_s3_bucket_policies(session, client_args_map))
+        policies_result.extend(get_sns_topic_policies(session, region_allow_list, region_deny_list, client_args_map))
+        policies_result.extend(get_sqs_queue_policies(session, caller_identity['Account'], region_allow_list, region_deny_list, client_args_map))
+        policies_result.extend(get_kms_key_policies(session, region_allow_list, region_deny_list, client_args_map))
+        policies_result.extend(get_secrets_manager_policies(session, region_allow_list, region_deny_list, client_args_map))
+    except:
+        pass
 
     return Graph(nodes_result, edges_result, policies_result, groups_result, metadata)
 
@@ -227,6 +248,16 @@ def get_nodes_groups_and_policies(iamclient) -> dict:
             access_keys_data = iamclient.list_access_keys(UserName=user_name)
             node.access_keys = len(access_keys_data['AccessKeyMetadata'])
             # logger.debug('Access Key Count for {}: {}'.format(user_name, len(access_keys_data['AccessKeyMetadata'])))
+            # Grab password data and update node
+            try:
+                login_profile_data = iamclient.get_login_profile(UserName=user_name)
+                if 'LoginProfile' in login_profile_data:
+                    node.active_password = True
+            except Exception as ex:
+                if 'NoSuchEntity' in str(ex):
+                    node.active_password = False  # expecting this
+                else:
+                    raise ex
 
     logger.info('Gathering MFA virtual device information')
     mfa_paginator = iamclient.get_paginator('list_virtual_mfa_devices')
@@ -251,12 +282,13 @@ def get_nodes_groups_and_policies(iamclient) -> dict:
     return result
 
 
-def get_s3_bucket_policies(session: botocore.session.Session) -> List[Policy]:
+def get_s3_bucket_policies(session: botocore.session.Session, client_args_map: Optional[dict] = None) -> List[Policy]:
     """Using a botocore Session object, return a list of Policy objects representing the bucket policies of each
     S3 bucket in this account.
     """
     result = []
-    s3client = session.create_client('s3')
+    s3args = client_args_map.get('s3', {})
+    s3client = session.create_client('s3', **s3args)
     buckets = [x['Name'] for x in s3client.list_buckets()['Buckets']]
     for bucket in buckets:
         bucket_arn = 'arn:aws:s3:::{}'.format(bucket)  # TODO: allow different partition
@@ -288,7 +320,8 @@ def get_s3_bucket_policies(session: botocore.session.Session) -> List[Policy]:
     return result
 
 
-def get_kms_key_policies(session: botocore.session.Session, region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[Policy]:
+def get_kms_key_policies(session: botocore.session.Session, region_allow_list: Optional[List[str]] = None,
+                         region_deny_list: Optional[List[str]] = None, client_args_map: Optional[dict] = None) -> List[Policy]:
     """Using a botocore Session object, return a list of Policy objects representing the key policies of each
     KMS key in this account.
 
@@ -297,12 +330,14 @@ def get_kms_key_policies(session: botocore.session.Session, region_allow_list: O
     """
     result = []
 
+    kmsargs = client_args_map.get('kms', {})
+
     # Iterate through all regions of KMS where possible
     for kms_region in get_regions_to_search(session, 'kms', region_allow_list, region_deny_list):
         try:
             # Grab the keys
             cmks = []
-            kmsclient = session.create_client('kms', region_name=kms_region)
+            kmsclient = session.create_client('kms', region_name=kms_region, **kmsargs)
             kms_paginator = kmsclient.get_paginator('list_keys')
             for page in kms_paginator.paginate():
                 cmks.extend([x['KeyArn'] for x in page['Keys']])
@@ -324,7 +359,8 @@ def get_kms_key_policies(session: botocore.session.Session, region_allow_list: O
     return result
 
 
-def get_sns_topic_policies(session: botocore.session.Session, region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[Policy]:
+def get_sns_topic_policies(session: botocore.session.Session, region_allow_list: Optional[List[str]] = None,
+                           region_deny_list: Optional[List[str]] = None, client_args_map: Optional[dict] = None) -> List[Policy]:
     """Using a botocore Session object, return a list of Policy objects representing the topic policies of each
     SNS topic in this account.
 
@@ -333,12 +369,14 @@ def get_sns_topic_policies(session: botocore.session.Session, region_allow_list:
     """
     result = []
 
+    snsargs = client_args_map.get('sns', {})
+
     # Iterate through all regions of SNS where possible
     for sns_region in get_regions_to_search(session, 'sns', region_allow_list, region_deny_list):
         try:
             # Grab the topics
             topics = []
-            snsclient = session.create_client('sns', region_name=sns_region)
+            snsclient = session.create_client('sns', region_name=sns_region, **snsargs)
             sns_paginator = snsclient.get_paginator('list_topics')
             for page in sns_paginator.paginate():
                 topics.extend([x['TopicArn'] for x in page['Topics']])
@@ -360,7 +398,9 @@ def get_sns_topic_policies(session: botocore.session.Session, region_allow_list:
     return result
 
 
-def get_sqs_queue_policies(session: botocore.session.Session, account_id: str, region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[Policy]:
+def get_sqs_queue_policies(session: botocore.session.Session, account_id: str,
+                           region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None,
+                           client_args_map: Optional[dict] = None) -> List[Policy]:
     """Using a botocore Session object, return a list of Policy objects representing the queue policies of each
     SQS queue in this account.
 
@@ -369,12 +409,14 @@ def get_sqs_queue_policies(session: botocore.session.Session, account_id: str, r
     """
     result = []
 
+    sqsargs = client_args_map.get('sqs', {})
+
     # Iterate through all regions of SQS where possible
     for sqs_region in get_regions_to_search(session, 'sqs', region_allow_list, region_deny_list):
         try:
             # Grab the queue names
             queue_urls = []
-            sqsclient = session.create_client('sqs', region_name=sqs_region)
+            sqsclient = session.create_client('sqs', region_name=sqs_region, **sqsargs)
             response = sqsclient.list_queues()
             if 'QueueUrls' in response:
                 queue_urls.extend(response['QueueUrls'])
@@ -410,7 +452,8 @@ def get_sqs_queue_policies(session: botocore.session.Session, account_id: str, r
     return result
 
 
-def get_secrets_manager_policies(session: botocore.session.Session, region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[Policy]:
+def get_secrets_manager_policies(session: botocore.session.Session, region_allow_list: Optional[List[str]] = None,
+                                 region_deny_list: Optional[List[str]] = None, client_args_map: Optional[dict] = None) -> List[Policy]:
     """Using a botocore Session object, return a list of Policy objects representing the resource policies
     of the secrets in AWS Secrets Manager.
 
@@ -419,12 +462,14 @@ def get_secrets_manager_policies(session: botocore.session.Session, region_allow
     """
     result = []
 
+    smargs = client_args_map.get('secretsmanager', {})
+
     # Iterate through all regions of Secrets Manager where possible
     for sm_region in get_regions_to_search(session, 'secretsmanager', region_allow_list, region_deny_list):
         try:
             # Grab the ARNs of the secrets in this region
             secret_arns = []
-            smclient = session.create_client('secretsmanager', region_name=sm_region)
+            smclient = session.create_client('secretsmanager', region_name=sm_region, **smargs)
             list_secrets_paginator = smclient.get_paginator('list_secrets')
             for page in list_secrets_paginator.paginate():
                 if 'SecretList' in page:
@@ -722,7 +767,7 @@ def get_policies_and_fill_out(iamclient, nodes: List[Node], groups: List[Group])
     return result
 
 
-def update_admin_status(nodes: List[Node]) -> None:
+def update_admin_status(nodes: List[Node], scps: Optional[List[List[dict]]] = None) -> None:
     """Given a list of nodes, goes through and updates each node's is_admin data."""
     logger.info('Determining which principals have administrative privileges')
     for node in nodes:
@@ -734,7 +779,8 @@ def update_admin_status(nodes: List[Node]) -> None:
             action = 'iam:PutUserPolicy'
         else:  # node_type == 'role'
             action = 'iam:PutRolePolicy'
-        if query_interface.local_check_authorization_handling_mfa(node, action, node.arn, {})[0]:
+        if query_interface.local_check_authorization_handling_mfa(node, action, node.arn, {},
+                                                                  service_control_policy_groups=scps)[0]:
             node.is_admin = True
             continue
 
@@ -744,17 +790,20 @@ def update_admin_status(nodes: List[Node]) -> None:
         else:
             action = 'iam:AttachRolePolicy'
         condition_keys = {'iam:PolicyARN': 'arn:aws:iam::aws:policy/AdministratorAccess'}
-        if query_interface.local_check_authorization_handling_mfa(node, action, node.arn, condition_keys)[0]:
+        if query_interface.local_check_authorization_handling_mfa(node, action, node.arn, condition_keys,
+                                                                  service_control_policy_groups=scps)[0]:
             node.is_admin = True
             continue
 
         # check if node can create a role and attach the AdministratorAccess policy or an inline policy
         if query_interface.local_check_authorization_handling_mfa(node, 'iam:CreateRole', '*', {})[0]:
             if query_interface.local_check_authorization_handling_mfa(node, 'iam:AttachRolePolicy', '*',
-                                                                      condition_keys)[0]:
+                                                                      condition_keys,
+                                                                      service_control_policy_groups=scps)[0]:
                 node.is_admin = True
                 continue
-            if query_interface.local_check_authorization_handling_mfa(node, 'iam:PutRolePolicy', '*', condition_keys)[0]:
+            if query_interface.local_check_authorization_handling_mfa(node, 'iam:PutRolePolicy', '*', condition_keys,
+                                                                      service_control_policy_groups=scps)[0]:
                 node.is_admin = True
                 continue
 
@@ -762,24 +811,28 @@ def update_admin_status(nodes: List[Node]) -> None:
         for attached_policy in node.attached_policies:
             if attached_policy.arn != node.arn:
                 if query_interface.local_check_authorization_handling_mfa(node, 'iam:CreatePolicyVersion',
-                                                                          attached_policy.arn, {})[0]:
+                                                                          attached_policy.arn, {},
+                                                                          service_control_policy_groups=scps)[0]:
                     node.is_admin = True
                     continue
 
         # check if node is a user, and if it can attach or modify any of its groups's policies
         if node_type == 'user':
             for group in node.group_memberships:
-                if query_interface.local_check_authorization_handling_mfa(node, 'iam:PutGroupPolicy', group.arn, {})[0]:
+                if query_interface.local_check_authorization_handling_mfa(node, 'iam:PutGroupPolicy', group.arn, {},
+                                                                          service_control_policy_groups=scps)[0]:
                     node.is_admin = True
                     break  # break the loop through groups
                 if query_interface.local_check_authorization_handling_mfa(node, 'iam:AttachGroupPolicy', group.arn,
-                                                                          condition_keys)[0]:
+                                                                          condition_keys,
+                                                                          service_control_policy_groups=scps)[0]:
                     node.is_admin = True
                     break  # as above
                 for attached_policy in group.attached_policies:
                     if attached_policy.arn != group.arn:
                         if query_interface.local_check_authorization_handling_mfa(node, 'iam:CreatePolicyVersion',
-                                                                                  attached_policy.arn, {})[0]:
+                                                                                  attached_policy.arn, {},
+                                                                                  service_control_policy_groups=scps)[0]:
                             node.is_admin = True
                             break  # break the loop through policies
                 if node.is_admin:

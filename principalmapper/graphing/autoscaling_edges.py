@@ -34,17 +34,20 @@ class AutoScalingEdgeChecker(EdgeChecker):
     """Class for identifying if EC2 Auto Scaling can be used by IAM principals to gain access to other IAM principals."""
 
     def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None,
-                     region_deny_list: Optional[List[str]] = None, scps: Optional[List[List[dict]]] = None) -> List[Edge]:
+                     region_deny_list: Optional[List[str]] = None, scps: Optional[List[List[dict]]] = None,
+                     client_args_map: Optional[dict] = None) -> List[Edge]:
         """Fulfills expected method return_edges."""
 
         logger.info('Generating Edges based on EC2 Auto Scaling.')
+
+        asargs = client_args_map.get('autoscaling', {})
 
         # Gather projects information for each region
         autoscaling_clients = []
         if self.session is not None:
             as_regions = botocore_tools.get_regions_to_search(self.session, 'autoscaling', region_allow_list, region_deny_list)
             for region in as_regions:
-                autoscaling_clients.append(self.session.create_client('autoscaling', region_name=region))
+                autoscaling_clients.append(self.session.create_client('autoscaling', region_name=region, **asargs))
 
         launch_configs = []
         for as_client in autoscaling_clients:

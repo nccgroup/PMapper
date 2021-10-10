@@ -37,6 +37,11 @@ def provide_arguments(parser: ArgumentParser):
         help='Generates an image file representing an AWS account.',
         action='store_true'
     )
+    parser.add_argument(
+        '--with-services',
+        help='Includes services with access to Roles in the AWS account visualization',
+        action='store_true'
+    )
 
 
 def process_arguments(parsed_args: Namespace):
@@ -55,7 +60,7 @@ def process_arguments(parsed_args: Namespace):
     else:
         # create file
         filepath = './{}.{}'.format(graph.metadata['account_id'], parsed_args.filetype)
-        graph_writer.handle_request(graph, filepath, parsed_args.filetype)
+        graph_writer.handle_request(graph, filepath, parsed_args.filetype, parsed_args.with_services)
 
     print('Created file {}'.format(filepath))
 

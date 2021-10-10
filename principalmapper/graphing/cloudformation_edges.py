@@ -36,17 +36,20 @@ class CloudFormationEdgeChecker(EdgeChecker):
     """Class for identifying if CloudFormation can be used by IAM principals to gain access to other IAM principals."""
 
     def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None,
-                     region_deny_list: Optional[List[str]] = None, scps: Optional[List[List[dict]]] = None) -> List[Edge]:
+                     region_deny_list: Optional[List[str]] = None, scps: Optional[List[List[dict]]] = None,
+                     client_args_map: Optional[dict] = None) -> List[Edge]:
         """Fulfills expected method return_edges."""
 
         logger.info('Pulling data on CloudFormation stacks.')
+
+        cfargs = client_args_map.get('cloudformation', {})
 
         # Grab existing stacks in each region
         cloudformation_clients = []
         if self.session is not None:
             cf_regions = botocore_tools.get_regions_to_search(self.session, 'cloudformation', region_allow_list, region_deny_list)
             for region in cf_regions:
-                cloudformation_clients.append(self.session.create_client('cloudformation', region_name=region))
+                cloudformation_clients.append(self.session.create_client('cloudformation', region_name=region, **cfargs))
 
         # grab existing cloudformation stacks
         stack_list = []
@@ -136,7 +139,7 @@ def generate_edges_locally(nodes: List[Node], stack_list: List[dict], scps: Opti
 
             relevant_stacks = []  # we'll reuse this for *ChangeSet
             for stack in stack_list:
-                if 'RoleArn' in stack:
+                if 'RoleARN' in stack:
                     if stack['RoleARN'] == node_destination.arn:
                         relevant_stacks.append(stack)
 
