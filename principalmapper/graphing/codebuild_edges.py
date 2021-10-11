@@ -42,7 +42,10 @@ class CodeBuildEdgeChecker(EdgeChecker):
 
         # Gather projects information for each region
 
-        cbargs = client_args_map.get('codebuild', {})
+        if client_args_map is None:
+            cbargs = {}
+        else:
+            cbargs = client_args_map.get('codebuild', {})
 
         codebuild_clients = []
         if self.session is not None:

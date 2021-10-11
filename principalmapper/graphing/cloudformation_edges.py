@@ -42,7 +42,10 @@ class CloudFormationEdgeChecker(EdgeChecker):
 
         logger.info('Pulling data on CloudFormation stacks.')
 
-        cfargs = client_args_map.get('cloudformation', {})
+        if client_args_map is None:
+            cfargs = {}
+        else:
+            cfargs = client_args_map.get('cloudformation', {})
 
         # Grab existing stacks in each region
         cloudformation_clients = []

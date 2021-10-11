@@ -40,7 +40,10 @@ class AutoScalingEdgeChecker(EdgeChecker):
 
         logger.info('Generating Edges based on EC2 Auto Scaling.')
 
-        asargs = client_args_map.get('autoscaling', {})
+        if client_args_map is None:
+            asargs = {}
+        else:
+            asargs = client_args_map.get('autoscaling', {})
 
         # Gather projects information for each region
         autoscaling_clients = []

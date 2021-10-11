@@ -42,7 +42,10 @@ class LambdaEdgeChecker(EdgeChecker):
 
         logger.info('Pulling data on Lambda functions')
 
-        lambdaargs = client_args_map.get('lambda', {})
+        if client_args_map is None:
+            lambdaargs = {}
+        else:
+            lambdaargs = client_args_map.get('lambda', {})
 
         lambda_clients = []
         if self.session is not None:
