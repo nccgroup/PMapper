@@ -309,6 +309,7 @@ def local_check_authorization_full(principal: Node, action_to_check: str, resour
         for policy in iam_group.attached_policies:
             if policy_has_matching_statement(policy, 'Deny', action_to_check, resource_to_check, prepped_condition_keys):
                 logger.debug('Explicit Deny: Principal\'s IAM Group policies')
+                return False
 
     if service_control_policy_groups is not None:
         for service_control_policy_group in service_control_policy_groups:
