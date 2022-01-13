@@ -39,7 +39,7 @@ class STSEdgeChecker(EdgeChecker):
         """Fulfills expected method return_edges. If the session object is None, performs checks in offline-mode"""
 
         result = generate_edges_locally(nodes, scps)
-        logging.info('Generating Edges based on STS')
+        logger.info('Generating Edges based on STS')
 
         for edge in result:
             logger.info("Found new edge: {}".format(edge.describe_edge()))
