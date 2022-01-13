@@ -23,7 +23,7 @@ import re
 from typing import Optional, List
 
 from principalmapper.common import Graph
-from principalmapper.querying.presets import privesc, connected, clusters, endgame, serviceaccess
+from principalmapper.querying.presets import privesc, connected, clusters, endgame, serviceaccess, wrongadmin
 from principalmapper.querying.query_interface import search_authorization_for, search_authorization_full
 from principalmapper.util import arns
 
@@ -45,6 +45,7 @@ Available presets:
     * clusters (tag key)
     * endgame (service|"*")
     * serviceaccess
+    * wrongadmin
 """
 
 
@@ -202,6 +203,8 @@ def handle_preset(graph: Graph, query: str, skip_admins: bool = False) -> None:
         endgame.handle_preset_query(graph, tokens, skip_admins)
     elif tokens[1] == 'serviceaccess':
         serviceaccess.handle_preset_query(graph, tokens, skip_admins)
+    elif tokens[1] == 'wrongadmin':
+        wrongadmin.handle_preset_query(graph, tokens, skip_admins)
     else:
         _print_query_help()
         return
@@ -275,9 +278,11 @@ def argquery(graph: Graph, principal_param: Optional[str], action_param: Optiona
             endgame.handle_preset_query(graph, ['', '', resource_param], skip_admins)
         elif preset_param == 'serviceaccess':
             serviceaccess.handle_preset_query(graph, [], skip_admins)
+        elif preset_param == 'wrongadmin':
+            wrongadmin.handle_preset_query(graph, [], skip_admins)
         else:
             raise ValueError('Parameter for "preset" is not valid. Expected values: "privesc", "connected", '
-                             '"clusters", "endgame", or "serviceaccess".')
+                             '"clusters", "endgame", "serviceaccess", or "wrongadmin".')
 
     else:
         argquery_response(graph, principal_param, action_param, resource_param, condition_param, skip_admins,

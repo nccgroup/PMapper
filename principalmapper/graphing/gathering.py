@@ -809,7 +809,7 @@ def update_admin_status(nodes: List[Node], scps: Optional[List[List[dict]]] = No
 
         # check if node can update an attached customer-managed policy (assumes SetAsDefault is set to True)
         for attached_policy in node.attached_policies:
-            if attached_policy.arn != node.arn:
+            if attached_policy.arn != node.arn and ':aws:policy/' not in attached_policy.arn:
                 if query_interface.local_check_authorization_handling_mfa(node, 'iam:CreatePolicyVersion',
                                                                           attached_policy.arn, {},
                                                                           service_control_policy_groups=scps)[0]:
@@ -829,7 +829,7 @@ def update_admin_status(nodes: List[Node], scps: Optional[List[List[dict]]] = No
                     node.is_admin = True
                     break  # as above
                 for attached_policy in group.attached_policies:
-                    if attached_policy.arn != group.arn:
+                    if attached_policy.arn != group.arn and ':aws:policy/' not in attached_policy.arn:
                         if query_interface.local_check_authorization_handling_mfa(node, 'iam:CreatePolicyVersion',
                                                                                   attached_policy.arn, {},
                                                                                   service_control_policy_groups=scps)[0]:
