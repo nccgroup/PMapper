@@ -97,3 +97,110 @@ class OrgTreeTests(unittest.TestCase):
                 None
             )
         )
+
+    def test_service_linked_role_avoids_scp_restriction(self):
+        principal = Node(
+            'arn:aws:iam::000000000000:role/AWSServiceRoleForSupport',
+            'AROAASDF',
+            [
+                Policy(
+                    'arn:aws:iam::000000000000:role/AWSServiceRoleForS3Support',
+                    'inline-1',
+                    {
+                        'Version': '2012-10-17',
+                        'Statement': [
+                            {
+                                'Effect': 'Allow',
+                                'Action': 's3:*',
+                                'Resource': '*'
+                            }
+                        ]
+                    }
+                )
+            ],
+            None,
+            {
+                'Version': '2012-10-17',
+                'Statement': [
+                    {
+                        'Effect': 'Allow',
+                        'Action': 'sts:AssumeRole',
+                        'Principal': {
+                            'Service': 's3support.amazonaws.com'
+                        }
+                    }
+                ]
+            },
+            None,
+            0,
+            False,
+            False,
+            None,
+            False,
+            None
+        )
+        # SCP list of lists, this would be akin to an account in the root OU with the S3 service denied
+        scp_collection = [
+            [
+                {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": "*",
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            ],
+            [
+                {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": "*",
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Deny",
+                            "Action": [
+                                "s3:*"
+                            ],
+                            "Resource": "*",
+                            "Sid": "Statement1"
+                        }
+                    ]
+                }
+            ]
+        ]
+        self.assertTrue(
+            local_check_authorization_full(
+                principal,
+                's3:CreateBucket',
+                'arn:aws:s3:::fakebucket',
+                {},
+                None,
+                None,
+                scp_collection,
+                None
+            ),
+            'AWSServiceRoleFor... check failed, this role should have access DESPITE the SCPs'
+        )
+        self.assertFalse(
+            local_check_authorization_full(
+                principal,
+                'ec2:RunInstances',
+                '*',
+                {},
+                None,
+                None,
+                scp_collection,
+                None
+            )
+        )

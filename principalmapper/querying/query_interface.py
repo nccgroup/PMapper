@@ -288,6 +288,8 @@ def local_check_authorization_full(principal: Node, action_to_check: str, resour
     prepped_condition_keys = _prepare_condition_context(conditions_keys_copy)
     prepped_condition_keys.update(_infer_condition_keys(principal, prepped_condition_keys))
 
+    is_not_service_linked_role = not _check_if_service_linked_role(principal)
+
     logger.debug(
         'Testing authorization for: principal: {}, action: {}, resource: {}, conditions: {}, Resource Policy: {}, SCPs: {}, Session Policy: {}'.format(
             principal.arn,
@@ -311,7 +313,7 @@ def local_check_authorization_full(principal: Node, action_to_check: str, resour
                 logger.debug('Explicit Deny: Principal\'s IAM Group policies')
                 return False
 
-    if service_control_policy_groups is not None:
+    if service_control_policy_groups is not None and is_not_service_linked_role:
         for service_control_policy_group in service_control_policy_groups:
             for service_control_policy in service_control_policy_group:
                 if policy_has_matching_statement(service_control_policy, 'Deny', action_to_check, resource_to_check, prepped_condition_keys):
@@ -336,7 +338,7 @@ def local_check_authorization_full(principal: Node, action_to_check: str, resour
             return False
 
     # Check SCPs
-    if service_control_policy_groups is not None:
+    if service_control_policy_groups is not None and is_not_service_linked_role:
         for service_control_policy_group in service_control_policy_groups:
             # For every group of SCPs (policies attached to the ancestors of the account and the current account), the
             # group of SCPs have to have a matching allow statement
@@ -397,6 +399,17 @@ def local_check_authorization_full(principal: Node, action_to_check: str, resour
                 return True  # already did Deny statement checks, so we're done
 
     logger.debug('Implicit Deny: Principal\'s Attached Policies')
+    return False
+
+
+def _check_if_service_linked_role(principal: Node) -> bool:
+    """Given a Node, determine if it should be treated as a service-linked role. This affects SCP policy decisions as
+    described in
+    https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps.html#not-restricted-by-scp"""
+
+    if ':role/' in principal.arn:
+        role_name = principal.arn.split('/')[-1]
+        return role_name.startswith('AWSServiceRoleFor')
     return False
 
 
