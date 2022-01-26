@@ -158,7 +158,7 @@ def pull_resource_policy_by_arn(session: botocore.session.Session, arn: Optional
     elif service == 's3':
         # arn:aws:s3:::<bucket>/<path_to_object_with_potential_colons>
         client = session.create_client('s3')
-        bucket_name = arns.get_resource(arn).split('arn:aws:s3:::')[-1].split('/')[0]
+        bucket_name = arns.get_resource(arn).split(':s3:::')[-1].split('/')[0]
         logger.debug('Calling S3 API to retrieve bucket policy of {}'.format(bucket_name))
         bucket_policy = json.loads(client.get_bucket_policy(Bucket=bucket_name)['Policy'])
         return bucket_policy
@@ -199,7 +199,7 @@ def get_interaccount_search_list(all_graphs: List[Graph], inter_account_edges: L
 
     account_id_graph_map = {}
     for graph in all_graphs:
-        account_id_graph_map[graph.metadata['account_id']] = graph
+        account_id_graph_map[graph.account] = graph
 
     # Get initial list of edges
     first_set = get_edges_interaccount(account_id_graph_map[arns.get_account_id(node.arn)], inter_account_edges, node, nodes_found)

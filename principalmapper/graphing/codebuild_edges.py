@@ -35,7 +35,7 @@ class CodeBuildEdgeChecker(EdgeChecker):
 
     def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None,
                      region_deny_list: Optional[List[str]] = None, scps: Optional[List[List[dict]]] = None,
-                     client_args_map: Optional[dict] = None) -> List[Edge]:
+                     client_args_map: Optional[dict] = None, partition: str = 'aws') -> List[Edge]:
         """Fulfills expected method return_edges."""
 
         logger.info('Generating Edges based on CodeBuild.')
@@ -49,7 +49,7 @@ class CodeBuildEdgeChecker(EdgeChecker):
 
         codebuild_clients = []
         if self.session is not None:
-            cf_regions = botocore_tools.get_regions_to_search(self.session, 'codebuild', region_allow_list, region_deny_list)
+            cf_regions = botocore_tools.get_regions_to_search(self.session, 'codebuild', region_allow_list, region_deny_list, partition)
             for region in cf_regions:
                 codebuild_clients.append(self.session.create_client('codebuild', region_name=region, **cbargs))
 

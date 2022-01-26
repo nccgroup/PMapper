@@ -237,7 +237,7 @@ def _get_s3_full_access_policy() -> dict:
 
 def _get_default_metadata() -> dict:
     """Constructs and returns a metadata dictionary to use across tests"""
-    return {'account_id': '000000000000', 'pmapper_version': principalmapper.__version__}
+    return {'account_id': '000000000000', 'pmapper_version': principalmapper.__version__, 'partition': 'aws'}
 
 
 def _make_trust_document(principal_element: dict) -> dict:

@@ -36,7 +36,7 @@ class SageMakerEdgeChecker(EdgeChecker):
 
     def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None,
                      region_deny_list: Optional[List[str]] = None, scps: Optional[List[List[dict]]] = None,
-                     client_args_map: Optional[dict] = None) -> List[Edge]:
+                     client_args_map: Optional[dict] = None, partition: str = 'aws') -> List[Edge]:
         """fulfills expected method"""
 
         logger.info('Generating Edges based on SageMaker')

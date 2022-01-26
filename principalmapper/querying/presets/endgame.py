@@ -24,23 +24,23 @@ from principalmapper.util.case_insensitive_dict import CaseInsensitiveDict
 
 _service_resource_exposure_map = {
     's3': {
-        'pattern': re.compile(r"^arn:aws:s3:::[^/]+$"),
+        'pattern': re.compile(r"^arn:\S+:s3:::[^/]+$"),
         'actions': ['s3:PutBucketPolicy']
     },
     'sns': {
-        'pattern': re.compile(r"^arn:aws:sns:[a-z0-9-]+:[0-9]+:.*"),
+        'pattern': re.compile(r"^arn:\S+:sns:[a-z0-9-]+:[0-9]+:.*"),
         'actions': ['sns:AddPermission', 'sns:SetTopicAttributes']
     },
     'sqs': {
-        'pattern': re.compile(r"^arn:aws:sqs:[a-z0-9-]+:[0-9]+:.*"),
+        'pattern': re.compile(r"^arn:\S+:sqs:[a-z0-9-]+:[0-9]+:.*"),
         'actions': ['sqs:AddPermission', 'sqs:SetQueueAttributes']
     },
     'kms': {
-        'pattern': re.compile(r"^arn:aws:kms:[a-z0-9-]+:[0-9]+:key/.*"),
+        'pattern': re.compile(r"^arn:\S+:kms:[a-z0-9-]+:[0-9]+:key/.*"),
         'actions': ['kms:PutKeyPolicy']
     },
     'secretsmanager': {
-        'pattern': re.compile(r"^arn:aws:secretsmanager:[a-z0-9-]+:[0-9]+:.*"),
+        'pattern': re.compile(r"^arn:\S+:secretsmanager:[a-z0-9-]+:[0-9]+:.*"),
         'actions': ['secretsmanager:PutResourcePolicy']
     }
 }
@@ -87,7 +87,7 @@ def compose_endgame_map(graph: Graph, service_to_include: str = '*', skip_admins
                                     continue
 
                                 query_result = query_interface.local_check_authorization_full(
-                                    node, action, policy.arn, node.cache['conditions'], policy.policy_doc, graph.metadata['account_id'],
+                                    node, action, policy.arn, node.cache['conditions'], policy.policy_doc, graph.account,
                                     None, None
                                 )
 
@@ -102,7 +102,7 @@ def compose_endgame_map(graph: Graph, service_to_include: str = '*', skip_admins
                                     })
                                     query_result = query_interface.local_check_authorization_full(
                                         node, action, policy.arn, conditions_copy, policy.policy_doc,
-                                        graph.metadata['account_id'],
+                                        graph.account,
                                         None, None
                                     )
                                     if query_result:

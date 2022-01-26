@@ -179,7 +179,7 @@ def process_arguments(parsed_args: Namespace):
         graph = graph_actions.create_new_graph(session, service_list, parsed_args.include_regions,
                                                parsed_args.exclude_regions, scps, client_args_map)
         graph_actions.print_graph_data(graph)
-        graph.store_graph_as_json(os.path.join(get_storage_root(), graph.metadata['account_id']))
+        graph.store_graph_as_json(os.path.join(get_storage_root(), graph.account))
 
     elif parsed_args.picked_graph_cmd == 'display':
         if parsed_args.account is None:
@@ -205,5 +205,15 @@ def process_arguments(parsed_args: Namespace):
                     account_metadata = json.load(fd)
                 version = account_metadata['pmapper_version']
                 print("{} (PMapper Version {})".format(direct.name, version))
+
+        partition_pattern = re.compile(r'aws.*')
+        for direct in storage_root.iterdir():
+            if partition_pattern.search(str(direct)) is not None:
+                for subdirect in direct.iterdir():
+                    if account_id_pattern.search(str(subdirect)) is not None:
+                        metadata_file = subdirect.joinpath(Path('metadata.json'))
+                        with open(str(metadata_file)) as fd:
+                            version = json.load(fd)['pmapper_version']
+                        print(f'{direct.name}:{subdirect.name} (PMapper Version {version})')
 
     return 0

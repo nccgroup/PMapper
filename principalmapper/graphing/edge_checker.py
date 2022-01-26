@@ -33,9 +33,9 @@ class EdgeChecker(object):
 
     def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None,
                      region_deny_list: Optional[List[str]] = None, scps: Optional[List[List[dict]]] = None,
-                     client_args_map: Optional[dict] = None) -> List[Edge]:
-        """Subclasses shall override this method. Given a list of nodes, the EdgeChecker should be able to use its session
-        object in order to make clients and call the AWS API to resolve information about the account. Then,
+                     client_args_map: Optional[dict] = None, partition: str = 'aws') -> List[Edge]:
+        """Subclasses shall override this method. Given a list of nodes, the EdgeChecker should be able to use its
+        session object in order to make clients and call the AWS API to resolve information about the account. Then,
         with this information, it should return a list of edges between the passed nodes.
 
         The region allow/deny lists are mutually-exclusive (i.e. at least one of which has the value None) lists of

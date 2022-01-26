@@ -40,21 +40,24 @@ class Graph(object):
     Graph data to/from files stored on-disk. The actual attributes of each graph/node/edge/policy/group object
     will remain the same across the same major+minor version of Principal Mapper, so a graph generated in v1.0.0
     should be loadable in v1.0.1, but not v1.1.0.
+
+    * **v1.2.0:** Shifted account/partition to arguments of Graph construction
     """
 
-    def __init__(self, nodes: list = None, edges: list = None, policies: list = None, groups: list = None,
-                 metadata: dict = None):
+    def __init__(self, nodes: list, edges: list, policies: list, groups: list, account: str, partition: str,
+                 metadata: dict):
         """Constructor"""
-        for arg, value in {'nodes': nodes, 'edges': edges, 'policies': policies, 'groups': groups,
-                           'metadata': metadata}.items():
-            if value is None:
-                raise ValueError('Required constructor argument {} was None'.format(arg))
+
+        for x in (nodes, edges, policies, groups, account, partition, metadata):
+            if x is None:
+                raise ValueError(f'Required argument {x} was None')
+
         self.nodes = nodes
         self.edges = edges
         self.policies = policies
         self.groups = groups
-        if 'account_id' not in metadata:
-            raise ValueError('Incomplete metadata input, expected key: "account_id"')
+        self.account = account
+        self.partition = partition
         if 'pmapper_version' not in metadata:
             raise ValueError('Incomplete metadata input, expected key: "pmapper_version"')
         self.metadata = metadata
@@ -73,6 +76,7 @@ class Graph(object):
 
         Structure:
         | <root_directory parameter>
+        |---- data.json
         |---- metadata.json
         |---- graph/
         |-------- nodes.json
@@ -88,6 +92,7 @@ class Graph(object):
         graphdir = os.path.join(rootpath, 'graph')
         if not os.path.exists(graphdir):
             os.makedirs(graphdir, 0o700)
+        regulardatafilepath = os.path.join(rootpath, 'data.json')
         metadatafilepath = os.path.join(rootpath, 'metadata.json')
         nodesfilepath = os.path.join(graphdir, 'nodes.json')
         edgesfilepath = os.path.join(graphdir, 'edges.json')
@@ -95,6 +100,8 @@ class Graph(object):
         groupsfilepath = os.path.join(graphdir, 'groups.json')
 
         old_umask = os.umask(0o077)  # block rwx for group/all
+        with open(regulardatafilepath, 'w') as f:
+            json.dump({'account': self.account, 'partition': self.partition}, f, indent=4)
         with open(metadatafilepath, 'w') as f:
             json.dump(self.metadata, f, indent=4)
         with open(nodesfilepath, 'w') as f:
@@ -113,6 +120,7 @@ class Graph(object):
 
         Structure:
         | <root_directory parameter>
+        |---- data.json
         |---- metadata.json
         |---- graph/
         |-------- nodes.json
@@ -132,6 +140,7 @@ class Graph(object):
             raise ValueError('Did not find file at: {}'.format(rootpath))
         graphdir = os.path.join(rootpath, 'graph')
         metadatafilepath = os.path.join(rootpath, 'metadata.json')
+        regulardatafilepath = os.path.join(rootpath, 'data.json')
         nodesfilepath = os.path.join(graphdir, 'nodes.json')
         edgesfilepath = os.path.join(graphdir, 'edges.json')
         policiesfilepath = os.path.join(graphdir, 'policies.json')
@@ -142,12 +151,16 @@ class Graph(object):
 
         current_pmapper_version = packaging.version.parse(principalmapper.__version__)
         loaded_graph_version = packaging.version.parse(metadata['pmapper_version'])
-        if current_pmapper_version.release[0] != loaded_graph_version.release[0] or \
-                current_pmapper_version.release[1] != loaded_graph_version.release[1]:
-            raise ValueError('Loaded Graph data was from a different version of Principal Mapper ({}), but the current '
-                             'version of Principal Mapper ({}) may not support it. Either update the stored Graph data '
-                             'and its metadata, or regraph the account.'.format(loaded_graph_version,
-                                                                                current_pmapper_version))
+        if current_pmapper_version.major != loaded_graph_version.major or current_pmapper_version.minor != loaded_graph_version.minor:
+            raise ValueError(
+                f'The loaded Graph data came from a different version of Principal Mapper '
+                f'({str(loaded_graph_version)}) that is not compatible with this version of Principal Mapper '
+                f'({str(current_pmapper_version)}). You will need to recreate the organization (`pmapper orgs '
+                f'create`).'
+            )
+
+        with open(regulardatafilepath) as f:
+            acctdata = json.load(f)  # type: dict
 
         policies = []
         with open(policiesfilepath) as f:
@@ -216,4 +229,12 @@ class Graph(object):
             edges.append(Edge(source=source, destination=destination, reason=edge['reason'],
                               short_reason=edge['short_reason']))
 
-        return Graph(nodes=nodes, edges=edges, policies=policies, groups=groups, metadata=metadata)
+        return Graph(
+            nodes=nodes,
+            edges=edges,
+            policies=policies,
+            groups=groups,
+            account=acctdata.get('account'),
+            partition=acctdata.get('partition'),
+            metadata=metadata
+        )

@@ -209,13 +209,23 @@ def process_arguments(parsed_args: Namespace):
         print("Organization IDs:")
         print("---")
         storage_root = Path(get_storage_root())
-        account_id_pattern = re.compile(r'o-\w+')
+        org_id_pattern = re.compile(r'o-\w+')
         for direct in storage_root.iterdir():
-            if account_id_pattern.search(str(direct)) is not None:
+            if org_id_pattern.search(str(direct)) is not None:
                 metadata_file = direct.joinpath(Path('metadata.json'))
                 with open(str(metadata_file)) as fd:
                     version = json.load(fd)['pmapper_version']
-                print("{} (PMapper Version {})".format(direct.name, version))
+                print(f"{direct.name} (PMapper Version {version})")
+
+        partition_pattern = re.compile(r'aws.*')
+        for direct in storage_root.iterdir():
+            if partition_pattern.search(str(direct)) is not None:
+                for subdirect in direct.iterdir():
+                    if org_id_pattern.search(str(subdirect)) is not None:
+                        metadata_file = subdirect.joinpath(Path('metadata.json'))
+                        with open(str(metadata_file)) as fd:
+                            version = json.load(fd)['pmapper_version']
+                        print(f'{direct.name}:{subdirect.name} (PMapper Version {version})')
 
     return 0
 

@@ -113,7 +113,7 @@ def search_authorization_across_accounts(graph_scp_pairs: List[Tuple[Graph, Opti
 
     account_id_graph_scp_pair_map = {}
     for graph_scp_pair in graph_scp_pairs:
-        account_id_graph_scp_pair_map[graph_scp_pair[0].metadata['account_id']] = graph_scp_pair
+        account_id_graph_scp_pair_map[graph_scp_pair[0].account] = graph_scp_pair
     source_graph_scp_pair = account_id_graph_scp_pair_map[arns.get_account_id(principal.arn)]
 
     if local_check_authorization_full(principal, action_to_check, resource_to_check, condition_keys_to_check,

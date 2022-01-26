@@ -87,6 +87,7 @@ def _get_admin_reason(node: Node) -> List[str]:
     result = []
     logger.debug("Checking if {} is an admin".format(node.searchable_name()))
     node_type = arns.get_resource(node.arn).split('/')[0]
+    partition = arns.get_partition(node.arn)
 
     # check if node can modify its own inline policies
     if node_type == 'user':
@@ -101,7 +102,7 @@ def _get_admin_reason(node: Node) -> List[str]:
         action = 'iam:AttachUserPolicy'
     else:
         action = 'iam:AttachRolePolicy'
-    condition_keys = {'iam:PolicyARN': 'arn:aws:iam::aws:policy/AdministratorAccess'}
+    condition_keys = {'iam:PolicyARN': f'arn:{partition}:iam::aws:policy/AdministratorAccess'}
     if query_interface.local_check_authorization_handling_mfa(node, action, node.arn, condition_keys)[0]:
         result.append('Can call {} to attach the AdministratorAccess policy to itself'.format(action))
 
