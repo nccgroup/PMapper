@@ -53,10 +53,11 @@ class GlueEdgeChecker(EdgeChecker):
             for region in cf_regions:
                 glue_clients.append(self.session.create_client('glue', region_name=region, **glueargs))
 
+        endpoint_role_list = []
         for glue_client in glue_clients:
             current_region = glue_client.meta.region_name
             logger.debug(f'Looking at region {current_region}')
-            endpoint_role_list = []
+
             try:
                 # paginate thru existing Glue Dev Endpoints
                 for page in glue_client.get_paginator('get_dev_endpoints').paginate():
@@ -88,17 +89,18 @@ class GlueEdgeChecker(EdgeChecker):
 
 
 def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] = None,
-                           endpoint_role_list: Optional[tuple] = None) -> List[Edge]:
+                           endpoint_role_list: Optional[List[tuple]] = None) -> List[Edge]:
 
     results = []
 
     # to make things faster, we build a Role -> Endpoint map to reduce iterations through endpoint_role_list
     node_endpoint_map = {}
-    for endpoint_arn, role_node in endpoint_role_list:
-        if role_node is not None and role_node not in node_endpoint_map:
-            node_endpoint_map[role_node] = [endpoint_arn]
-        else:
-            node_endpoint_map[role_node].append(endpoint_arn)
+    if endpoint_role_list is not None:
+        for endpoint_arn, role_node in endpoint_role_list:
+            if role_node is not None and role_node not in node_endpoint_map:
+                node_endpoint_map[role_node] = [endpoint_arn]
+            else:
+                node_endpoint_map[role_node].append(endpoint_arn)
 
     # for all potential destination nodes...
     for node_destination in nodes:
