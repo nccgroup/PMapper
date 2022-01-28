@@ -32,7 +32,7 @@ def build_graph_with_one_admin() -> Graph:
     admin_user_arn = 'arn:aws:iam::000000000000:user/admin'
     policy = Policy(admin_user_arn, 'InlineAdminPolicy', _get_admin_policy())
     node = Node(admin_user_arn, 'AIDA00000000000000000', [policy], [], None, None, 1, True, True, None, False, None)
-    return Graph([node], [], [policy], [], _get_default_metadata())
+    return Graph([node], [], [policy], [], '000000000000', 'aws', _get_default_metadata())
 
 
 # noinspection PyListCreation
@@ -94,7 +94,7 @@ def build_playground_graph() -> Graph:
     # edges to add
     edges = obtain_edges(None, checker_map.keys(), nodes)
 
-    return Graph(nodes, edges, policies, [], _get_default_metadata())
+    return Graph(nodes, edges, policies, [], '000000000000', 'aws', _get_default_metadata())
 
 
 def _get_admin_policy() -> dict:
@@ -237,7 +237,7 @@ def _get_s3_full_access_policy() -> dict:
 
 def _get_default_metadata() -> dict:
     """Constructs and returns a metadata dictionary to use across tests"""
-    return {'account_id': '000000000000', 'pmapper_version': principalmapper.__version__, 'partition': 'aws'}
+    return {'account_id': '000000000000', 'pmapper_version': principalmapper.__version__}
 
 
 def _make_trust_document(principal_element: dict) -> dict:

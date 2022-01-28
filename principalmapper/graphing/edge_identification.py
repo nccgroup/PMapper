@@ -25,6 +25,7 @@ from principalmapper.graphing.autoscaling_edges import AutoScalingEdgeChecker
 from principalmapper.graphing.cloudformation_edges import CloudFormationEdgeChecker
 from principalmapper.graphing.codebuild_edges import CodeBuildEdgeChecker
 from principalmapper.graphing.ec2_edges import EC2EdgeChecker
+from principalmapper.graphing.glue_edges import GlueEdgeChecker
 from principalmapper.graphing.iam_edges import IAMEdgeChecker
 from principalmapper.graphing.lambda_edges import LambdaEdgeChecker
 from principalmapper.graphing.sagemaker_edges import SageMakerEdgeChecker
@@ -41,6 +42,7 @@ checker_map = {
     'cloudformation': CloudFormationEdgeChecker,
     'codebuild': CodeBuildEdgeChecker,
     'ec2': EC2EdgeChecker,
+    'glue': GlueEdgeChecker,
     'iam': IAMEdgeChecker,
     'lambda': LambdaEdgeChecker,
     'sagemaker': SageMakerEdgeChecker,

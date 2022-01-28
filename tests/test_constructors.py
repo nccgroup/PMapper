@@ -26,13 +26,13 @@ from principalmapper.common.nodes import Node
 class ConstructorTest(unittest.TestCase):
     def test_graphs(self):
         with self.assertRaises(ValueError):
-            Graph(nodes=None, edges=[], policies=[], groups=[])
+            Graph(nodes=None, edges=[], policies=[], groups=[], account='000000000000', partition='aws', metadata={})
         with self.assertRaises(ValueError):
-            Graph(nodes=[], edges=None, policies=[], groups=[])
+            Graph(nodes=[], edges=None, policies=[], groups=[], account='000000000000', partition='aws', metadata={})
         with self.assertRaises(ValueError):
-            Graph(nodes=[], edges=[], policies=None, groups=[])
+            Graph(nodes=[], edges=[], policies=None, groups=[], account='000000000000', partition='aws', metadata={})
         with self.assertRaises(ValueError):
-            Graph(nodes=[], edges=[], policies=[], groups=None)
+            Graph(nodes=[], edges=[], policies=[], groups=None, account='000000000000', partition='aws', metadata={})
 
     def test_nodes(self):
         with self.assertRaises(ValueError):
