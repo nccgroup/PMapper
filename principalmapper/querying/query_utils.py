@@ -36,10 +36,11 @@ def get_search_list(graph: Graph, node: Node) -> List[List[Edge]]:
     result = []
     explored_nodes = []
 
-    # Special-case: node is an "admin", so we make up admin edges and return them all
+    # Special-case: node is an "admin", so we make up admin edges and return them all. BUT, if the destination
+    # node is the original node or a service-linked role, then we skip those
     if node.is_admin:
         for other_node in graph.nodes:
-            if node == other_node:
+            if node == other_node or check_if_service_linked_role(other_node):
                 continue
             result.append([Edge(node, other_node, 'can access through administrative actions', 'Admin')])
         return result
@@ -225,9 +226,8 @@ def get_interaccount_search_list(all_graphs: List[Graph], inter_account_edges: L
 
 def get_edges_interaccount(source_graph: Graph, inter_account_edges: List[Edge], node: Node, ignored_nodes: List[Node]) -> List[Edge]:
     """Given a Node, the Graph it belongs to, a list of inter-account Edges, and a list of Nodes to skip, this returns
-    any Edges where the Node is the source element as long as the destination element isn't included in the skipped Nodes.
-
-    If the given node is an admin, those Edge objects get generated and returned.
+    any Edges where the Node is the source element as long as the destination element isn't included in the skipped
+    Nodes.
     """
 
     result = []
@@ -241,3 +241,14 @@ def get_edges_interaccount(source_graph: Graph, inter_account_edges: List[Edge],
             result.append(inter_account_edge)
 
     return result
+
+
+def check_if_service_linked_role(principal: Node) -> bool:
+    """Given a Node, determine if it should be treated as a service-linked role. This affects SCP policy decisions as
+    described in
+    https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps.html#not-restricted-by-scp"""
+
+    if ':role/' in principal.arn:
+        role_name = principal.arn.split('/')[-1]
+        return role_name.startswith('AWSServiceRoleFor')
+    return False
