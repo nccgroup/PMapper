@@ -56,7 +56,7 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
     * datapipeline:CreatePipeline (resource "*")
     * datapipeline:PutPipelineDefinition (resource "*")
     * iam:PassRole for the Data Pipeline Role (which must trust datapipeline.amazonaws.com)
-    * (TODO: Verify) iam:PassRole for the EC2 Data Pipeline Role (which must trust ec2.amazonaws.com and have an instance profile)
+    * iam:PassRole for the EC2 Data Pipeline Role (which must trust ec2.amazonaws.com and have an instance profile)
 
     Note that we have two roles involved. Data Pipeline Role, which seems to be a sorta service role but
     doesn't have the same path/naming convention as other service roles, is used to actually call EC2 and
@@ -64,7 +64,7 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
     the EC2 Data Pipeline Role, which actually is accessible to the EC2 instance doing the computational
     work of the pipeline.
 
-    Other works seemed to indicate the Data Pipeline Role was accessible, however that might not be true
+    Other works/blogs seemed to indicate the Data Pipeline Role was accessible, however that might not be true
     anymore? In any case, recent experimentation only allowed me access to the EC2 Data Pipeline Role.
 
     To create the list of edges, we gather our:
@@ -81,5 +81,115 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
     """
 
     results = []
+
+    intermediate_node_paths = {}
+    destination_nodes = []
+    for node in nodes:
+        if ':role/' not in node.arn:
+            continue
+
+        rp_result = resource_policy_authorization(
+            'datapipeline.amazonaws.com',
+            arns.get_account_id(node.arn),
+            node.trust_policy,
+            'sts:AssumeRole',
+            node.arn,
+            {}
+        )
+
+        if rp_result is ResourcePolicyEvalResult.SERVICE_MATCH:
+            intermediate_node_paths[node] = []
+
+        rp_result = resource_policy_authorization(
+            'ec2.amazonaws.com',
+            arns.get_account_id(node.arn),
+            node.trust_policy,
+            'sts:AssumeRole',
+            node.arn,
+            {}
+        )
+
+        if rp_result is ResourcePolicyEvalResult.SERVICE_MATCH and node.instance_profile is not None:
+            destination_nodes.append(node)
+
+    for intermediate_node in intermediate_node_paths.keys():
+        for destination_node in destination_nodes:
+            # if intermediate can run EC2 and pass the role, then add that path for checking
+            if not query_interface.local_check_authorization(
+                intermediate_node,
+                'ec2:RunInstances',
+                '*',
+                {'ec2:InstanceProfile': destination_node.instance_profile}
+            ):
+                continue
+
+            if query_interface.local_check_authorization(
+                intermediate_node,
+                'iam:PassRole',
+                destination_node.arn,
+                {'iam:PassedToService': 'ec2.amazonaws.com'}
+            ):
+                intermediate_node_paths[intermediate_node].append(destination_node)
+
+    # now we have the mappings for <intermediate> -> <destination> paths
+    for node_source in nodes:
+        if node_source.is_admin:
+            continue
+
+        create_pipeline_auth, cpa_mfa = query_interface.local_check_authorization_handling_mfa(
+            node_source,
+            'datapipeline:CreatePipeline',
+            '*',
+            {},
+            service_control_policy_groups=scps
+        )
+        if not create_pipeline_auth:
+            continue
+
+        put_pipeline_def_auth, ppda_mfa = query_interface.local_check_authorization_handling_mfa(
+            node_source,
+            'datapipeline:PutPipelineDefinition',
+            '*',
+            {},
+            service_control_policy_groups=scps
+        )
+        if not put_pipeline_def_auth:
+            continue
+
+        for intermediate_node in intermediate_node_paths.keys():
+            intermediate_node_auth, ina_mfa = query_interface.local_check_authorization_handling_mfa(
+                node_source,
+                'iam:PassRole',
+                intermediate_node.arn,
+                {'iam:PassedToService': 'datapipeline.amazonaws.com'},
+                service_control_policy_groups=scps
+            )
+            if not intermediate_node_auth:
+                continue  # can't use the intermediate to get to the destinations, so we move on
+
+            for destination_node in destination_nodes:
+                if node_source == destination_node:
+                    continue
+
+                destination_node_auth, dna_mfa = query_interface.local_check_authorization_handling_mfa(
+                    node_source,
+                    'iam:PassRole',
+                    destination_node.arn,
+                    {},
+                    service_control_policy_groups=scps
+                )
+                if destination_node_auth:
+                    if cpa_mfa or ppda_mfa or ina_mfa or dna_mfa:
+                        reason = f'can use Data Pipeline with {intermediate_node.searchable_name()} to access ' \
+                                 f'(needs MFA)'
+                    else:
+                        reason = f'can use Data Pipeline with {intermediate_node.searchable_name()} to access'
+
+                    results.append(Edge(
+                        node_source,
+                        destination_node,
+                        reason,
+                        'Data Pipeline'
+                    ))
 
     return results
