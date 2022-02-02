@@ -40,7 +40,7 @@ class EC2EdgeChecker(EdgeChecker):
         """Fulfills expected method return_edges."""
 
         logger.info('Generating Edges based on EC2.')
-        result = generate_edges_locally(nodes, scps)
+        result = generate_edges_locally(nodes, scps, partition)
 
         for edge in result:
             logger.info("Found new edge: {}".format(edge.describe_edge()))
@@ -48,7 +48,7 @@ class EC2EdgeChecker(EdgeChecker):
         return result
 
 
-def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] = None) -> List[Edge]:
+def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] = None, partition: str = 'aws') -> List[Edge]:
     """Generates and returns Edge objects. It is possible to use this method if you are operating offline (infra-as-code).
     """
 
@@ -69,7 +69,20 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
         )
 
         if sim_result != ResourcePolicyEvalResult.SERVICE_MATCH:
-            continue  # EC2 wasn't auth'd to assume the role
+            if partition != 'aws-cn':
+                continue
+            else:
+                # special case: AWS China uses ec2.amazonaws.com.cn as a service principal, so retry
+                sim_result = resource_policy_authorization(
+                    'ec2.amazonaws.com.cn',
+                    arns.get_account_id(node_destination.arn),
+                    node_destination.trust_policy,
+                    'sts:AssumeRole',
+                    node_destination.arn,
+                    {},
+                )
+                if sim_result != ResourcePolicyEvalResult.SERVICE_MATCH:
+                    continue
 
         for node_source in nodes:
             # skip self-access checks
@@ -91,7 +104,19 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
                 service_control_policy_groups=scps
             )
             if not pass_role_auth:
-                continue  # source can't pass the role to use it
+                if partition != 'aws-cn':
+                    continue  # source can't pass the role to use it
+                else:
+                    # try again with AWS China EC2 SP
+                    pass_role_auth, mfa_res = query_interface.local_check_authorization_handling_mfa(
+                        node_source,
+                        'iam:PassRole',
+                        node_destination.arn,
+                        {'iam:PassedToService': 'ec2.amazonaws.com.cn'},
+                        service_control_policy_groups=scps
+                    )
+                    if not pass_role_auth:
+                        continue
 
             # check if destination has an instance profile, if not: check if source can create it
             if node_destination.instance_profile is None:
