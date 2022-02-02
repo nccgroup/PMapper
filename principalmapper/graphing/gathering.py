@@ -89,7 +89,8 @@ def create_graph(session: botocore.session.Session, service_list: list, region_a
         region_allow_list,
         region_deny_list,
         scps,
-        client_args_map
+        client_args_map,
+        current_partition
     )
 
     # Pull S3, SNS, SQS, KMS, and Secrets Manager resource policies

@@ -29,7 +29,7 @@ from principalmapper.graphing.gathering import get_organizations_data
 from principalmapper.graphing.edge_identification import checker_map
 from principalmapper.querying import query_orgs
 from principalmapper.util import botocore_tools
-from principalmapper.util.storage import get_storage_root
+from principalmapper.util.storage import get_storage_root, get_default_graph_path
 
 
 logger = logging.getLogger(__name__)
@@ -179,7 +179,12 @@ def process_arguments(parsed_args: Namespace):
         graph = graph_actions.create_new_graph(session, service_list, parsed_args.include_regions,
                                                parsed_args.exclude_regions, scps, client_args_map)
         graph_actions.print_graph_data(graph)
-        graph.store_graph_as_json(os.path.join(get_storage_root(), graph.account))
+        if graph.partition == 'aws':
+            graphid = graph.account
+        else:
+            graphid = f'{graph.partition}:{graph.account}'
+
+        graph.store_graph_as_json(get_default_graph_path(graphid))
 
     elif parsed_args.picked_graph_cmd == 'display':
         if parsed_args.account is None:
