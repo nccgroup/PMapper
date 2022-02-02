@@ -40,7 +40,7 @@ def get_search_list(graph: Graph, node: Node) -> List[List[Edge]]:
     # node is the original node or a service-linked role, then we skip those
     if node.is_admin:
         for other_node in graph.nodes:
-            if node == other_node or check_if_service_linked_role(other_node):
+            if node == other_node or other_node.is_service_linked_role():
                 continue
             result.append([Edge(node, other_node, 'can access through administrative actions', 'Admin')])
         return result

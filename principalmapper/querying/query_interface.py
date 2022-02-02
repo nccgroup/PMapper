@@ -288,7 +288,7 @@ def local_check_authorization_full(principal: Node, action_to_check: str, resour
     prepped_condition_keys = _prepare_condition_context(conditions_keys_copy)
     prepped_condition_keys.update(_infer_condition_keys(principal, prepped_condition_keys))
 
-    is_not_service_linked_role = not query_utils.check_if_service_linked_role(principal)
+    is_not_service_linked_role = not principal.is_service_linked_role()
 
     logger.debug(
         'Testing authorization for: principal: {}, action: {}, resource: {}, conditions: {}, Resource Policy: {}, SCPs: {}, Session Policy: {}'.format(
