@@ -32,10 +32,12 @@ jobs:
           cache: 'pip'
 
       - name: "Install PMapper"
+        shell: bash
         run: |
           cd ${{ github.workspace }} ; pip install .
           pip show principalmapper
 
       - name: "Run Test Cases"
+        shell: bash
         run: |
           cd ${{ github.workspace }} ; python -m unittest -v tests/test*
