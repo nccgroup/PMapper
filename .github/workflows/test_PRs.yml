@@ -33,11 +33,9 @@ jobs:
 
       - name: "Install PMapper"
         run: |
-          cd $GITHUB_WORKSPACE
-          pip install .
+          cd ${{ github.workspace }} ; pip install .
           pip show principalmapper
 
       - name: "Run Test Cases"
         run: |
-          cd $GITHUB_WORKSPACE
-          python -m unittest -v tests/test*
+          cd ${{ github.workspace }} ; python -m unittest -v tests/test*
