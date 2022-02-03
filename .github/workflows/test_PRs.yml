@@ -33,11 +33,13 @@ jobs:
 
       - name: "Install PMapper"
         shell: bash
+        working-directory: ${{ github.workspace }}
         run: |
-          cd ${{ github.workspace }} ; pip install .
+          pip install .
           pip show principalmapper
 
       - name: "Run Test Cases"
         shell: bash
+        working-directory: ${{ github.workspace }}
         run: |
-          cd ${{ github.workspace }} ; python -m unittest -v tests/test*
+          python -m unittest -v tests/test*
