@@ -28,7 +28,7 @@ from principalmapper.graphing.cross_account_edges import get_edges_between_graph
 from principalmapper.graphing.gathering import get_organizations_data
 from principalmapper.graphing.edge_identification import checker_map
 from principalmapper.querying import query_orgs
-from principalmapper.util import botocore_tools
+from principalmapper.util import botocore_tools, arns
 from principalmapper.util.storage import get_storage_root, get_default_graph_path
 
 
@@ -149,9 +149,13 @@ def process_arguments(parsed_args: Namespace):
                 stsclient = session.create_client('sts')
             caller_identity = stsclient.get_caller_identity()
             caller_account = caller_identity['Account']
+            partition = arns.get_partition(caller_identity['Arn'])
             logger.debug("Caller Identity: {}".format(caller_identity))
 
-            org_tree_search_dir = Path(get_storage_root())
+            if partition == 'aws':
+                org_tree_search_dir = Path(get_storage_root())
+            else:
+                org_tree_search_dir = Path(os.path.join(get_storage_root(), partition))
             org_id_pattern = re.compile(r'/o-\w+')
             for subdir in org_tree_search_dir.iterdir():
                 if org_id_pattern.search(str(subdir)) is not None:
