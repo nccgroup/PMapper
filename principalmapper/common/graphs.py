@@ -56,8 +56,18 @@ class Graph(object):
         self.edges = edges
         self.policies = policies
         self.groups = groups
+
         self.account = account
+        if not isinstance(account, str):
+            raise ValueError('Parameter `account` is expected to be str')
+
         self.partition = partition
+        if not isinstance(partition, str):
+            raise ValueError('Parameter `partition` is expected to be str')
+
+        if not isinstance(metadata, dict):
+            raise ValueError('Parameter `metadata` is expected to be dict')
+
         if 'pmapper_version' not in metadata:
             raise ValueError('Incomplete metadata input, expected key: "pmapper_version"')
         self.metadata = metadata
