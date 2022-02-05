@@ -180,8 +180,7 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
                 )
                 if destination_node_auth:
                     if cpa_mfa or ppda_mfa or ina_mfa or dna_mfa:
-                        reason = f'can use Data Pipeline with {intermediate_node.searchable_name()} to access ' \
-                                 f'(needs MFA)'
+                        reason = f'(requires MFA) can use Data Pipeline with {intermediate_node.searchable_name()} to access '
                     else:
                         reason = f'can use Data Pipeline with {intermediate_node.searchable_name()} to access'
 

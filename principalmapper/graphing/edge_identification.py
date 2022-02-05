@@ -26,6 +26,7 @@ from principalmapper.graphing.cloudformation_edges import CloudFormationEdgeChec
 from principalmapper.graphing.codebuild_edges import CodeBuildEdgeChecker
 from principalmapper.graphing.datapipeline_edges import DataPipelineEdgeChecker
 from principalmapper.graphing.ec2_edges import EC2EdgeChecker
+from principalmapper.graphing.ecs_edges import ECSEdgeChecker
 from principalmapper.graphing.glue_edges import GlueEdgeChecker
 from principalmapper.graphing.iam_edges import IAMEdgeChecker
 from principalmapper.graphing.lambda_edges import LambdaEdgeChecker
@@ -44,6 +45,7 @@ checker_map = {
     'codebuild': CodeBuildEdgeChecker,
     'datapipeline': DataPipelineEdgeChecker,
     'ec2': EC2EdgeChecker,
+    'ecs': ECSEdgeChecker,  # TODO: need to verify ECS work
     'glue': GlueEdgeChecker,
     'iam': IAMEdgeChecker,
     'lambda': LambdaEdgeChecker,

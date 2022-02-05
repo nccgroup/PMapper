@@ -142,7 +142,7 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
                     )
                     if update_ep_auth:
                         if update_ep_needs_mfa:
-                            reason = f'can use the Glue resource {target_endpoint} to access (needs MFA)'
+                            reason = f'(requires MFA) can use the Glue resource {target_endpoint} to access'
                         else:
                             reason = f'can use the Glue resource {target_endpoint} to access'
                         results.append(Edge(
@@ -173,7 +173,7 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
 
                 if create_ep_auth:
                     if passrole_needs_mfa or create_ep_needs_mfa:
-                        reason = 'can call glue:CreateDevEndpoint to access (needs MFA)'
+                        reason = '(requires MFA) can call glue:CreateDevEndpoint to access'
                     else:
                         reason = 'can call glue:CreateDevEndpoint to access'
                     results.append(Edge(
