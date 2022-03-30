@@ -1,0 +1,45 @@
+# This workflow is designed to run through the process of installing, building, and executing
+# basic PMapper unittests against PMapper's supported versions when there's a new PR aiming
+# at the "master" branch
+
+name: "Test Against Pythons"
+
+on:
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+permissions:
+  actions: read
+  issues: write
+  contents: read
+  discussions: write
+
+jobs:
+  build_and_test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-latest", "windows-latest", "macos-latest"]
+        python-version: ["3.6", "3.10"]
+    steps:
+      - name: "Grab Code"
+        uses: actions/checkout@v2
+
+      - name: "Install Python"
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: "Install PMapper"
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: |
+          pip install .
+          pip show principalmapper
+
+      - name: "Run Test Cases"
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: |
+          python -m unittest -v tests/test*

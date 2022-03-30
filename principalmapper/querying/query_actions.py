@@ -21,10 +21,22 @@ import logging
 import os
 import re
 from typing import Optional, List
-
+import csv
 from principalmapper.common import Graph
-from principalmapper.querying.presets import privesc, connected, clusters, endgame, serviceaccess, wrongadmin
-from principalmapper.querying.query_interface import search_authorization_for, search_authorization_full
+from principalmapper.querying.presets import (
+    privesc,
+    connected,
+    clusters,
+    endgame,
+    serviceaccess,
+    wrongadmin,
+)
+import json
+from datetime import datetime
+from principalmapper.querying.query_interface import (
+    search_authorization_for,
+    search_authorization_full,
+)
 from principalmapper.util import arns
 
 
@@ -49,15 +61,23 @@ Available presets:
 """
 
 
-def query_response(graph: Graph, query: str, skip_admins: bool = False, resource_policy: Optional[dict] = None,
-                   resource_owner: Optional[str] = None, include_unauthorized: bool = False,
-                   session_policy: Optional[dict] = None, scps: Optional[List[List[dict]]] = None) -> None:
+def query_response(
+    graph: Graph,
+    query: str,
+    skip_admins: bool = False,
+    resource_policy: Optional[dict] = None,
+    resource_owner: Optional[str] = None,
+    include_unauthorized: bool = False,
+    session_policy: Optional[dict] = None,
+    scps: Optional[List[List[dict]]] = None,
+    output_format: Optional[str] = None,
+) -> None:
     """Interprets, executes, and outputs the results to a query."""
     result = []
 
     # Parse
-    tokens = re.split(r'\s+', query, flags=re.UNICODE)
-    logger.debug('Query tokens: {}'.format(tokens))
+    tokens = re.split(r"\s+", query, flags=re.UNICODE)
+    logger.debug("Query tokens: {}".format(tokens))
     if len(tokens) < 2:
         _print_query_help()
         return
@@ -65,55 +85,59 @@ def query_response(graph: Graph, query: str, skip_admins: bool = False, resource
     nodes = []
 
     # first form: "can X do Y with Z when A B C" (principal, action, resource, conditionA, etc.)
-    if tokens[0] == 'can' and tokens[2] == 'do':  # can <X> do <Y>
+    if tokens[0] == "can" and tokens[2] == "do":  # can <X> do <Y>
         nodes.append(graph.get_node_by_searchable_name(tokens[1]))
         action = tokens[3]
 
         if len(tokens) > 5:  # can <X> do <Y> with <Z>
-            if tokens[4] != 'with':
+            if tokens[4] != "with":
                 _print_query_help()
                 return
             resource = tokens[5]
         else:
-            resource = '*'
+            resource = "*"
 
         if len(tokens) > 7:  # can <X> do <Y> with <Z> when <A> and <B> and <C>
-            if tokens[6] != 'when':
+            if tokens[6] != "when":
                 _print_query_help()
                 return
 
             # doing this funky stuff in case condition values can have spaces
             # we make the (bad, but good enough?) assumption that condition values don't have ' and ' in them
-            condition_str = ' '.join(tokens[7:])
-            condition_tokens = re.split(r'\s+and\s+', condition_str, flags=re.UNICODE)
+            condition_str = " ".join(tokens[7:])
+            condition_tokens = re.split(r"\s+and\s+", condition_str, flags=re.UNICODE)
             condition = {}
             for condition_token in condition_tokens:
                 # split on equals-sign (=), assume first instance separates the key and value
-                components = condition_token.split('=')
+                components = condition_token.split("=")
                 if len(components) < 2:
-                    raise ValueError('Format for condition args not matched: <key>=<value>')
+                    raise ValueError(
+                        "Format for condition args not matched: <key>=<value>"
+                    )
                 key = components[0]
-                value = '='.join(components[1:])
+                value = "=".join(components[1:])
                 condition.update({key: value})
-            logger.debug('Conditions: {}'.format(condition))
+            logger.debug("Conditions: {}".format(condition))
         else:
             condition = {}
 
     # second form: who can do X with Y when Z and A and B and C
-    elif tokens[0] == 'who' and tokens[1] == 'can' and tokens[2] == 'do':  # who can do X
+    elif (
+        tokens[0] == "who" and tokens[1] == "can" and tokens[2] == "do"
+    ):  # who can do X
         nodes.extend(graph.nodes)
         action = tokens[3]
 
         if len(tokens) > 5:  # who can do X with Y
-            if tokens[4] != 'with':
+            if tokens[4] != "with":
                 _print_query_help()
                 return
             resource = tokens[5]
         else:
-            resource = '*'
+            resource = "*"
 
         if len(tokens) > 7:  # who can do X with Y when A and B and C
-            if tokens[6] != 'when':
+            if tokens[6] != "when":
                 _print_query_help()
                 return
 
@@ -172,10 +196,25 @@ def query_response(graph: Graph, query: str, skip_admins: bool = False, resource
             ))
 
     # Print
+    rows = []
+    fields = ["Entity", "Action", "Resource", "How?"]
     for query_result, action, resource in result:
         if query_result.allowed or include_unauthorized:
-            query_result.print_result(action, resource)
-            print()
+            if output_format in ("csv","json"):
+                rows.append(query_result.create_information_object(action, resource,output_format))
+            else:
+                query_result.print_result(action, resource)
+    if output_format == "csv":
+        output_filename = datetime.now().isoformat() + ".csv"
+        with open(output_filename, "w") as f:
+            write = csv.writer(f)
+            write.writerow(fields)
+            write.writerows(rows)
+            print("CSV file has been generated with the name: " + output_filename)
+    elif output_format == "json":
+        json_data = {"findings": rows}
+        print("JSON OUTPUT:")
+        print(json.dumps(json_data))
 
 
 def handle_preset(graph: Graph, query: str, skip_admins: bool = False) -> None:

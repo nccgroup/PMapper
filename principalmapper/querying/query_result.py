@@ -33,6 +33,7 @@ class QueryResult(object):
     node is an admin, but could not directly call the API with its perms and had to "use" its admin perms to gain the
     necessary access to call the API.
     """
+
     def __init__(self, allowed: bool, edge_list: Union[List[Edge], Node], node: Node):
         self.allowed = allowed
         self.edge_list = edge_list
@@ -44,38 +45,122 @@ class QueryResult(object):
             if isinstance(self.edge_list, Node):
                 if self.edge_list == self.node:
                     # node is an Admin but can't directly call the action
-                    print('{} CAN BECOME authorized to call action {} for resource {} THRU its admin privileges'.format(
-                        self.node.searchable_name(), action_param, resource_param
-                    ))
+                    print(
+                        "{} CAN BECOME authorized to call action {} for resource {} THRU its admin privileges".format(
+                            self.node.searchable_name(), action_param, resource_param
+                        )
+                    )
                 else:
-                    raise ValueError('Improperly-generated QueryResult object: edge_list is a Node but not the input Node')
+                    raise ValueError(
+                        "Improperly-generated QueryResult object: edge_list is a Node but not the input Node"
+                    )
 
             elif len(self.edge_list) == 0:
                 # node itself is auth'd
-                print('{} IS authorized to call action {} for resource {}'.format(
-                    self.node.searchable_name(), action_param, resource_param
-                ))
+                print(
+                    "{} IS authorized to call action {} for resource {}".format(
+                        self.node.searchable_name(), action_param, resource_param
+                    )
+                )
             else:
                 # node is auth'd through other nodes
-                print('{} CAN call action {} for resource {} THRU {}'.format(
-                    self.node.searchable_name(), action_param, resource_param,
-                    self.edge_list[-1].destination.searchable_name()
-                ))
+                print(
+                    "{} CAN call action {} for resource {} THRU {}".format(
+                        self.node.searchable_name(),
+                        action_param,
+                        resource_param,
+                        self.edge_list[-1].destination.searchable_name(),
+                    )
+                )
 
                 # print the path the node has to take
                 for edge in self.edge_list:
-                    print('   {}'.format(edge.describe_edge()))
+                    print("   {}".format(edge.describe_edge()))
 
                 # print that the end-edge is authorized to make the call
-                print('   {} IS authorized to call action {} for resource {}'.format(
-                    self.edge_list[-1].destination.searchable_name(),
-                    action_param,
-                    resource_param
-                ))
+                print(
+                    "   {} IS authorized to call action {} for resource {}".format(
+                        self.edge_list[-1].destination.searchable_name(),
+                        action_param,
+                        resource_param,
+                    )
+                )
         else:
-            print('{} CANNOT call action {} for resource {}'.format(
-                self.node.searchable_name(), action_param, resource_param
-            ))
+            print(
+                "{} CANNOT call action {} for resource {}".format(
+                    self.node.searchable_name(), action_param, resource_param
+                )
+            )
+
+    def create_information_object(self, action_param: str, resource_param: str,output_format:str):
+        row = []
+        entity = action = resource = how = None
+
+        if self.allowed:
+            if isinstance(self.edge_list, Node):
+                entity = self.node.searchable_name()
+                action = action_param
+                resource = resource_param
+                if self.edge_list == self.node:
+                    # node is an Admin but can't directly call the action
+                    how = "Admin Privileges"
+                else:
+                    raise ValueError(
+                        "Improperly-generated QueryResult object: edge_list is a Node but not the input Node"
+                    )
+
+            elif len(self.edge_list) == 0:
+                # node itself is auth'd
+                how = "Admin Privileges"
+            else:
+                describe_how = "{} CAN call action {} for resource {} THRU {}".format(
+                    self.node.searchable_name(),
+                    action_param,
+                    resource_param,
+                    self.edge_list[-1].destination.searchable_name(),
+                )
+
+                # print the path the node has to take
+                for edge in self.edge_list:
+                    describe_how = describe_how + "\n----{}".format(
+                        edge.describe_edge()
+                    )
+
+                # print that the end-edge is authorized to make the call
+                describe_how = (
+                    describe_how
+                    + "\n"
+                    + "----{} IS authorized to call action {} for resource {}".format(
+                        self.edge_list[-1].destination.searchable_name(),
+                        action_param,
+                        resource_param,
+                    )
+                )
+                how = describe_how
+            if output_format == "csv":
+                row.extend(
+                    [
+                        entity,
+                        action,
+                        resource,
+                        how,
+                    ]
+                )
+            elif output_format == "json":
+                row.append({
+                    "entity": entity,
+                    "action": action,
+                    "resource": resource,
+                    "how": how
+                })
+
+        else:
+            print(
+                "{} CANNOT call action {} for resource {}".format(
+                    self.node.searchable_name(), action_param, resource_param
+                )
+            )
+        return row
 
     def write_result(self, action_param: str, resource_param: str, output: io.StringIO):
         """Writes information about the QueryResult object to the given IO interface.
@@ -86,52 +171,57 @@ class QueryResult(object):
         if self.allowed:
             if isinstance(self.edge_list, Node) and self.edge_list == self.node:
                 # node is an Admin but can't directly call the action
-                output.write('{} IS authorized to call action {} for resource {} THRU its admin privileges\n'.format(
-                    self.node.searchable_name(), action_param, resource_param
-                ))
+                output.write(
+                    "{} IS authorized to call action {} for resource {} THRU its admin privileges\n".format(
+                        self.node.searchable_name(), action_param, resource_param
+                    )
+                )
             if len(self.edge_list) == 0:
                 # node itself is auth'd
-                output.write('{} IS authorized to call action {} for resource {}\n'.format(
-                    self.node.searchable_name(), action_param, resource_param))
+                output.write(
+                    "{} IS authorized to call action {} for resource {}\n".format(
+                        self.node.searchable_name(), action_param, resource_param
+                    )
+                )
 
             else:
                 # node is auth'd through other nodes
-                output.write('{} CAN call action {} for resource {} THRU {}\n'.format(
-                    self.node.searchable_name(), action_param, resource_param,
-                    self.edge_list[-1].destination.searchable_name()
-                ))
+                output.write(
+                    "{} CAN call action {} for resource {} THRU {}\n".format(
+                        self.node.searchable_name(),
+                        action_param,
+                        resource_param,
+                        self.edge_list[-1].destination.searchable_name(),
+                    )
+                )
 
                 # print the path the node has to take
                 for edge in self.edge_list:
-                    output.write('   {}\n'.format(edge.describe_edge()))
+                    output.write("   {}\n".format(edge.describe_edge()))
 
                 # print that the end-edge is authorized to make the call
-                output.write('   {} IS authorized to call action {} for resource {}\n'.format(
-                    self.edge_list[-1].destination.searchable_name(),
-                    action_param,
-                    resource_param
-                ))
+                output.write(
+                    "   {} IS authorized to call action {} for resource {}\n".format(
+                        self.edge_list[-1].destination.searchable_name(),
+                        action_param,
+                        resource_param,
+                    )
+                )
         else:
-            output.write('{} CANNOT call action {} for resource {}\n'.format(
-                self.node.searchable_name(), action_param, resource_param
-            ))
+            output.write(
+                "{} CANNOT call action {} for resource {}\n".format(
+                    self.node.searchable_name(), action_param, resource_param
+                )
+            )
 
     def as_json(self):
         """Produces a JSON representation of this query's result."""
         if isinstance(self.edge_list, Node):
-            edge_rep = [{
-                'src': self.edge_list.arn,
-                'dst': self.edge_list.arn
-            }]
+            edge_rep = [{"src": self.edge_list.arn, "dst": self.edge_list.arn}]
         else:
             edge_rep = []
             for edge in self.edge_list:
-                edge_rep.append({
-                    'src': edge.source.arn,
-                    'dst': edge.destination.arn
-                })
-        return json.dumps({
-            'allowed': self.allowed,
-            'node': self.node.arn,
-            'edge_list': edge_rep
-        })
+                edge_rep.append({"src": edge.source.arn, "dst": edge.destination.arn})
+        return json.dumps(
+            {"allowed": self.allowed, "node": self.node.arn, "edge_list": edge_rep}
+        )
