@@ -31,6 +31,8 @@ from principalmapper.querying.presets import (
     serviceaccess,
     wrongadmin,
 )
+import json
+from datetime import datetime
 from principalmapper.querying.query_interface import (
     search_authorization_for,
     search_authorization_full,
@@ -198,13 +200,21 @@ def query_response(
     fields = ["Entity", "Action", "Resource", "How?"]
     for query_result, action, resource in result:
         if query_result.allowed or include_unauthorized:
-            query_result.print_result(action, resource)
-            rows.append(query_result.create_information_object(action, resource))
-    with open("output.csv", "w") as f:
-        # using csv.writer method from CSV package
-        write = csv.writer(f)
-        write.writerow(fields)
-        write.writerows(rows)
+            if output_format in ("csv","json"):
+                rows.append(query_result.create_information_object(action, resource,output_format))
+            else:
+                query_result.print_result(action, resource)
+    if output_format == "csv":
+        output_filename = datetime.now().isoformat() + ".csv"
+        with open(output_filename, "w") as f:
+            write = csv.writer(f)
+            write.writerow(fields)
+            write.writerows(rows)
+            print("CSV file has been generated with the name: " + output_filename)
+    elif output_format == "json":
+        json_data = {"findings": rows}
+        print("JSON OUTPUT:")
+        print(json.dumps(json_data))
 
 
 def handle_preset(graph: Graph, query: str, skip_admins: bool = False) -> None:

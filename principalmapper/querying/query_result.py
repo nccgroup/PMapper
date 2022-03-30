@@ -92,21 +92,18 @@ class QueryResult(object):
                 )
             )
 
-    def create_information_object(self, action_param: str, resource_param: str):
-        # row = ["Entity", "Action", "Resource", "How?"]
+    def create_information_object(self, action_param: str, resource_param: str,output_format:str):
         row = []
+        entity = action = resource = how = None
+
         if self.allowed:
             if isinstance(self.edge_list, Node):
+                entity = self.node.searchable_name()
+                action = action_param
+                resource = resource_param
                 if self.edge_list == self.node:
                     # node is an Admin but can't directly call the action
-                    row.extend(
-                        [
-                            self.node.searchable_name(),
-                            action_param,
-                            resource_param,
-                            "Admin Privileges",
-                        ]
-                    )
+                    how = "Admin Privileges"
                 else:
                     raise ValueError(
                         "Improperly-generated QueryResult object: edge_list is a Node but not the input Node"
@@ -114,24 +111,8 @@ class QueryResult(object):
 
             elif len(self.edge_list) == 0:
                 # node itself is auth'd
-                row.extend(
-                    [
-                        self.node.searchable_name(),
-                        action_param,
-                        resource_param,
-                        "",
-                    ]
-                )
+                how = "Admin Privileges"
             else:
-                # node is auth'd through other nodes
-                print(
-                    "{} CAN call action {} for resource {} THRU {}".format(
-                        self.node.searchable_name(),
-                        action_param,
-                        resource_param,
-                        self.edge_list[-1].destination.searchable_name(),
-                    )
-                )
                 describe_how = "{} CAN call action {} for resource {} THRU {}".format(
                     self.node.searchable_name(),
                     action_param,
@@ -155,14 +136,23 @@ class QueryResult(object):
                         resource_param,
                     )
                 )
+                how = describe_how
+            if output_format == "csv":
                 row.extend(
                     [
-                        self.node.searchable_name(),
-                        action_param,
-                        resource_param,
-                        describe_how,
+                        entity,
+                        action,
+                        resource,
+                        how,
                     ]
                 )
+            elif output_format == "json":
+                row.append({
+                    "entity": entity,
+                    "action": action,
+                    "resource": resource,
+                    "how": how
+                })
 
         else:
             print(
