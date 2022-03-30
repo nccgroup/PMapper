@@ -55,7 +55,8 @@ def gen_report(graph: Graph) -> Report:
     """Generates a Report object with findings and metadata about report-generation"""
     findings = gen_all_findings(graph)
     return Report(
-        graph.metadata['account_id'],
+        graph.account,
+        graph.partition,
         dt.datetime.now(dt.timezone.utc),
         findings,
         'Findings identified using Principal Mapper ({}) from NCC Group: https://github.com/nccgroup/PMapper'.format(
@@ -475,7 +476,7 @@ def gen_resources_with_potential_confused_deputies(graph: Graph) -> List[Finding
                     for action in action_list:
                         rpa_result = resource_policy_authorization(
                             service,
-                            graph.metadata['account_id'],
+                            graph.account,
                             policy.policy_doc,
                             action,
                             policy.arn,
@@ -523,7 +524,10 @@ def print_report(report: Report) -> None:
     print('----------------------------------------------------------------')
     print('# Principal Mapper Findings')
     print()
-    print('Findings identified in AWS account {}'.format(report.account))
+    if report.partition == 'aws':
+        print('Findings identified in AWS account {}'.format(report.account))
+    else:
+        print(f'Findings identified in AWS account {report.account} ({report.partition})')
     print()
     print('Date and Time: {}'.format(report.date_and_time.isoformat()))
     print()

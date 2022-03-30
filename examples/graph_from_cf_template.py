@@ -144,7 +144,7 @@ def main():
     edges = iam_edges.generate_edges_locally(nodes) + sts_edges.generate_edges_locally(nodes)
 
     # Create our graph and finish
-    graph = Graph(nodes, edges, policies, groups, metadata)
+    graph = Graph(nodes, edges, policies, groups, '000000000000', 'aws', metadata)
     graph_actions.print_graph_data(graph)
 
 

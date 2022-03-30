@@ -1,4 +1,4 @@
 botocore > 1.13
-packaging
+packaging >= 21.0
 python-dateutil
 pydot

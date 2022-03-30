@@ -29,7 +29,7 @@ def write_standard_graphviz(graph: Graph, filepath: str, file_format: str, with_
     # Load graph data into pydot
     pydg = pydot.Dot(
         graph_type='digraph',
-        graph_name='Principal Mapper Visualization: {}'.format(graph.metadata['account_id']),
+        graph_name='Principal Mapper Visualization: {}'.format(graph.account),
         overlap='scale',
         layout='neato',
         concentrate='true',

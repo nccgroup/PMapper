@@ -35,7 +35,7 @@ class AutoScalingEdgeChecker(EdgeChecker):
 
     def return_edges(self, nodes: List[Node], region_allow_list: Optional[List[str]] = None,
                      region_deny_list: Optional[List[str]] = None, scps: Optional[List[List[dict]]] = None,
-                     client_args_map: Optional[dict] = None) -> List[Edge]:
+                     client_args_map: Optional[dict] = None, partition: str = 'aws') -> List[Edge]:
         """Fulfills expected method return_edges."""
 
         logger.info('Generating Edges based on EC2 Auto Scaling.')
@@ -48,7 +48,7 @@ class AutoScalingEdgeChecker(EdgeChecker):
         # Gather projects information for each region
         autoscaling_clients = []
         if self.session is not None:
-            as_regions = botocore_tools.get_regions_to_search(self.session, 'autoscaling', region_allow_list, region_deny_list)
+            as_regions = botocore_tools.get_regions_to_search(self.session, 'autoscaling', region_allow_list, region_deny_list, partition)
             for region in as_regions:
                 autoscaling_clients.append(self.session.create_client('autoscaling', region_name=region, **asargs))
 
@@ -67,14 +67,16 @@ class AutoScalingEdgeChecker(EdgeChecker):
                                 })
 
             except ClientError as ex:
-                logger.warning('Unable to search region {} for launch configs. The region may be disabled, or the error may '
-                               'be caused by an authorization issue. Continuing.'.format(as_client.meta.region_name))
-                logger.debug('Exception details: {}'.format(ex))
+                logger.warning(
+                    f'Unable to search region {as_client.meta.region_name} for launch configs. The region may be '
+                    f'disabled, or the error may be caused by an authorization issue. Continuing.'
+                )
+                logger.debug(f'Exception details: {ex}')
 
         result = generate_edges_locally(nodes, scps, launch_configs)
 
         for edge in result:
-            logger.info("Found new edge: {}".format(edge.describe_edge()))
+            logger.info(f"Found new edge: {edge.describe_edge()}")
 
         return result
 

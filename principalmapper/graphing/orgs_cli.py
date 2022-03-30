@@ -29,7 +29,7 @@ from principalmapper.graphing.cross_account_edges import get_edges_between_graph
 from principalmapper.graphing.gathering import get_organizations_data
 from principalmapper.querying.query_orgs import produce_scp_list
 from principalmapper.util import botocore_tools
-from principalmapper.util.storage import get_storage_root
+from principalmapper.util.storage import get_storage_root, get_default_graph_path
 
 
 logger = logging.getLogger(__name__)
@@ -106,7 +106,8 @@ def process_arguments(parsed_args: Namespace):
         # create the account -> OU path map and apply to all accounts (same as orgs update operation)
         account_ou_map = _map_account_ou_paths(org_tree)
         logger.debug('account_ou_map: {}'.format(account_ou_map))
-        _update_accounts_with_ou_path_map(org_tree.org_id, account_ou_map, get_storage_root())
+        root_path = get_storage_root() if org_tree.partition == 'aws' else os.path.join(get_storage_root(), org_tree.partition)
+        _update_accounts_with_ou_path_map(org_tree.org_id, account_ou_map, root_path)
         logger.info('Updated currently stored Graphs with applicable AWS Organizations data')
 
         # create and cache a list of edges between all the accounts we have data for
@@ -114,7 +115,11 @@ def process_arguments(parsed_args: Namespace):
         graph_objs = []
         for account in org_tree.accounts:
             try:
-                potential_path = os.path.join(get_storage_root(), account)
+                if org_tree.partition != 'aws':
+                    potential_path = get_default_graph_path(f'{org_tree.partition}:{account}')
+                else:
+                    potential_path = get_default_graph_path(account)
+
                 logger.debug('Trying to load a Graph from {}'.format(potential_path))
                 graph_obj = Graph.create_graph_from_local_disk(potential_path)
                 graph_objs.append(graph_obj)
@@ -135,18 +140,23 @@ def process_arguments(parsed_args: Namespace):
         org_tree.edge_list = edge_list
         logger.info('Compiled cross-account edges')
 
-        org_tree.save_organization_to_disk(os.path.join(get_storage_root(), org_tree.org_id))
+        if org_tree.partition != 'aws':
+            org_storage_path = get_default_graph_path(f'{org_tree.partition}:{org_tree.org_id}')
+        else:
+            org_storage_path = get_default_graph_path(org_tree.org_id)
+        org_tree.save_organization_to_disk(org_storage_path)
         logger.info('Stored organization data to disk')
 
     elif parsed_args.picked_orgs_cmd == 'update':
         # pull the existing data from disk
-        org_filepath = os.path.join(get_storage_root(), parsed_args.org)
+        org_filepath = get_default_graph_path(parsed_args.org)
         org_tree = OrganizationTree.create_from_dir(org_filepath)
 
         # create the account -> OU path map and apply to all accounts
         account_ou_map = _map_account_ou_paths(org_tree)
         logger.debug('account_ou_map: {}'.format(account_ou_map))
-        _update_accounts_with_ou_path_map(org_tree.org_id, account_ou_map, get_storage_root())
+        root_path = get_storage_root() if org_tree.partition == 'aws' else os.path.join(get_storage_root(), org_tree.partition)
+        _update_accounts_with_ou_path_map(org_tree.org_id, account_ou_map, root_path)
         logger.info('Updated currently stored Graphs with applicable AWS Organizations data')
 
         # create and cache a list of edges between all the accounts we have data for
@@ -154,7 +164,10 @@ def process_arguments(parsed_args: Namespace):
         graph_objs = []
         for account in org_tree.accounts:
             try:
-                potential_path = os.path.join(get_storage_root(), account)
+                if org_tree.partition != 'aws':
+                    potential_path = get_default_graph_path(f'{org_tree.partition}:{account}')
+                else:
+                    potential_path = get_default_graph_path(account)
                 logger.debug('Trying to load a Graph from {}'.format(potential_path))
                 graph_obj = Graph.create_graph_from_local_disk(potential_path)
                 graph_objs.append(graph_obj)
@@ -175,12 +188,16 @@ def process_arguments(parsed_args: Namespace):
         org_tree.edge_list = edge_list
         logger.info('Compiled cross-account edges')
 
-        org_tree.save_organization_to_disk(os.path.join(get_storage_root(), org_tree.org_id))
+        if org_tree.partition != 'aws':
+            org_storage_path = get_default_graph_path(f'{org_tree.partition}:{org_tree.org_id}')
+        else:
+            org_storage_path = get_default_graph_path(org_tree.org_id)
+        org_tree.save_organization_to_disk(org_storage_path)
         logger.info('Stored organization data to disk')
 
     elif parsed_args.picked_orgs_cmd == 'display':
         # pull the existing data from disk
-        org_filepath = os.path.join(get_storage_root(), parsed_args.org)
+        org_filepath = get_default_graph_path(parsed_args.org)
         org_tree = OrganizationTree.create_from_dir(org_filepath)
 
         def _print_account(org_account: OrganizationAccount, indent_level: int, inherited_scps: List[Policy]):
@@ -209,13 +226,23 @@ def process_arguments(parsed_args: Namespace):
         print("Organization IDs:")
         print("---")
         storage_root = Path(get_storage_root())
-        account_id_pattern = re.compile(r'o-\w+')
+        org_id_pattern = re.compile(r'o-\w+')
         for direct in storage_root.iterdir():
-            if account_id_pattern.search(str(direct)) is not None:
+            if org_id_pattern.search(str(direct)) is not None:
                 metadata_file = direct.joinpath(Path('metadata.json'))
                 with open(str(metadata_file)) as fd:
                     version = json.load(fd)['pmapper_version']
-                print("{} (PMapper Version {})".format(direct.name, version))
+                print(f"{direct.name} (PMapper Version {version})")
+
+        partition_pattern = re.compile(r'aws.*')
+        for direct in storage_root.iterdir():
+            if partition_pattern.search(str(direct)) is not None:
+                for subdirect in direct.iterdir():
+                    if org_id_pattern.search(str(subdirect)) is not None:
+                        metadata_file = subdirect.joinpath(Path('metadata.json'))
+                        with open(str(metadata_file)) as fd:
+                            version = json.load(fd)['pmapper_version']
+                        print(f'{direct.name}:{subdirect.name} (PMapper Version {version})')
 
     return 0
 

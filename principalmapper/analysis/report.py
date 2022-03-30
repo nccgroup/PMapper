@@ -26,8 +26,9 @@ class Report:
     utility function to convert the contents of the report to a dictionary object.
     """
 
-    def __init__(self, account: str, date_and_time: dt.datetime, findings: List[Finding], source: str):
+    def __init__(self, account: str, partition: str, date_and_time: dt.datetime, findings: List[Finding], source: str):
         self.account = account
+        self.partition = partition
         self.date_and_time = date_and_time
         self.findings = findings
         self.source = source
@@ -36,6 +37,7 @@ class Report:
         """Produces a dictionary representing this Report's contents."""
         return {
             'account': self.account,
+            'partition': self.partition,
             'date_and_time': self.date_and_time.isoformat(),
             'findings': [x.as_dictionary() for x in self.findings],
             'source': self.source

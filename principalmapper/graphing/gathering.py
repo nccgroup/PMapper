@@ -63,9 +63,10 @@ def create_graph(session: botocore.session.Session, service_list: list, region_a
     stsclient = session.create_client('sts', **stsargs)
     logger.debug(stsclient.meta.endpoint_url)
     caller_identity = stsclient.get_caller_identity()
-    logger.debug("Caller Identity: {}".format(caller_identity['Arn']))
+    logger.debug(f"Caller Identity: {caller_identity['Arn']}")
+    current_partition = arns.get_partition(caller_identity['Arn'])
+    current_account = caller_identity['Account']
     metadata = {
-        'account_id': caller_identity['Account'],
         'pmapper_version': principalmapper.__version__
     }
 
@@ -88,20 +89,21 @@ def create_graph(session: botocore.session.Session, service_list: list, region_a
         region_allow_list,
         region_deny_list,
         scps,
-        client_args_map
+        client_args_map,
+        current_partition
     )
 
     # Pull S3, SNS, SQS, KMS, and Secrets Manager resource policies
     try:
-        policies_result.extend(get_s3_bucket_policies(session, client_args_map))
-        policies_result.extend(get_sns_topic_policies(session, region_allow_list, region_deny_list, client_args_map))
-        policies_result.extend(get_sqs_queue_policies(session, caller_identity['Account'], region_allow_list, region_deny_list, client_args_map))
-        policies_result.extend(get_kms_key_policies(session, region_allow_list, region_deny_list, client_args_map))
-        policies_result.extend(get_secrets_manager_policies(session, region_allow_list, region_deny_list, client_args_map))
+        policies_result.extend(get_s3_bucket_policies(session, client_args_map, current_partition))
+        policies_result.extend(get_sns_topic_policies(session, region_allow_list, region_deny_list, client_args_map, current_partition))
+        policies_result.extend(get_sqs_queue_policies(session, caller_identity['Account'], region_allow_list, region_deny_list, client_args_map, current_partition))
+        policies_result.extend(get_kms_key_policies(session, region_allow_list, region_deny_list, client_args_map, current_partition))
+        policies_result.extend(get_secrets_manager_policies(session, region_allow_list, region_deny_list, client_args_map, current_partition))
     except:
         pass
 
-    return Graph(nodes_result, edges_result, policies_result, groups_result, metadata)
+    return Graph(nodes_result, edges_result, policies_result, groups_result, current_account, current_partition, metadata)
 
 
 def get_nodes_groups_and_policies(iamclient) -> dict:
@@ -282,7 +284,8 @@ def get_nodes_groups_and_policies(iamclient) -> dict:
     return result
 
 
-def get_s3_bucket_policies(session: botocore.session.Session, client_args_map: Optional[dict] = None) -> List[Policy]:
+def get_s3_bucket_policies(session: botocore.session.Session, client_args_map: Optional[dict] = None,
+                           partition: str = 'aws') -> List[Policy]:
     """Using a botocore Session object, return a list of Policy objects representing the bucket policies of each
     S3 bucket in this account.
     """
@@ -291,7 +294,7 @@ def get_s3_bucket_policies(session: botocore.session.Session, client_args_map: O
     s3client = session.create_client('s3', **s3args)
     buckets = [x['Name'] for x in s3client.list_buckets()['Buckets']]
     for bucket in buckets:
-        bucket_arn = 'arn:aws:s3:::{}'.format(bucket)  # TODO: allow different partition
+        bucket_arn = f'arn:aws:{partition}:::{bucket}'
         try:
             bucket_policy = json.loads(s3client.get_bucket_policy(Bucket=bucket)['Policy'])
             result.append(Policy(
@@ -299,12 +302,10 @@ def get_s3_bucket_policies(session: botocore.session.Session, client_args_map: O
                 bucket,
                 bucket_policy
             ))
-            logger.info('Caching policy for {}'.format(bucket_arn))
+            logger.info(f'Caching policy for {bucket_arn}')
         except botocore.exceptions.ClientError as ex:
             if 'NoSuchBucketPolicy' in str(ex):
-                logger.info('Bucket {} does not have a bucket policy, adding a "stub" policy instead.'.format(
-                    bucket
-                ))
+                logger.info(f'Bucket {bucket} does not have a bucket policy, adding a "stub" policy instead.')
                 result.append(Policy(
                     bucket_arn,
                     bucket,
@@ -314,14 +315,15 @@ def get_s3_bucket_policies(session: botocore.session.Session, client_args_map: O
                     }
                 ))
             else:
-                logger.info('Unable to retrieve bucket policy for {}. You should add this manually. Continuing.'.format(bucket))
-            logger.debug('Exception was: {}'.format(ex))
+                logger.info(f'Unable to retrieve bucket policy for {bucket}. You should add this manually. Continuing.')
+            logger.debug(f'Exception was: {ex}')
 
     return result
 
 
 def get_kms_key_policies(session: botocore.session.Session, region_allow_list: Optional[List[str]] = None,
-                         region_deny_list: Optional[List[str]] = None, client_args_map: Optional[dict] = None) -> List[Policy]:
+                         region_deny_list: Optional[List[str]] = None, client_args_map: Optional[dict] = None,
+                         partition: str = 'aws') -> List[Policy]:
     """Using a botocore Session object, return a list of Policy objects representing the key policies of each
     KMS key in this account.
 
@@ -333,7 +335,7 @@ def get_kms_key_policies(session: botocore.session.Session, region_allow_list: O
     kmsargs = client_args_map.get('kms', {})
 
     # Iterate through all regions of KMS where possible
-    for kms_region in get_regions_to_search(session, 'kms', region_allow_list, region_deny_list):
+    for kms_region in get_regions_to_search(session, 'kms', region_allow_list, region_deny_list, partition):
         try:
             # Grab the keys
             cmks = []
@@ -352,15 +354,19 @@ def get_kms_key_policies(session: botocore.session.Session, region_allow_list: O
                 ))
                 logger.info('Caching policy for {}'.format(cmk))
         except botocore.exceptions.ClientError as ex:
-            logger.info('Unable to search KMS in region {} for key policies. The region may be disabled, or the current principal may not be authorized to access the service. Continuing.'.format(kms_region))
-            logger.debug('Exception was: {}'.format(ex))
+            logger.info(
+                f'Unable to search KMS in region {kms_region} for key policies. The region may be disabled, or the '
+                f'current principal may not be authorized to access the service. Continuing.'
+            )
+            logger.debug(f'Exception was: {ex}')
             continue
 
     return result
 
 
 def get_sns_topic_policies(session: botocore.session.Session, region_allow_list: Optional[List[str]] = None,
-                           region_deny_list: Optional[List[str]] = None, client_args_map: Optional[dict] = None) -> List[Policy]:
+                           region_deny_list: Optional[List[str]] = None, client_args_map: Optional[dict] = None,
+                           partition: str = 'aws') -> List[Policy]:
     """Using a botocore Session object, return a list of Policy objects representing the topic policies of each
     SNS topic in this account.
 
@@ -372,7 +378,7 @@ def get_sns_topic_policies(session: botocore.session.Session, region_allow_list:
     snsargs = client_args_map.get('sns', {})
 
     # Iterate through all regions of SNS where possible
-    for sns_region in get_regions_to_search(session, 'sns', region_allow_list, region_deny_list):
+    for sns_region in get_regions_to_search(session, 'sns', region_allow_list, region_deny_list, partition):
         try:
             # Grab the topics
             topics = []
@@ -391,8 +397,11 @@ def get_sns_topic_policies(session: botocore.session.Session, region_allow_list:
                 ))
                 logger.info('Caching policy for {}'.format(topic))
         except botocore.exceptions.ClientError as ex:
-            logger.info('Unable to search SNS in region {} for topic policies. The region may be disabled, or the current principal may not be authorized to access the service. Continuing.'.format(sns_region))
-            logger.debug('Exception was: {}'.format(ex))
+            logger.info(
+                f'Unable to search SNS in region {sns_region} for topic policies. The region may be disabled, or '
+                f'the current principal may not be authorized to access the service. Continuing.'
+            )
+            logger.debug(f'Exception was: {ex}')
             continue
 
     return result
@@ -400,7 +409,7 @@ def get_sns_topic_policies(session: botocore.session.Session, region_allow_list:
 
 def get_sqs_queue_policies(session: botocore.session.Session, account_id: str,
                            region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None,
-                           client_args_map: Optional[dict] = None) -> List[Policy]:
+                           client_args_map: Optional[dict] = None, partition: str = 'aws') -> List[Policy]:
     """Using a botocore Session object, return a list of Policy objects representing the queue policies of each
     SQS queue in this account.
 
@@ -412,7 +421,7 @@ def get_sqs_queue_policies(session: botocore.session.Session, account_id: str,
     sqsargs = client_args_map.get('sqs', {})
 
     # Iterate through all regions of SQS where possible
-    for sqs_region in get_regions_to_search(session, 'sqs', region_allow_list, region_deny_list):
+    for sqs_region in get_regions_to_search(session, 'sqs', region_allow_list, region_deny_list, partition):
         try:
             # Grab the queue names
             queue_urls = []
@@ -430,30 +439,34 @@ def get_sqs_queue_policies(session: botocore.session.Session, account_id: str,
                 if 'Policy' in sqs_policy_response:
                     sqs_policy_doc = json.loads(sqs_policy_response['Policy'])
                     result.append(Policy(
-                        'arn:aws:sqs:{}:{}:{}'.format(sqs_region, account_id, queue_name),
+                        f'arn:{partition}:sqs:{sqs_region}:{account_id}:{queue_name}',
                         queue_name,
                         json.loads(sqs_policy_doc)
                     ))
-                    logger.info('Caching policy for {}'.format('arn:aws:sqs:{}:{}:{}'.format(sqs_region, account_id, queue_name)))
+                    logger.info(f'Caching policy for {f"arn:{partition}:sqs:{sqs_region}:{account_id}:{queue_name}"}')
                 else:
                     result.append(Policy(
-                        'arn:aws:sqs:{}:{}:{}'.format(sqs_region, account_id, queue_name),
+                        f'arn:{partition}:sqs:{sqs_region}:{account_id}:{queue_name}',
                         queue_name,
                         {
                             "Statement": [],
                             "Version": "2012-10-17"
                         }
                     ))
-                    logger.info('Queue {} does not have a queue policy, adding a "stub" policy instead.'.format(queue_name))
+                    logger.info(f'Queue {queue_name} does not have a queue policy, adding a "stub" policy instead.')
         except botocore.exceptions.ClientError as ex:
-            logger.info('Unable to search SQS in region {} for queues. The region may be disabled, or the current principal may not be authorized to access the service. Continuing.'.format(sqs_region))
-            logger.debug('Exception was: {}'.format(ex))
+            logger.info(
+                f'Unable to search SQS in region {sqs_region} for queues. The region may be disabled, or the current '
+                f'principal may not be authorized to access the service. Continuing.'
+            )
+            logger.debug(f'Exception was: {ex}')
 
     return result
 
 
 def get_secrets_manager_policies(session: botocore.session.Session, region_allow_list: Optional[List[str]] = None,
-                                 region_deny_list: Optional[List[str]] = None, client_args_map: Optional[dict] = None) -> List[Policy]:
+                                 region_deny_list: Optional[List[str]] = None, client_args_map: Optional[dict] = None,
+                                 partition: str = 'aws') -> List[Policy]:
     """Using a botocore Session object, return a list of Policy objects representing the resource policies
     of the secrets in AWS Secrets Manager.
 
@@ -465,7 +478,7 @@ def get_secrets_manager_policies(session: botocore.session.Session, region_allow
     smargs = client_args_map.get('secretsmanager', {})
 
     # Iterate through all regions of Secrets Manager where possible
-    for sm_region in get_regions_to_search(session, 'secretsmanager', region_allow_list, region_deny_list):
+    for sm_region in get_regions_to_search(session, 'secretsmanager', region_allow_list, region_deny_list, partition):
         try:
             # Grab the ARNs of the secrets in this region
             secret_arns = []
@@ -850,6 +863,7 @@ def get_organizations_data(session: botocore.session.Session) -> OrganizationTre
     # grab account data
     stsclient = session.create_client('sts')
     account_data = stsclient.get_caller_identity()
+    partition = arns.get_partition(account_data['Arn'])
 
     # try to grab org data, raising RuntimeError if appropriate
     try:
@@ -857,9 +871,11 @@ def get_organizations_data(session: botocore.session.Session) -> OrganizationTre
         organization_data = orgsclient.describe_organization()
     except botocore.exceptions.ClientError as ex:
         if 'AccessDeniedException' in str(ex):
-            raise RuntimeError('Encountered a permission error. Either the current principal ({}) is not authorized to '
-                               'interact with AWS Organizations, or the current account ({}) is not the '
-                               'management account'.format(account_data['Arn'], account_data['Account']))
+            raise RuntimeError(
+                f'Encountered a permission error. Either the current principal ({account_data["Arn"]}) is not '
+                f'authorized to interact with AWS Organizations, or the current account '
+                f'({account_data["Account"]}) is not the management account'
+            )
         else:
             raise ex
 
@@ -875,7 +891,8 @@ def get_organizations_data(session: botocore.session.Session) -> OrganizationTre
         None,  # get SCPs later
         None,  # get account list later
         [],  # caller is responsible for creating and setting the edge list
-        {'pmapper_version': principalmapper.__version__}
+        {'pmapper_version': principalmapper.__version__},
+        partition
     )
 
     scp_list = []
@@ -904,7 +921,7 @@ def get_organizations_data(session: botocore.session.Session) -> OrganizationTre
             desc_policy_resp = orgsclient.describe_policy(PolicyId=policy_arn.split('/')[-1])
             scps_result.append(Policy(policy_arn, policy_name, json.loads(desc_policy_resp['Policy']['Content'])))
 
-        logger.debug('SCPs of {}: {}'.format(target_id, [x.arn for x in scps_result]))
+        logger.debug(f'SCPs of {target_id}: {[x.arn for x in scps_result]}')
 
         scp_list.extend(scps_result)
         return scps_result
@@ -918,7 +935,7 @@ def get_organizations_data(session: botocore.session.Session) -> OrganizationTre
             for tag in ltp_page['Tags']:
                 target_tags[tag['Key']] = tag['Value']
 
-        logger.debug('Tags for {}: {}'.format(target_id, target_tags))
+        logger.debug(f'Tags for {target_id}: {target_tags}')
         return target_tags
 
     # for each root, recursively grab child OUs while filling out OrganizationNode/OrganizationAccount objects
@@ -1002,4 +1019,4 @@ def _get_policy_by_arn_or_raise(arn: str, policies: List[Policy]) -> Policy:
     for policy in policies:
         if arn == policy.arn:
             return policy
-    raise ValueError('Could not locate policy {}.'.format(arn))
+    raise ValueError(f'Could not locate policy {arn}.')

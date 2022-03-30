@@ -55,11 +55,11 @@ def process_arguments(parsed_args: Namespace):
     graph = graph_actions.get_existing_graph(session, parsed_args.account)
 
     if parsed_args.only_privesc:
-        filepath = './{}-privesc-risks.{}'.format(graph.metadata['account_id'], parsed_args.filetype)
+        filepath = './{}-privesc-risks.{}'.format(graph.account, parsed_args.filetype)
         graph_writer.draw_privesc_paths(graph, filepath, parsed_args.filetype)
     else:
         # create file
-        filepath = './{}.{}'.format(graph.metadata['account_id'], parsed_args.filetype)
+        filepath = './{}.{}'.format(graph.account, parsed_args.filetype)
         graph_writer.handle_request(graph, filepath, parsed_args.filetype, parsed_args.with_services)
 
     print('Created file {}'.format(filepath))

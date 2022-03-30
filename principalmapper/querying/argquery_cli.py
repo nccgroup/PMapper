@@ -103,7 +103,7 @@ def process_arguments(parsed_args: Namespace):
     else:
         session = None
     graph = graph_actions.get_existing_graph(session, parsed_args.account)
-    logger.debug('Querying against graph {}'.format(graph.metadata['account_id']))
+    logger.debug('Querying against graph {}'.format(graph.account))
 
     # process condition args to generate input dict
     conditions = {}

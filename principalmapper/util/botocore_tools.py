@@ -46,7 +46,9 @@ def get_session(profile_arg: Optional[str], stsargs: Optional[dict] = None) -> b
     return result
 
 
-def get_regions_to_search(session: botocore.session.Session, service_name: str, region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None) -> List[str]:
+def get_regions_to_search(session: botocore.session.Session, service_name: str,
+                          region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None,
+                          partition: str = 'aws') -> List[str]:
     """Using a botocore Session object, the name of a service, and either an allow-list or a deny-list (but not both),
     return a list of regions to be used during the gathering process. This uses the botocore Session object's
     get_available_regions method as the base list.
@@ -58,12 +60,14 @@ def get_regions_to_search(session: botocore.session.Session, service_name: str, 
     thrown if a region is specified inthe deny-list but not included in the base list.
 
     A ValueError is thrown if the allow-list AND deny-list are both not None.
+
+    * **v1.2.0:** Added partition support (default to 'aws')
     """
 
     if region_allow_list is not None and region_deny_list is not None:
         raise ValueError('This function allows only either the allow-list or the deny-list, but NOT both.')
 
-    base_list = session.get_available_regions(service_name)
+    base_list = session.get_available_regions(service_name, partition)
 
     result = []
 
@@ -78,6 +82,6 @@ def get_regions_to_search(session: botocore.session.Session, service_name: str, 
     else:
         result = base_list
 
-    logger.debug('Final list of regions for {}: {}'.format(service_name, result))
+    logger.debug(f'Final list of regions for {service_name}: {result}')
 
     return result
