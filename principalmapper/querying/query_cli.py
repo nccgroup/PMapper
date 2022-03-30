@@ -35,44 +35,44 @@ def provide_arguments(parser: ArgumentParser):
     query component of Principal Mapper.
     """
     parser.add_argument(
-        '-s',
-        '--skip-admin',
-        action='store_true',
-        help='Ignores "admin" level principals when querying about multiple principals in an account'
+        "-s",
+        "--skip-admin",
+        action="store_true",
+        help='Ignores "admin" level principals when querying about multiple principals in an account',
     )
     parser.add_argument(
-        '-u',
-        '--include-unauthorized',
-        action='store_true',
-        help='Includes output to say if a given principal is not able to call an action.'
+        "-u",
+        "--include-unauthorized",
+        action="store_true",
+        help="Includes output to say if a given principal is not able to call an action.",
     )
     query_rpolicy_args = parser.add_mutually_exclusive_group()
     query_rpolicy_args.add_argument(
-        '--with-resource-policy',
-        action='store_true',
-        help='Retrieves and includes the resource policy for the resource in the query. Handles S3, IAM, SNS, SQS, and KMS.'
+        "--with-resource-policy",
+        action="store_true",
+        help="Retrieves and includes the resource policy for the resource in the query. Handles S3, IAM, SNS, SQS, and KMS.",
     )
     query_rpolicy_args.add_argument(
-        '--resource-policy-text',
-        help='The full text of a resource policy to consider during authorization evaluation.'
+        "--resource-policy-text",
+        help="The full text of a resource policy to consider during authorization evaluation.",
     )
     parser.add_argument(
-        '--resource-owner',
-        help='The account ID of the owner of the resource. Required for S3 objects (which do not have it in the ARN).'
+        "--resource-owner",
+        help="The account ID of the owner of the resource. Required for S3 objects (which do not have it in the ARN).",
     )
     parser.add_argument(
-        '--session-policy',
-        help='The full text of a session policy to consider during authorization evaluation.'
+        "--session-policy",
+        help="The full text of a session policy to consider during authorization evaluation.",
     )
     parser.add_argument(
-        '--scps',
-        action='store_true',
-        help='When specified, the SCPs that apply to the account are taken into consideration.'
+        "--scps",
+        action="store_true",
+        help="When specified, the SCPs that apply to the account are taken into consideration.",
     )
     parser.add_argument(
-        'query',
-        help='The query to execute.'
+        "--output-format", help="When specified, the output can be sent to json or csv"
     )
+    parser.add_argument("query", help="The query to execute.")
 
 
 def process_arguments(parsed_args: Namespace):
@@ -85,13 +85,11 @@ def process_arguments(parsed_args: Namespace):
         session = None
 
     graph = graph_actions.get_existing_graph(session, parsed_args.account)
-    logger.debug('Querying against graph {}'.format(graph.metadata['account_id']))
+    logger.debug("Querying against graph {}".format(graph.metadata["account_id"]))
 
     if parsed_args.with_resource_policy:
         resource_policy = query_utils.pull_cached_resource_policy_by_arn(
-            graph,
-            arn=None,
-            query=parsed_args.query
+            graph, arn=None, query=parsed_args.query
         )
     elif parsed_args.resource_policy_text:
         resource_policy = json.loads(parsed_args.resource_policy_text)
@@ -101,28 +99,41 @@ def process_arguments(parsed_args: Namespace):
     resource_owner = parsed_args.resource_owner
     if resource_policy is not None:
         if resource_owner is None:
-            if arns.get_service(resource_policy.arn) == 's3':
-                raise ValueError('Must supply resource owner (--resource-owner) when including S3 bucket policies '
-                                 'in a query')
+            if arns.get_service(resource_policy.arn) == "s3":
+                raise ValueError(
+                    "Must supply resource owner (--resource-owner) when including S3 bucket policies "
+                    "in a query"
+                )
             else:
                 resource_owner = arns.get_account_id(resource_policy.arn)
         if isinstance(resource_policy, Policy):
             resource_policy = resource_policy.policy_doc
 
     if parsed_args.scps:
-        if 'org-id' in graph.metadata and 'org-path' in graph.metadata:
-            org_tree_path = os.path.join(get_storage_root(), graph.metadata['org-id'])
+        if "org-id" in graph.metadata and "org-path" in graph.metadata:
+            org_tree_path = os.path.join(get_storage_root(), graph.metadata["org-id"])
             org_tree = OrganizationTree.create_from_dir(org_tree_path)
             scps = query_orgs.produce_scp_list(graph, org_tree)
         else:
-            raise ValueError('Graph for account {} does not have an associated OrganizationTree mapped (need to run '
-                             '`pmapper orgs create/update` to get that.')
+            raise ValueError(
+                "Graph for account {} does not have an associated OrganizationTree mapped (need to run "
+                "`pmapper orgs create/update` to get that."
+            )
     else:
         scps = None
 
+    output_format = parsed_args.output_format
+
     query_actions.query_response(
-        graph, parsed_args.query, parsed_args.skip_admin, resource_policy, resource_owner,
-        parsed_args.include_unauthorized, parsed_args.session_policy, scps
+        graph,
+        parsed_args.query,
+        parsed_args.skip_admin,
+        resource_policy,
+        resource_owner,
+        parsed_args.include_unauthorized,
+        parsed_args.session_policy,
+        scps,
+        output_format,
     )
 
     return 0
