@@ -57,10 +57,6 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
             continue  # skip non-roles
 
         for node_source in nodes:
-            # skip self-access checks
-            if node_source == node_destination:
-                continue
-
             # check if source is an admin, if so it can access destination but this is not tracked via an Edge
             if node_source.is_admin:
                 continue
@@ -78,8 +74,11 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
             if sim_result == ResourcePolicyEvalResult.DENY_MATCH:
                 continue  # Node was explicitly denied from assuming the role
 
-            if sim_result == ResourcePolicyEvalResult.NO_MATCH:
-                continue  # Resource policy must match for sts:AssumeRole, even in same-account scenarios
+            # In almost all cases, even in same-account scenarios, the resource policy must match for
+            # sts:AssumeRole. One exception to this is if the source and destination are the same, which
+            # matters for the circular access finding.
+            if sim_result == ResourcePolicyEvalResult.NO_MATCH and node_source.arn != node_destination.arn:
+                continue
 
             assume_auth, need_mfa = query_interface.local_check_authorization_handling_mfa(
                 node_source, 'sts:AssumeRole', node_destination.arn, {}, service_control_policy_groups=scps
