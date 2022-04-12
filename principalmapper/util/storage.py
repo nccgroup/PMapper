@@ -56,5 +56,16 @@ def get_storage_root():
 
 
 def get_default_graph_path(account_or_org: str):
-    """Returns a path to a given account or organization by the provided string."""
-    return os.path.join(get_storage_root(), account_or_org)
+    """Returns a path to a given account or organization by the provided string.
+
+    * **v1.2.0**: Added partition support, expected format is <partition>:<account_id>. If there's no partition,
+      default is 'aws'. If partition is not 'aws', then we add that to the directories we hop through.
+    """
+    if ':' in account_or_org:
+        argparts = account_or_org.split(':')
+        basedir = os.path.join(get_storage_root(), argparts[0])
+        acctid = argparts[1]
+    else:
+        basedir = get_storage_root()
+        acctid = account_or_org
+    return os.path.join(basedir, acctid)

@@ -90,10 +90,9 @@ def produce_scp_list(graph: Graph, org: OrganizationTree) -> Optional[List[List[
     want in that case."""
 
     if 'org-id' not in graph.metadata or 'org-path' not in graph.metadata:
-        raise ValueError('Given graph for account {} does not have AWS Organizations data (try running '
-                         '`pmapper orgs create/update`).')
+        raise ValueError(f'Given Graph for account {graph.account} does not have AWS Organizations data')
 
-    if graph.metadata['account_id'] == org.management_account_id:
+    if graph.account == org.management_account_id:
         return None
 
     result = []
@@ -101,6 +100,6 @@ def produce_scp_list(graph: Graph, org: OrganizationTree) -> Optional[List[List[
     # org-path is in the form '<organization ID>/<root ID>/[<OU 1>/<OU 2>/<OU N>/]' so we split and start from [1]
     org_path_parts = graph.metadata['org-path'].split('/')
 
-    _grab_policies_and_traverse(org.root_ous, org_path_parts, 1, graph.metadata['account_id'], result)
+    _grab_policies_and_traverse(org.root_ous, org_path_parts, 1, graph.account, result)
 
     return result

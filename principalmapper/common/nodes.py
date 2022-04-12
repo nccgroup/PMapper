@@ -105,7 +105,8 @@ class Node(object):
             self.cache['outbound_edges'] = []
             if self.is_admin:
                 for node in graph.nodes:
-                    if node == self:
+                    # skip self-links and links to service-linked roles (not even accessible to admins)
+                    if node == self or node.is_service_linked_role():
                         continue
                     else:
                         self.cache['outbound_edges'].append(
@@ -118,6 +119,15 @@ class Node(object):
                     if edge.source == self:
                         self.cache['outbound_edges'].append(edge)
         return self.cache['outbound_edges']
+
+    def is_service_linked_role(self):
+        if 'is_service_linked_role' not in self.cache:
+            if ':role/' in self.arn:
+                role_name = self.arn.split('/')[-1]
+                self.cache['is_service_linked_role'] = role_name.startswith('AWSServiceRoleFor')
+            else:
+                self.cache['is_service_linked_role'] = False
+        return self.cache['is_service_linked_role']
 
     def to_dictionary(self) -> dict:
         """Creates a dictionary representation of this Node for storage."""

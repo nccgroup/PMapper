@@ -21,6 +21,7 @@ import argparse
 import logging
 import sys
 
+import principalmapper
 from principalmapper.analysis import cli as analysis_cli
 from principalmapper.graphing import graph_cli
 from principalmapper.graphing import orgs_cli
@@ -48,6 +49,11 @@ def main() -> int:
         '--debug',
         action='store_true',
         help='Produces debug-level output of the underlying Principal Mapper library during execution.'
+    )
+    argument_parser.add_argument(
+        '--version',
+        action='version',
+        version=f'Principal Mapper v{principalmapper.__version__}'
     )
 
     # Create subparser for various subcommands

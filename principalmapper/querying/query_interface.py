@@ -113,7 +113,7 @@ def search_authorization_across_accounts(graph_scp_pairs: List[Tuple[Graph, Opti
 
     account_id_graph_scp_pair_map = {}
     for graph_scp_pair in graph_scp_pairs:
-        account_id_graph_scp_pair_map[graph_scp_pair[0].metadata['account_id']] = graph_scp_pair
+        account_id_graph_scp_pair_map[graph_scp_pair[0].account] = graph_scp_pair
     source_graph_scp_pair = account_id_graph_scp_pair_map[arns.get_account_id(principal.arn)]
 
     if local_check_authorization_full(principal, action_to_check, resource_to_check, condition_keys_to_check,
@@ -288,7 +288,7 @@ def local_check_authorization_full(principal: Node, action_to_check: str, resour
     prepped_condition_keys = _prepare_condition_context(conditions_keys_copy)
     prepped_condition_keys.update(_infer_condition_keys(principal, prepped_condition_keys))
 
-    is_not_service_linked_role = not _check_if_service_linked_role(principal)
+    is_not_service_linked_role = not principal.is_service_linked_role()
 
     logger.debug(
         'Testing authorization for: principal: {}, action: {}, resource: {}, conditions: {}, Resource Policy: {}, SCPs: {}, Session Policy: {}'.format(
@@ -399,17 +399,6 @@ def local_check_authorization_full(principal: Node, action_to_check: str, resour
                 return True  # already did Deny statement checks, so we're done
 
     logger.debug('Implicit Deny: Principal\'s Attached Policies')
-    return False
-
-
-def _check_if_service_linked_role(principal: Node) -> bool:
-    """Given a Node, determine if it should be treated as a service-linked role. This affects SCP policy decisions as
-    described in
-    https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps.html#not-restricted-by-scp"""
-
-    if ':role/' in principal.arn:
-        role_name = principal.arn.split('/')[-1]
-        return role_name.startswith('AWSServiceRoleFor')
     return False
 
 

@@ -28,8 +28,8 @@ from principalmapper.graphing.cross_account_edges import get_edges_between_graph
 from principalmapper.graphing.gathering import get_organizations_data
 from principalmapper.graphing.edge_identification import checker_map
 from principalmapper.querying import query_orgs
-from principalmapper.util import botocore_tools
-from principalmapper.util.storage import get_storage_root
+from principalmapper.util import botocore_tools, arns
+from principalmapper.util.storage import get_storage_root, get_default_graph_path
 
 
 logger = logging.getLogger(__name__)
@@ -149,9 +149,13 @@ def process_arguments(parsed_args: Namespace):
                 stsclient = session.create_client('sts')
             caller_identity = stsclient.get_caller_identity()
             caller_account = caller_identity['Account']
+            partition = arns.get_partition(caller_identity['Arn'])
             logger.debug("Caller Identity: {}".format(caller_identity))
 
-            org_tree_search_dir = Path(get_storage_root())
+            if partition == 'aws':
+                org_tree_search_dir = Path(get_storage_root())
+            else:
+                org_tree_search_dir = Path(os.path.join(get_storage_root(), partition))
             org_id_pattern = re.compile(r'/o-\w+')
             for subdir in org_tree_search_dir.iterdir():
                 if org_id_pattern.search(str(subdir)) is not None:
@@ -179,7 +183,12 @@ def process_arguments(parsed_args: Namespace):
         graph = graph_actions.create_new_graph(session, service_list, parsed_args.include_regions,
                                                parsed_args.exclude_regions, scps, client_args_map)
         graph_actions.print_graph_data(graph)
-        graph.store_graph_as_json(os.path.join(get_storage_root(), graph.metadata['account_id']))
+        if graph.partition == 'aws':
+            graphid = graph.account
+        else:
+            graphid = f'{graph.partition}:{graph.account}'
+
+        graph.store_graph_as_json(get_default_graph_path(graphid))
 
     elif parsed_args.picked_graph_cmd == 'display':
         if parsed_args.account is None:
@@ -205,5 +214,15 @@ def process_arguments(parsed_args: Namespace):
                     account_metadata = json.load(fd)
                 version = account_metadata['pmapper_version']
                 print("{} (PMapper Version {})".format(direct.name, version))
+
+        partition_pattern = re.compile(r'aws.*')
+        for direct in storage_root.iterdir():
+            if partition_pattern.search(str(direct)) is not None:
+                for subdirect in direct.iterdir():
+                    if account_id_pattern.search(str(subdirect)) is not None:
+                        metadata_file = subdirect.joinpath(Path('metadata.json'))
+                        with open(str(metadata_file)) as fd:
+                            version = json.load(fd)['pmapper_version']
+                        print(f'{direct.name}:{subdirect.name} (PMapper Version {version})')
 
     return 0

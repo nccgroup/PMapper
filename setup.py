@@ -37,7 +37,7 @@ setup(
     include_package_data=True,
     packages=find_packages(exclude=("tests", )),
     package_data={},
-    python_requires='>=3.5, <4',  # assume Python 4 will break
+    python_requires='>=3.6, <4',  # assume Python 4 will break
     install_requires=['botocore', 'packaging', 'python-dateutil', 'pydot'],
     entry_points={
         'console_scripts': [
@@ -57,6 +57,7 @@ setup(
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
         'Topic :: Security'
     ],
     keywords=[

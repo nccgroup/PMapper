@@ -24,7 +24,10 @@ from principalmapper.common import Edge, Node
 from principalmapper.graphing.autoscaling_edges import AutoScalingEdgeChecker
 from principalmapper.graphing.cloudformation_edges import CloudFormationEdgeChecker
 from principalmapper.graphing.codebuild_edges import CodeBuildEdgeChecker
+from principalmapper.graphing.datapipeline_edges import DataPipelineEdgeChecker
 from principalmapper.graphing.ec2_edges import EC2EdgeChecker
+from principalmapper.graphing.ecs_edges import ECSEdgeChecker
+from principalmapper.graphing.glue_edges import GlueEdgeChecker
 from principalmapper.graphing.iam_edges import IAMEdgeChecker
 from principalmapper.graphing.lambda_edges import LambdaEdgeChecker
 from principalmapper.graphing.sagemaker_edges import SageMakerEdgeChecker
@@ -40,7 +43,10 @@ checker_map = {
     'autoscaling': AutoScalingEdgeChecker,
     'cloudformation': CloudFormationEdgeChecker,
     'codebuild': CodeBuildEdgeChecker,
+    'datapipeline': DataPipelineEdgeChecker,
     'ec2': EC2EdgeChecker,
+    'ecs': ECSEdgeChecker,  # TODO: need to verify ECS work
+    'glue': GlueEdgeChecker,
     'iam': IAMEdgeChecker,
     'lambda': LambdaEdgeChecker,
     'sagemaker': SageMakerEdgeChecker,
@@ -51,14 +57,17 @@ checker_map = {
 
 def obtain_edges(session: Optional[botocore.session.Session], checker_list: List[str], nodes: List[Node],
                  region_allow_list: Optional[List[str]] = None, region_deny_list: Optional[List[str]] = None,
-                 scps: Optional[List[List[dict]]] = None, client_args_map: Optional[dict] = None) -> List[Edge]:
+                 scps: Optional[List[List[dict]]] = None, client_args_map: Optional[dict] = None,
+                 partition: str = 'aws') -> List[Edge]:
     """Given a list of nodes and a botocore Session, return a list of edges between those nodes. Only checks
     against services passed in the checker_list param. """
     result = []
     logger.info('Initiating edge checks.')
-    logger.debug('Services being checked for edges: {}'.format(checker_list))
+    logger.debug(f'Services being checked for edges: {checker_list}')
     for check in checker_list:
         if check in checker_map:
             checker_obj = checker_map[check](session)
-            result.extend(checker_obj.return_edges(nodes, region_allow_list, region_deny_list, scps, client_args_map))
+            result.extend(
+                checker_obj.return_edges(nodes, region_allow_list, region_deny_list, scps, client_args_map, partition)
+            )
     return result

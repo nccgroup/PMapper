@@ -47,3 +47,9 @@ class TestEdgeIdentification(unittest.TestCase):
         self.assertTrue(is_connected(graph, admin_user_node, jump_user))
         self.assertTrue(is_connected(graph, admin_user_node, nonassumable_role_node))
         self.assertTrue(is_connected(graph, other_jump_user, other_assumable_role))
+
+    def test_mfa_assume_role(self):
+        graph = build_playground_graph()
+        source_node = graph.get_node_by_searchable_name('user/jumpuser')
+        mfa_target_node = graph.get_node_by_searchable_name('role/mfa_role_with_s3_access')
+        self.assertTrue(is_connected(graph, source_node, mfa_target_node))

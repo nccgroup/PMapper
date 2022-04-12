@@ -45,7 +45,7 @@ def get_edges_between_graphs(graph_a: Graph, graph_b: Graph, scps_a: Optional[Li
             conditions['aws:username'] = na.searchable_name().split('/')[1]
 
         conditions['aws:SecureTransport'] = 'true'
-        conditions['aws:PrincipalAccount'] = ga.metadata['account_id']
+        conditions['aws:PrincipalAccount'] = ga.account
         conditions['aws:PrincipalArn'] = na.arn
         if 'org-id' in ga.metadata:
             conditions['aws:PrincipalOrgID'] = ga.metadata['org-id']

@@ -19,6 +19,10 @@ import os
 import os.path
 from typing import List, Optional, Tuple
 
+import packaging
+import packaging.version
+
+import principalmapper
 from principalmapper.common import Edge
 from principalmapper.common.policies import Policy
 
@@ -86,10 +90,13 @@ class OrganizationNode(object):
 class OrganizationTree(object):
     """The OrganizationGraph object represents an AWS Organization, which is a collection of AWS accounts. These
     accounts are organized in a hierarchy (we use a tree for this).
+
+    * **v1.2.0:** Added the required 'partition' field
     """
 
     def __init__(self, org_id: str, management_account_id: str, root_ous: List[OrganizationNode],
-                 all_scps: List[Policy], accounts: List[str], edge_list: List[Edge], metadata: dict):
+                 all_scps: List[Policy], accounts: List[str], edge_list: List[Edge], metadata: dict,
+                 partition: str):
         self.org_id = org_id
         self.management_account_id = management_account_id
         self.root_ous = root_ous
@@ -99,6 +106,7 @@ class OrganizationTree(object):
         if 'pmapper_version' not in metadata:
             raise ValueError('The pmapper_version key/value (str) is required: {"pmapper_version": "..."}')
         self.metadata = metadata
+        self.partition = partition
 
     def as_dictionary(self) -> dict:
         """Returns a dictionary representation of this OrganizationTree object. Used for serialization to disk. We
@@ -109,7 +117,8 @@ class OrganizationTree(object):
             'management_account_id': self.management_account_id,
             'root_ous': [x.as_dictionary() for x in self.root_ous],
             'edge_list': [x.to_dictionary() for x in self.edge_list],
-            'accounts': self.accounts
+            'accounts': self.accounts,
+            'partition': self.partition
         }
 
     def save_organization_to_disk(self, dirpath: str):
@@ -163,6 +172,17 @@ class OrganizationTree(object):
         with open(metadata_filepath) as fd:
             metadata_obj = json.load(fd)
 
+        # verify pmapper_version
+        current_pmapper_version = packaging.version.parse(principalmapper.__version__)
+        loaded_orgtree_version = packaging.version.parse(metadata_obj['pmapper_version'])
+        if current_pmapper_version.major != loaded_orgtree_version.major or current_pmapper_version.minor != loaded_orgtree_version.minor:
+            raise ValueError(
+                f'The loaded organization data came from a different version of Principal Mapper '
+                f'({str(loaded_orgtree_version)}) that is not compatible with this version of Principal Mapper '
+                f'({str(current_pmapper_version)}). You will need to recreate the organization (`pmapper orgs '
+                f'create`).'
+            )
+
         # load the OrganizationX objects
         org_datafile_path = os.path.join(dirpath, 'org_data.json')
         with open(org_datafile_path) as fd:
@@ -188,5 +208,6 @@ class OrganizationTree(object):
             [x for x in policies.values()],
             org_dictrepr['accounts'],
             org_dictrepr['edge_list'],
-            metadata_obj
+            metadata_obj,
+            org_dictrepr['partition']
         )
