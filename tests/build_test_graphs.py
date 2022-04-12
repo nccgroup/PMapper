@@ -24,7 +24,7 @@ from principalmapper.graphing.edge_identification import obtain_edges, checker_m
 
 def build_empty_graph() -> Graph:
     """Constructs and returns a Graph object with no nodes, edges, policies, or groups"""
-    return Graph([], [], [], [], _get_default_metadata())
+    return Graph([], [], [], [], '000000000000', 'aws', _get_default_metadata())
 
 
 def build_graph_with_one_admin() -> Graph:
@@ -72,6 +72,24 @@ def build_playground_graph() -> Graph:
     nodes.append(Node(common_iam_prefix + 'role/s3_access_role', 'AIDA00000000000000003', [s3_full_access_policy], [], root_trusted_policy_doc,
                       None, 0, False, False, None, False, None))
 
+    # assumable role with s3 access and MFA required to assume
+    nodes.append(Node(common_iam_prefix + 'role/mfa_role_with_s3_access', 'AIDA0000000000000099', [s3_full_access_policy], [],
+                      {
+                          'Version': '2012-10-17',
+                          'Statement': [
+                              {
+                                  'Effect': 'Allow',
+                                  'Principal': {'AWS': 'arn:aws:iam::000000000000:root'},
+                                  'Action': 'sts:AssumeRole',
+                                  'Condition': {
+                                      'Bool': {
+                                          'aws:MultiFactorAuthPresent': 'true'
+                                      }
+                                  }
+                              }
+                          ]
+                      }, None, 0, False, False, None, False, None))
+
     # second assumable role with s3 access with alternative trust policy
     nodes.append(Node(common_iam_prefix + 'role/s3_access_role_alt', 'AIDA00000000000000004', [s3_full_access_policy], [],
                  alt_root_trusted_policy_doc, None, 0, False, False, None, False, None))
@@ -81,7 +99,7 @@ def build_playground_graph() -> Graph:
                       other_acct_trusted_policy_doc, None, 0, False, False, None, False, None))
 
     # jump user with access to sts:AssumeRole
-    nodes.append(Node(common_iam_prefix + 'user/jumpuser', 'AIDA00000000000000006', [jump_policy], [], None, None, 1, True, False, None, False, None))
+    nodes.append(Node(common_iam_prefix + 'user/jumpuser', 'AIDA00000000000000006', [jump_policy], [], None, None, 1, True, False, None, True, None))
 
     # user with S3 access, path in user's ARN
     nodes.append(Node(common_iam_prefix + 'user/somepath/some_other_jumpuser', 'AIDA00000000000000007', [jump_policy],

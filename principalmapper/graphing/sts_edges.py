@@ -25,6 +25,7 @@ from principalmapper.graphing.edge_checker import EdgeChecker
 from principalmapper.querying import query_interface
 from principalmapper.querying.local_policy_simulation import resource_policy_authorization, ResourcePolicyEvalResult, has_matching_statement
 from principalmapper.util import arns
+from principalmapper.util.case_insensitive_dict import CaseInsensitiveDict
 
 
 logger = logging.getLogger(__name__)
@@ -66,6 +67,7 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
                 continue
 
             # Check against resource policy
+            rp_mfa_required = False
             sim_result = resource_policy_authorization(
                 node_source,
                 arns.get_account_id(node_source.arn),
@@ -75,11 +77,22 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
                 {},
             )
 
-            if sim_result == ResourcePolicyEvalResult.DENY_MATCH:
-                continue  # Node was explicitly denied from assuming the role
-
-            if sim_result == ResourcePolicyEvalResult.NO_MATCH:
-                continue  # Resource policy must match for sts:AssumeRole, even in same-account scenarios
+            if sim_result == ResourcePolicyEvalResult.DENY_MATCH or sim_result == ResourcePolicyEvalResult.NO_MATCH:
+                sim_result = resource_policy_authorization(
+                    node_source,
+                    arns.get_account_id(node_source.arn),
+                    node_destination.trust_policy,
+                    'sts:AssumeRole',
+                    node_destination.arn,
+                    {
+                        'aws:MultiFactorAuthAge': '1',
+                        'aws:MultiFactorAuthPresent': 'true'
+                    }
+                )
+                if sim_result == ResourcePolicyEvalResult.DENY_MATCH or sim_result == ResourcePolicyEvalResult.NO_MATCH:
+                    continue
+                else:
+                    rp_mfa_required = True  # Resource Policy auth check passed when MFA elements set
 
             assume_auth, need_mfa = query_interface.local_check_authorization_handling_mfa(
                 node_source, 'sts:AssumeRole', node_destination.arn, {}, service_control_policy_groups=scps
@@ -89,21 +102,21 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
                 'Deny',
                 'sts:AssumeRole',
                 node_destination.arn,
-                {},
+                CaseInsensitiveDict({}),
             )
             policy_denies_mfa = has_matching_statement(
                 node_source,
                 'Deny',
                 'sts:AssumeRole',
                 node_destination.arn,
-                {
+                CaseInsensitiveDict({
                     'aws:MultiFactorAuthAge': '1',
                     'aws:MultiFactorAuthPresent': 'true'
-                },
+                }),
             )
 
             if assume_auth:
-                if need_mfa:
+                if need_mfa or rp_mfa_required:
                     reason = '(requires MFA) can access via sts:AssumeRole'
                 else:
                     reason = 'can access via sts:AssumeRole'
