@@ -75,6 +75,22 @@ class GlueEdgeChecker(EdgeChecker):
                                        f'devEndpoint/{endpoint["EndpointName"]}'
                         endpoint_role_list.append((endpoint_arn, role_node))
 
+                # paginate thru existing Glue Jobs
+                for page in glue_client.get_paginator('get_jobs').paginate():
+                    for job in page['Jobs']:
+                        role_node = None
+                        if 'Role' in job:
+                            for node in nodes:
+                                if node.arn == job['Role']:
+                                    role_node = node
+                                    break
+
+                        if len(nodes) == 0:
+                            break  # causes false-negatives if there's no users/roles in the account
+                        job_arn = f'arn:{partition}:glue:{current_region}:{arns.get_account_id(nodes[0].arn)}:' \
+                                       f'job/{job["Name"]}'
+                        endpoint_role_list.append((job_arn, role_node))
+
             except ClientError as ex:
                 logger.warning('Unable to search region {} for projects. The region may be disabled, or the error may '
                                'be caused by an authorization issue. Continuing.'.format(glue_client.meta.region_name))
@@ -132,19 +148,39 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
 
             # check if source can use existing endpoints to access destination
             if node_destination in node_endpoint_map:
-                for target_endpoint in node_endpoint_map[node_destination]:
+                for target in node_endpoint_map[node_destination]:
                     update_ep_auth, update_ep_needs_mfa = query_interface.local_check_authorization_handling_mfa(
                         node_source,
                         'glue:UpdateDevEndpoint',
-                        target_endpoint,
+                        target,
                         {},
                         service_control_policy_groups=scps
                     )
                     if update_ep_auth:
                         if update_ep_needs_mfa:
-                            reason = f'(requires MFA) can use the Glue resource {target_endpoint} to access'
+                            reason = f'(requires MFA) can use the Glue resource {target} to access'
                         else:
-                            reason = f'can use the Glue resource {target_endpoint} to access'
+                            reason = f'can use the Glue resource {target} to access'
+                        results.append(Edge(
+                            node_source,
+                            node_destination,
+                            reason,
+                            'Glue'
+                        ))
+                        break
+
+                    update_job_auth, update_job_needs_mfa = query_interface.local_check_authorization_handling_mfa(
+                        node_source,
+                        'glue:UpdateJob',
+                        target,
+                        {},
+                        service_control_policy_groups=scps
+                    )
+                    if update_job_auth:
+                        if update_job_needs_mfa:
+                            reason = f'(requires MFA) can use the Glue resource {target} to access'
+                        else:
+                            reason = f'can use the Glue resource {target} to access'
                         results.append(Edge(
                             node_source,
                             node_destination,
@@ -176,6 +212,26 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
                         reason = '(requires MFA) can call glue:CreateDevEndpoint to access'
                     else:
                         reason = 'can call glue:CreateDevEndpoint to access'
+                    results.append(Edge(
+                        node_source,
+                        node_destination,
+                        reason,
+                        'Glue'
+                    ))
+
+                create_job_auth, create_job_needs_mfa = query_interface.local_check_authorization_handling_mfa(
+                    node_source,
+                    'glue:CreateJob',
+                    '*',
+                    {},
+                    service_control_policy_groups=scps
+                )
+
+                if create_job_auth:
+                    if passrole_needs_mfa or create_job_needs_mfa:
+                        reason = '(requires MFA) can call glue:CreateJob to access'
+                    else:
+                        reason = 'can call glue:CreateJob to access'
                     results.append(Edge(
                         node_source,
                         node_destination,
