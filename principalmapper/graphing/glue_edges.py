@@ -149,45 +149,45 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
             # check if source can use existing endpoints to access destination
             if node_destination in node_endpoint_map:
                 for target in node_endpoint_map[node_destination]:
-                    update_ep_auth, update_ep_needs_mfa = query_interface.local_check_authorization_handling_mfa(
-                        node_source,
-                        'glue:UpdateDevEndpoint',
-                        target,
-                        {},
-                        service_control_policy_groups=scps
-                    )
-                    if update_ep_auth:
-                        if update_ep_needs_mfa:
-                            reason = f'(requires MFA) can use the Glue resource {target} to access'
-                        else:
-                            reason = f'can use the Glue resource {target} to access'
-                        results.append(Edge(
+                    if ':devEndpoint/' in target:
+                        update_ep_auth, update_ep_needs_mfa = query_interface.local_check_authorization_handling_mfa(
                             node_source,
-                            node_destination,
-                            reason,
-                            'Glue'
-                        ))
-                        break
+                            'glue:UpdateDevEndpoint',
+                            target,
+                            {},
+                            service_control_policy_groups=scps
+                        )
+                        if update_ep_auth:
+                            if update_ep_needs_mfa:
+                                reason = f'(requires MFA) can use the Glue resource {target} to access'
+                            else:
+                                reason = f'can use the Glue resource {target} to access'
+                            results.append(Edge(
+                                node_source,
+                                node_destination,
+                                reason,
+                                'Glue'
+                            ))
 
-                    update_job_auth, update_job_needs_mfa = query_interface.local_check_authorization_handling_mfa(
-                        node_source,
-                        'glue:UpdateJob',
-                        target,
-                        {},
-                        service_control_policy_groups=scps
-                    )
-                    if update_job_auth:
-                        if update_job_needs_mfa:
-                            reason = f'(requires MFA) can use the Glue resource {target} to access'
-                        else:
-                            reason = f'can use the Glue resource {target} to access'
-                        results.append(Edge(
+                    if ':job/' in target:
+                        update_job_auth, update_job_needs_mfa = query_interface.local_check_authorization_handling_mfa(
                             node_source,
-                            node_destination,
-                            reason,
-                            'Glue'
-                        ))
-                        break
+                            'glue:UpdateJob',
+                            target,
+                            {},
+                            service_control_policy_groups=scps
+                        )
+                        if update_job_auth:
+                            if update_job_needs_mfa:
+                                reason = f'(requires MFA) can use the Glue resource {target} to access'
+                            else:
+                                reason = f'can use the Glue resource {target} to access'
+                            results.append(Edge(
+                                node_source,
+                                node_destination,
+                                reason,
+                                'Glue'
+                            ))
 
             # check if source can create a new endpoint to access destination
             passrole_auth, passrole_needs_mfa = query_interface.local_check_authorization_handling_mfa(
