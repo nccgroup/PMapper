@@ -31,7 +31,8 @@
 #      See the License for the specific language governing permissions and
 #      limitations under the License.
 
-from collections import Mapping, MutableMapping, OrderedDict
+from collections.abc import Mapping, MutableMapping
+from collections import OrderedDict
 
 
 class CaseInsensitiveDict(MutableMapping):
