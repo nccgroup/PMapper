@@ -888,7 +888,7 @@ def _statement_matches_resource(statement: dict, resource: str, condition_keys: 
         return True
 
 
-@functools.lru_cache(maxsize=2048, typed=True)
+@functools.lru_cache(maxsize=2048*64, typed=True)
 def _compose_pattern(string_to_transform) -> Pattern:
     """Helper function that transforms a string with potential wildcards (* or ?) into a regular expression.
     Uses the functools.lru_cache decorator to reduce re-compiling the same value multiple times."""
