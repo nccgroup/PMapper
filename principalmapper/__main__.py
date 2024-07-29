@@ -28,7 +28,7 @@ from principalmapper.querying import query_cli
 from principalmapper.querying import argquery_cli
 from principalmapper.querying import repl_cli
 from principalmapper.visualizing import cli as visualizing_cli
-
+from principalmapper.neo4j import neo4j_cli
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +113,14 @@ def main() -> int:
     )
     analysis_cli.provide_arguments(analysisparser)
 
+    # Neo4j subcommand
+    neo4jparser = subparser.add_parser(
+        'neo4j',
+        description='Ingests data into a Neo4j database',
+        help='Ingests data into a Neo4j database'
+    )
+    neo4j_cli.provide_arguments(neo4jparser)
+
     parsed_args = argument_parser.parse_args()
 
     # setup our outputs here
@@ -155,6 +163,8 @@ def main() -> int:
         return visualizing_cli.process_arguments(parsed_args)
     elif parsed_args.picked_cmd == 'analysis':
         return analysis_cli.process_arguments(parsed_args)
+    elif parsed_args.picked_cmd == 'neo4j':
+        return neo4j_cli.process_arguments(parsed_args)
 
     return 64  # /usr/include/sysexits.h
 

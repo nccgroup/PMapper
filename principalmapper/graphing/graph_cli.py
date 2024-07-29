@@ -27,6 +27,7 @@ from principalmapper.graphing import graph_actions
 from principalmapper.graphing.cross_account_edges import get_edges_between_graphs
 from principalmapper.graphing.gathering import get_organizations_data
 from principalmapper.graphing.edge_identification import checker_map
+from principalmapper.graphing import edge_identification
 from principalmapper.querying import query_orgs
 from principalmapper.util import botocore_tools
 from principalmapper.util.storage import get_storage_root
@@ -96,6 +97,102 @@ def provide_arguments(parser: ArgumentParser):
         metavar='SERVICE'
     )
 
+    # args for commands fitting the pattern "pmapper graph create_without_edges ..."
+    create_without_edges_parser = graph_subparser.add_parser(
+        'create_without_edges',
+        description='Creates a Graph object for a given AWS account',
+        help='Creates a Graph object for a given AWS account'
+    )
+    create_without_edges_parser.add_argument(
+        '--ignore-orgs',
+        action='store_true',
+        help='If specified, skips the check for stored AWS Organizations data and ignores any potentially applicable SCPs during the graph creation process'
+    )
+    
+
+    alt_data_source_group = create_without_edges_parser.add_mutually_exclusive_group()
+    alt_data_source_group.add_argument(
+        '--localstack-endpoint',
+        help='The HTTP(S) endpoint for a running instance of LocalStack'
+    )
+
+    # create cmd args for including/excluding regions
+    region_args_group = create_without_edges_parser.add_mutually_exclusive_group()
+    region_args_group.add_argument(
+        '--include-regions',
+        nargs='*',
+        help='An allow-list of regions to pull data from, cannot be combined with --exclude-regions, the `global` region is always included',
+        metavar='REGION'
+    )
+    region_args_group.add_argument(
+        '--exclude-regions',
+        nargs='*',
+        help='A deny-list of regions to pull data from, cannot be combined with --include-regions, the `global` region is always included',
+        metavar='REGION'
+    )
+
+    service_args_group = create_without_edges_parser.add_mutually_exclusive_group()
+    service_args_group.add_argument(
+        '--include-services',
+        nargs='*',
+        help='An allow-list of services to search for Edge objects, cannot be combined with --exclude-services',
+        metavar='SERVICE'
+    )
+    service_args_group.add_argument(
+        '--exclude-services',
+        nargs='*',
+        help='A deny-list of services to search for Edge objects, cannot be combined with --include-services',
+        metavar='SERVICE'
+    )
+
+    # args for commands fitting the pattern "pmapper graph add_edges ..."
+    add_edges_parser = graph_subparser.add_parser(
+        'add_edges',
+        description='Creates a Graph object for a given AWS account',
+        help='Creates a Graph object for a given AWS account'
+    )
+    add_edges_parser.add_argument(
+        '--ignore-orgs',
+        action='store_true',
+        help='If specified, skips the check for stored AWS Organizations data and ignores any potentially applicable SCPs during the graph creation process'
+    )
+    
+
+    alt_data_source_group = add_edges_parser.add_mutually_exclusive_group()
+    alt_data_source_group.add_argument(
+        '--localstack-endpoint',
+        help='The HTTP(S) endpoint for a running instance of LocalStack'
+    )
+
+    # create cmd args for including/excluding regions
+    region_args_group = add_edges_parser.add_mutually_exclusive_group()
+    region_args_group.add_argument(
+        '--include-regions',
+        nargs='*',
+        help='An allow-list of regions to pull data from, cannot be combined with --exclude-regions, the `global` region is always included',
+        metavar='REGION'
+    )
+    region_args_group.add_argument(
+        '--exclude-regions',
+        nargs='*',
+        help='A deny-list of regions to pull data from, cannot be combined with --include-regions, the `global` region is always included',
+        metavar='REGION'
+    )
+
+    service_args_group = add_edges_parser.add_mutually_exclusive_group()
+    service_args_group.add_argument(
+        '--include-services',
+        nargs='*',
+        help='An allow-list of services to search for Edge objects, cannot be combined with --exclude-services',
+        metavar='SERVICE'
+    )
+    service_args_group.add_argument(
+        '--exclude-services',
+        nargs='*',
+        help='A deny-list of services to search for Edge objects, cannot be combined with --include-services',
+        metavar='SERVICE'
+    )
+
     # args for commands fitting the pattern "pmapper graph display ..."
     display_parser = graph_subparser.add_parser(
         'display',
@@ -115,7 +212,7 @@ def process_arguments(parsed_args: Namespace):
     """Given a namespace object generated from parsing args, perform the appropriate tasks. Returns an int
     matching expectations set by /usr/include/sysexits.h for command-line utilities."""
 
-    if parsed_args.picked_graph_cmd == 'create':
+    if parsed_args.picked_graph_cmd == 'create' or parsed_args.picked_graph_cmd == 'create_without_edges':
         logger.debug('Called create subcommand of graph')
 
         # filter the args first
@@ -176,10 +273,104 @@ def process_arguments(parsed_args: Namespace):
         else:
             client_args_map = None
 
-        graph = graph_actions.create_new_graph(session, service_list, parsed_args.include_regions,
-                                               parsed_args.exclude_regions, scps, client_args_map)
+        
+        graph = graph_actions.create_new_graph_without_edges(session, service_list, parsed_args.include_regions,
+                                            parsed_args.exclude_regions, scps, client_args_map)
+        
         graph_actions.print_graph_data(graph)
         graph.store_graph_as_json(os.path.join(get_storage_root(), graph.metadata['account_id']))
+
+        if parsed_args.picked_graph_cmd == 'create':
+            edges_result = edge_identification.obtain_edges(
+                session,
+                service_list,
+                graph.nodes,
+                parsed_args.include_regions,
+                parsed_args.exclude_regions,
+                scps,
+                client_args_map
+            )
+
+            graph.edges = edges_result
+
+            graph_actions.print_graph_data(graph)
+            graph.store_graph_as_json(os.path.join(get_storage_root(), graph.metadata['account_id']))
+
+    elif parsed_args.picked_graph_cmd == 'add_edges':
+        if parsed_args.account is None:
+            session = botocore_tools.get_session(parsed_args.profile)
+        else:
+            session = None
+
+        graph = graph_actions.get_existing_graph(
+            session,
+            parsed_args.account
+        )
+
+        service_list_base = list(checker_map.keys())
+        if parsed_args.include_services is not None:
+            service_list = [x for x in service_list_base if x in parsed_args.include_services]
+        elif parsed_args.exclude_services is not None:
+            service_list = [x for x in service_list_base if x not in parsed_args.exclude_services]
+        else:
+            service_list = service_list_base
+        logger.debug('Service list after processing args: {}'.format(service_list))
+
+        # need to know account ID to search potential SCPs
+        if parsed_args.localstack_endpoint is not None:
+            session = botocore_tools.get_session(parsed_args.profile, {'endpoint_url': parsed_args.localstack_endpoint})
+        else:
+            session = botocore_tools.get_session(parsed_args.profile)
+
+        scps = None
+        if not parsed_args.ignore_orgs:
+            if parsed_args.localstack_endpoint is not None:
+                stsclient = session.create_client('sts', endpoint_url=parsed_args.localstack_endpoint)
+            else:
+                stsclient = session.create_client('sts')
+            caller_identity = stsclient.get_caller_identity()
+            caller_account = caller_identity['Account']
+            logger.debug("Caller Identity: {}".format(caller_identity))
+
+            org_tree_search_dir = Path(get_storage_root())
+            org_id_pattern = re.compile(r'/o-\w+')
+            for subdir in org_tree_search_dir.iterdir():
+                if org_id_pattern.search(str(subdir)) is not None:
+                    logger.debug('Checking {} to see if account {} is a member'.format(str(subdir), caller_account))
+                    org_tree = OrganizationTree.create_from_dir(str(subdir))
+                    if caller_account in org_tree.accounts:
+                        logger.info('Account {} is a member of Organization {}'.format(caller_account, org_tree.org_id))
+                        if caller_account == org_tree.management_account_id:
+                            logger.info('Account {} is the management account, SCPs do not apply'.format(caller_account))
+                        else:
+                            logger.info('Identifying and applying SCPs for the graphing process')
+                            scps = query_orgs.produce_scp_list_by_account_id(caller_account, org_tree)
+                        break
+
+        if parsed_args.localstack_endpoint is not None:
+            full_service_list = ('autoscaling', 'cloudformation', 'codebuild', 'ec2', 'iam', 'kms', 'lambda',
+                                 'sagemaker', 's3', 'ssm', 'secretsmanager', 'sns', 'sts', 'sqs')
+
+            client_args_map = {
+                x: {'endpoint_url': parsed_args.localstack_endpoint} for x in full_service_list
+            }
+        else:
+            client_args_map = None
+
+        edges_result = edge_identification.obtain_edges(
+            session,
+            service_list,
+            graph.nodes,
+            parsed_args.include_regions,
+            parsed_args.exclude_regions,
+            scps,
+            client_args_map
+        )
+
+        graph.edges = edges_result
+        graph_actions.print_graph_data(graph)
+        graph.store_graph_as_json(os.path.join(get_storage_root(), graph.metadata['account_id']))
+
 
     elif parsed_args.picked_graph_cmd == 'display':
         if parsed_args.account is None:

@@ -103,6 +103,67 @@ def create_graph(session: botocore.session.Session, service_list: list, region_a
 
     return Graph(nodes_result, edges_result, policies_result, groups_result, metadata)
 
+def create_graph_without_edges(session: botocore.session.Session, service_list: list, region_allow_list: Optional[List[str]] = None,
+                 region_deny_list: Optional[List[str]] = None, scps: Optional[List[List[dict]]] = None,
+                 client_args_map: Optional[dict] = None) -> Graph:
+    """Constructs a Graph object.
+
+    Information about the graph as it's built will be written to the IO parameter `output`.
+
+    The region allow/deny lists are mutually-exclusive (i.e. at least one of which has the value None) lists of
+    allowed/denied regions to pull data from. Note that we don't do the same allow/deny list parameters for the
+    service list, because that is a fixed property of what pmapper supports as opposed to an unknown/uncontrolled
+    list of regions that AWS supports.
+
+    The `client_args_map` is either None (default) or a dictionary containing a mapping of service -> keyword args for
+    when the client is created for the service. For example, if you want to specify a different endpoint URL
+    when calling IAM, your map should look like:
+
+    ```
+    client_args_map = {'iam': {'endpoint_url': 'http://localhost:4456'}}
+    ```
+
+    Later on, when calling create_client('iam', ...) the map will be added via kwargs
+    """
+
+    if client_args_map is None:
+        client_args_map = {}
+
+    stsargs = client_args_map.get('sts', {})
+    stsclient = session.create_client('sts', **stsargs)
+    logger.debug(stsclient.meta.endpoint_url)
+    caller_identity = stsclient.get_caller_identity()
+    logger.debug("Caller Identity: {}".format(caller_identity['Arn']))
+    metadata = {
+        'account_id': caller_identity['Account'],
+        'pmapper_version': principalmapper.__version__
+    }
+
+    iamargs = client_args_map.get('iam', {})
+    iamclient = session.create_client('iam', **iamargs)
+
+    results = get_nodes_groups_and_policies(iamclient)
+    nodes_result = results['nodes']
+    groups_result = results['groups']
+    policies_result = results['policies']
+
+    # Determine which nodes are admins and update node objects
+    update_admin_status(nodes_result, scps)
+
+    # Generate edges, generate Edge objects
+    edges_result = []
+
+    # Pull S3, SNS, SQS, KMS, and Secrets Manager resource policies
+    try:
+        policies_result.extend(get_s3_bucket_policies(session, client_args_map))
+        policies_result.extend(get_sns_topic_policies(session, region_allow_list, region_deny_list, client_args_map))
+        policies_result.extend(get_sqs_queue_policies(session, caller_identity['Account'], region_allow_list, region_deny_list, client_args_map))
+        policies_result.extend(get_kms_key_policies(session, region_allow_list, region_deny_list, client_args_map))
+        policies_result.extend(get_secrets_manager_policies(session, region_allow_list, region_deny_list, client_args_map))
+    except:
+        pass
+
+    return Graph(nodes_result, edges_result, policies_result, groups_result, metadata)
 
 def get_nodes_groups_and_policies(iamclient) -> dict:
     """Using an IAM.Client object, return a dictionary containing nodes, groups, and policies to be
@@ -538,12 +599,12 @@ def get_unfilled_nodes(iamclient) -> List[Node]:
                 group_memberships=[],
                 trust_policy=None,
                 instance_profile=None,
-                num_access_keys=0,
+                access_keys=0,
                 active_password='PasswordLastUsed' in user,
                 is_admin=False,
                 permissions_boundary=_pb,
                 has_mfa=False,
-                tags=None  # TODO: fix tags for old user-gathering method
+                tags=None,  # TODO: fix tags for old user-gathering method
             ))
             logger.debug('Adding Node for user ' + user['Arn'])
 
@@ -565,12 +626,12 @@ def get_unfilled_nodes(iamclient) -> List[Node]:
                 group_memberships=[],
                 trust_policy=role['AssumeRolePolicyDocument'],
                 instance_profile=None,
-                num_access_keys=0,
+                access_keys=0,
                 active_password=False,
                 is_admin=False,
                 permissions_boundary=_pb,
                 has_mfa=False,
-                tags=None  # TODO: fix tags for old role-gathering method
+                tags=None,  # TODO: fix tags for old role-gathering method
             ))
 
     # Get instance profiles, paginating results, and attach to roles as appropriate

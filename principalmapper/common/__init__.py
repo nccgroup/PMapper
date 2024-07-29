@@ -22,7 +22,7 @@ from principalmapper.common.edges import Edge
 from principalmapper.common.graphs import Graph
 from principalmapper.common.groups import Group
 from principalmapper.common.policies import Policy
-from principalmapper.common.org_trees import OrganizationAccount, OrganizationNode, OrganizationTree
+from principalmapper.common.org_trees import OrganizationAccount, OrganizationNode, OrganizationTree, IdentityStore
 
 # Put submodules into __all__ for neater interface of principalmapper.common
-__all__ = ['Node', 'Edge', 'Graph', 'Group', 'Policy', 'OrganizationAccount', 'OrganizationNode', 'OrganizationTree']
+__all__ = ['Node', 'Edge', 'Graph', 'Group', 'Policy', 'OrganizationAccount', 'OrganizationNode', 'OrganizationTree', 'IdentityStore']

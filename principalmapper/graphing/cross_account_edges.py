@@ -54,7 +54,13 @@ def get_edges_between_graphs(graph_a: Graph, graph_b: Graph, scps_a: Optional[Li
 
         for tag_key, tag_value in na.tags.items():
             conditions['aws:PrincipalTag/{}'.format(tag_key)] = tag_value
-
+        
+        for statement in nb.trust_policy['Statement']:
+            external_id = statement.get('Condition', {}).get('StringEquals', {}).get('sts:ExternalId')
+            if external_id:
+                conditions['sts:ExternalId'] = external_id
+                continue
+        
         # check without MFA
         auth_result = local_check_authorization_full(
             na,
@@ -102,9 +108,9 @@ def get_edges_between_graphs(graph_a: Graph, graph_b: Graph, scps_a: Optional[Li
                     result.append(Edge(node_a, node_b, 'can call sts:AssumeRole to access', 'STS'))
 
             # check b -> a
-            if node_a.searchable_name().startswith('role/'):
-                if _check_assume_role(graph_b, node_b, graph_a, node_a, scps_b):
-                    logger.info('Found edge: {}'.format(_describe_edge(node_b, node_a)))
-                    result.append(Edge(node_b, node_a, 'can call sts:AssumeRole to access', 'STS'))
+            # if node_a.searchable_name().startswith('role/'):
+            #     if _check_assume_role(graph_b, node_b, graph_a, node_a, scps_b):
+            #         logger.info('Found edge: {}'.format(_describe_edge(node_b, node_a)))
+            #         result.append(Edge(node_b, node_a, 'can call sts:AssumeRole to access', 'STS'))
 
     return result

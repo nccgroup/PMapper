@@ -19,12 +19,36 @@ import os
 import os.path
 from typing import List, Optional, Tuple
 
-from principalmapper.common import Edge
+from principalmapper.common import Edge, Node, Group
 from principalmapper.common.policies import Policy
 
 
 logger = logging.getLogger(__name__)
 
+
+class IdentityStore(object):
+    """The IdentityStore object represents an identity store within an AWS Organization."""
+
+    def __init__(self, arn: str, id: str, groups: List[Group], users: List[Node], group_edges: List[Edge], account_assignment_edges: List[Edge]):
+        self.arn = arn
+        self.id = id
+        self.groups = groups
+        self.users = users
+        self.group_edges = group_edges
+        self.account_assignment_edges = account_assignment_edges
+
+    def to_dictionary(self) -> dict:
+        """Returns a dictionary representation of this OrganizationAccount object. Used for serialization to disk. We
+        only return the SCP ARN since it is stored in a separate file."""
+
+        return {
+            'arn': self.arn,
+            'id': self.id,
+            'group': [x.to_dictionary() for x in self.groups],
+            'users': [x.to_dictionary() for x in self.users],
+            'group_edges': [x.to_dictionary() for x in self.group_edges],
+            'group_edges': [x.to_dictionary() for x in self.account_assignment_edges]
+        }
 
 class OrganizationAccount(object):
     """The OrganizationAccount object represents an account within an AWS Organization."""
@@ -37,7 +61,7 @@ class OrganizationAccount(object):
         else:
             self.tags = tags
 
-    def as_dictionary(self) -> dict:
+    def to_dictionary(self) -> dict:
         """Returns a dictionary representation of this OrganizationAccount object. Used for serialization to disk. We
         only return the SCP ARN since it is stored in a separate file."""
 
@@ -69,15 +93,15 @@ class OrganizationNode(object):
         else:
             self.tags = tags
 
-    def as_dictionary(self) -> dict:
+    def to_dictionary(self) -> dict:
         """Returns a dictionary representation of this OrganizationNode object. Used for serialization to disk. We
         only return the SCP ARN since it is stored in a separate file."""
 
         return {
             'ou_id': self.ou_id,
             'ou_name': self.ou_name,
-            'accounts': [x.as_dictionary() for x in self.accounts],
-            'child_nodes': [x.as_dictionary() for x in self.child_nodes],
+            'accounts': [x.to_dictionary() for x in self.accounts],
+            'child_nodes': [x.to_dictionary() for x in self.child_nodes],
             'scps': [x.arn for x in self.scps],
             'tags': self.tags
         }
@@ -89,7 +113,7 @@ class OrganizationTree(object):
     """
 
     def __init__(self, org_id: str, management_account_id: str, root_ous: List[OrganizationNode],
-                 all_scps: List[Policy], accounts: List[str], edge_list: List[Edge], metadata: dict):
+                 all_scps: List[Policy], accounts: List[str], edge_list: List[Edge], metadata: dict, identity_stores: Optional[List[IdentityStore]] = None):
         self.org_id = org_id
         self.management_account_id = management_account_id
         self.root_ous = root_ous
@@ -99,16 +123,22 @@ class OrganizationTree(object):
         if 'pmapper_version' not in metadata:
             raise ValueError('The pmapper_version key/value (str) is required: {"pmapper_version": "..."}')
         self.metadata = metadata
+        self.identity_stores = identity_stores if identity_stores else []
 
-    def as_dictionary(self) -> dict:
+    def to_dictionary(self) -> dict:
         """Returns a dictionary representation of this OrganizationTree object. Used for serialization to disk. We
         exclude the SCPs and metadata since `save_organization_to_disk` does those in a separate file."""
-
+        try:
+            edge_list = [x.to_dictionary() for x in self.edge_list]
+        except:
+            edge_list = self.edge_list
+            
         return {
             'org_id': self.org_id,
             'management_account_id': self.management_account_id,
-            'root_ous': [x.as_dictionary() for x in self.root_ous],
-            'edge_list': [x.to_dictionary() for x in self.edge_list],
+            'root_ous': [x.to_dictionary() for x in self.root_ous],
+            'edge_list': edge_list,
+            'identity_stores': [x.to_dictionary() for x in self.identity_stores],
             'accounts': self.accounts
         }
 
@@ -123,6 +153,7 @@ class OrganizationTree(object):
         |---- metadata.json
         |---- scps.json
         |---- org_data.json
+        |---- identity_store.json
 
         The client app (such as __main__.py of principalmapper) will specify where to retrieve the data."""
 
@@ -133,6 +164,7 @@ class OrganizationTree(object):
         metadata_filepath = os.path.join(rootpath, 'metadata.json')
         scps_filepath = os.path.join(rootpath, 'scps.json')
         org_data_filepath = os.path.join(rootpath, 'org_data.json')
+        identity_store_filepath = os.path.join(rootpath, 'identity_store.json')
 
         old_umask = os.umask(0o077)  # block rwx for group/all
         with open(metadata_filepath, 'w') as f:
@@ -140,8 +172,11 @@ class OrganizationTree(object):
         with open(scps_filepath, 'w') as f:
             json.dump([x.to_dictionary() for x in self.all_scps], f, indent=4)
         with open(org_data_filepath, 'w') as f:
-            org_data_dict = self.as_dictionary()
+            org_data_dict = self.to_dictionary()
             json.dump(org_data_dict, f, indent=4)
+        if self.identity_stores:
+            with open(identity_store_filepath, 'w') as f:
+                json.dump([x.to_dictionary() for x in self.identity_stores], f, indent=4)
         os.umask(old_umask)
 
     @classmethod
@@ -167,6 +202,14 @@ class OrganizationTree(object):
         org_datafile_path = os.path.join(dirpath, 'org_data.json')
         with open(org_datafile_path) as fd:
             org_dictrepr = json.load(fd)
+        
+        
+        identity_store_filepath = os.path.join(dirpath, 'identity_store.json')
+        if os.path.exists(identity_store_filepath):
+            with open(identity_store_filepath) as fd:
+                identitystore_obj = json.load(fd)
+        else:
+            identitystore_obj = None
 
         def _produce_ou(ou_dict: dict) -> OrganizationNode:
             return OrganizationNode(
@@ -188,5 +231,6 @@ class OrganizationTree(object):
             [x for x in policies.values()],
             org_dictrepr['accounts'],
             org_dictrepr['edge_list'],
-            metadata_obj
+            metadata_obj,
+            identity_stores=identitystore_obj
         )

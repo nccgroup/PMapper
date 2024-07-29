@@ -32,11 +32,11 @@ class Report:
         self.findings = findings
         self.source = source
 
-    def as_dictionary(self) -> dict:
+    def to_dictionary(self) -> dict:
         """Produces a dictionary representing this Report's contents."""
         return {
             'account': self.account,
             'date_and_time': self.date_and_time.isoformat(),
-            'findings': [x.as_dictionary() for x in self.findings],
+            'findings': [x.to_dictionary() for x in self.findings],
             'source': self.source
         }

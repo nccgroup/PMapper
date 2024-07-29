@@ -74,15 +74,35 @@ def policy_has_matching_statement(policy: Union[Policy, dict], effect_value: str
         # start by checking the action
         if 'Action' in statement:
             for action in _listify_string(statement['Action']):
-                if _matches_after_expansion(action_to_check, action):
+                if action == '*':
                     matches_action = True
                     break
+                elif not action.split(':')[0] == action_to_check.split(':')[0]:
+                    # Action doesnt pertain to the same service, no point in contining
+                    continue
+                elif action == action_to_check:
+                    matches_action = True
+                elif any([x in action for x in ['${','*','.']]):
+                    # only run _matches_after_expansion if there is a variable or wildcard in the action
+                    if _matches_after_expansion(action_to_check, action):
+                        matches_action = True
+                        break
         else:  # 'NotAction' in statement
             matches_action = True
             for notaction in _listify_string(statement['NotAction']):
-                if _matches_after_expansion(action_to_check, notaction):
+                if notaction == '*':
                     matches_action = False
-                    break  # finish looping
+                    break
+                elif not notaction.split(':')[0] == action_to_check.split(':')[0]:
+                    # Action doesnt pertain to the same service, no point in contining
+                    continue
+                elif notaction == action_to_check:
+                    matches_action = False
+                elif any([x in notaction for x in ['${','*','.']]):
+                    # only run _matches_after_expansion if there is a variable or wildcard in the notaction
+                    if _matches_after_expansion(action_to_check, notaction):
+                        matches_action = False
+                        break
         if not matches_action:
             continue  # cut early
 
@@ -665,6 +685,12 @@ def resource_policy_matching_statements(node_or_service: Union[Node, str], resou
 
     results = []
 
+    if resource_policy is None or 'Statement' not in resource_policy:
+        logger.error("resource_policy is None or missing 'Statement' key.")
+        logger.error(node_or_service)
+        logger.error(resource_policy)
+        return []
+
     for statement in _listify_dictionary(resource_policy['Statement']):
         matches_principal, matches_action, matches_resource, matches_condition = False, False, False, False
         if 'Principal' in statement:  # should be a dictionary
@@ -736,6 +762,9 @@ def resource_policy_authorization(node_or_service: Union[Node, str], resource_ow
                                   action_to_check: str, resource_to_check: str,
                                   condition_keys_to_check: Union[dict, CaseInsensitiveDict]) -> ResourcePolicyEvalResult:
     """Returns a ResourcePolicyEvalResult for a given request, based on the resource policy."""
+
+    # if not resource_policy:
+    #     return ResourcePolicyEvalResult.NO_MATCH
 
     if isinstance(condition_keys_to_check, dict):
         prepped_condition_keys = CaseInsensitiveDict(condition_keys_to_check)
@@ -815,8 +844,19 @@ def policies_include_matching_allow_action(principal: Node, action_to_check: str
                 continue
             if 'Action' in statement:
                 for action in _listify_string(statement['Action']):
-                    if _matches_after_expansion(action_to_check, action):
+                    if action == '*':
                         return True
+                    elif not action.split(':')[0] == action_to_check.split(':')[0]:
+                        # Action doesnt pertain to the same service, no point in contining
+                        continue
+                    elif action == action_to_check:
+                        return True
+                    elif any([x in action for x in ['${','*','.']]):
+                        # only run _matches_after_expansion if there is a variable or wildcard in the action
+                        if _matches_after_expansion(action_to_check, action):
+                            return True
+                    # if _matches_after_expansion(action_to_check, action):
+                    #     return True
             else:  # 'NotAction' in statement
                 return True  # so broad that we'd need to simulate to make sure
     return False
@@ -888,7 +928,7 @@ def _statement_matches_resource(statement: dict, resource: str, condition_keys: 
         return True
 
 
-@functools.lru_cache(maxsize=2048, typed=True)
+@functools.lru_cache(maxsize=2048*64, typed=True)
 def _compose_pattern(string_to_transform) -> Pattern:
     """Helper function that transforms a string with potential wildcards (* or ?) into a regular expression.
     Uses the functools.lru_cache decorator to reduce re-compiling the same value multiple times."""
@@ -912,15 +952,30 @@ def _matches_after_expansion(string_to_check: str, string_to_check_against: str,
     Handles matching with respect to wildcards, variables.
     """
 
+    if string_to_check_against == '*':
+        return True
+    if string_to_check == string_to_check_against and (condition_keys == {} or condition_keys is None):
+        return True
+    elif ':' in string_to_check and ':' in string_to_check_against:
+        if not string_to_check.split(':')[0] == string_to_check_against.split(':')[0]:
+            return False
+        else:
+            pass
+    elif not any([x in string_to_check_against for x in ['${','*','.']]):
+        # Pass to break on to see when we would reach this
+        pass
+
     # regexify string_to_check_against
     # handles use of ${} var substitution, wildcards (*), and periods (.)
     copy_string = string_to_check_against
 
-    if condition_keys is not None:
+    if condition_keys is not None and '${' in copy_string:
         for k, v in condition_keys.items():
             if isinstance(v, list):
                 v = str(v)  # TODO: how would a multi-valued context value be handled in resource fields?
             full_key = '${' + k + '}'
+            if full_key in copy_string:
+                pass
             copy_string = copy_string.replace(full_key, v)
 
     pattern = _compose_pattern(copy_string)

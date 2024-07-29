@@ -23,7 +23,7 @@ import re
 from typing import Optional, List
 
 from principalmapper.common import Graph
-from principalmapper.querying.presets import privesc, connected, clusters, endgame, serviceaccess, wrongadmin
+from principalmapper.querying.presets import privesc, connected, clusters, endgame, serviceaccess, wrongadmin, externalaccess
 from principalmapper.querying.query_interface import search_authorization_for, search_authorization_full
 from principalmapper.util import arns
 
@@ -205,6 +205,8 @@ def handle_preset(graph: Graph, query: str, skip_admins: bool = False) -> None:
         serviceaccess.handle_preset_query(graph, tokens, skip_admins)
     elif tokens[1] == 'wrongadmin':
         wrongadmin.handle_preset_query(graph, tokens, skip_admins)
+    elif tokens[1] == 'externalaccess':
+        externalaccess.handle_preset_query(graph, tokens, skip_admins)
     else:
         _print_query_help()
         return
@@ -280,6 +282,8 @@ def argquery(graph: Graph, principal_param: Optional[str], action_param: Optiona
             serviceaccess.handle_preset_query(graph, [], skip_admins)
         elif preset_param == 'wrongadmin':
             wrongadmin.handle_preset_query(graph, [], skip_admins)
+        elif preset_param == 'externalaccess':
+            externalaccess.handle_preset_query(graph, [], skip_admins)
         else:
             raise ValueError('Parameter for "preset" is not valid. Expected values: "privesc", "connected", '
                              '"clusters", "endgame", "serviceaccess", or "wrongadmin".')

@@ -1,3 +1,15 @@
+# Changes in this Fork
+
+* Preset query to determine external access for an account: `pmapper --account ACCOUNTID query -s 'preset externalaccess'`
+* `externalaccess` subcommand for `orgs` to determine internal-account and external access for accounts in an organization: `pmapper orgs externalaccess --org ORGID`
+* `identitycenter` subcommand for `orgs` to ingest Identity Center users, groups, and account assignments: `pmapper orgs identitycenter --org ORGID`
+* `neo4j` command to load data into a neo4j database. Limited queries are supplied in `NEO4J_README.md`
+  * Identity Center information needs to be first collected if you want it loaded.
+  * When run for a single account it will generate nodes and edges for access granted to external accounts
+  * When run for an org, it will differentiate between cross-account access and external access, and create nodes for external accounts
+* Performance optimizations in local policy simulation
+* Multiprocessing for edge identification
+
 # Principal Mapper
 
 Principal Mapper (PMapper) is a script and library for identifying risks in the configuration of AWS Identity and 

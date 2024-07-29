@@ -26,7 +26,7 @@ class Finding:
         self.description = description
         self.recommendation = recommendation
 
-    def as_dictionary(self) -> dict:
+    def to_dictionary(self) -> dict:
         """Returns a dictionary representation of this Finding."""
         return {
             'title': self.title,

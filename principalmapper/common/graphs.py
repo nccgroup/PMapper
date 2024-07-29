@@ -193,9 +193,10 @@ class Graph(object):
             for group in groups:
                 if group.arn in node['group_memberships']:
                     group_memberships.append(group)
+
             nodes.append(Node(arn=node['arn'], id_value=node['id_value'], attached_policies=node_policies,
                               group_memberships=group_memberships, trust_policy=node['trust_policy'],
-                              instance_profile=node['instance_profile'], num_access_keys=node['access_keys'],
+                              instance_profile=node['instance_profile'], access_keys=node['access_keys'],
                               active_password=node['active_password'], is_admin=node['is_admin'],
                               permissions_boundary=node_permission_boundary, has_mfa=node['has_mfa'], tags=node['tags']))
 

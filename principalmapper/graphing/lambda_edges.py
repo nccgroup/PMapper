@@ -28,6 +28,11 @@ from principalmapper.querying.local_policy_simulation import resource_policy_aut
 from principalmapper.querying import query_interface
 from principalmapper.util import arns, botocore_tools
 
+from multiprocessing import Pool, Manager, cpu_count
+from multiprocessing.queues import Queue
+from rich.progress import Progress
+import time
+
 
 logger = logging.getLogger(__name__)
 
@@ -81,13 +86,50 @@ def generate_edges_locally(nodes: List[Node], function_list: List[dict], scps: O
     (infra-as-code), but you must provide a `function_list` that is a list of dictionaries that mimic the
     output of calling `lambda:ListFunctions`.
     """
+    edges = []
+    role_nodes = [node for node in nodes if ':role/' in node.arn]
+    total_nodes = len(role_nodes)
+
+    num_processes = max(cpu_count() - 1, 1)  # Number of CPU cores minus one, but at least 1
+    base_batch_size = len(role_nodes) // num_processes
+    remainder = len(role_nodes) % num_processes
+    batch_size = base_batch_size + (1 if remainder > 0 else 0)
+    
+    with Manager() as manager:
+        progress_queue = manager.Queue()
+
+        # Create batches of nodes
+        batches = [role_nodes[i:i + batch_size] for i in range(0, len(role_nodes), batch_size)]
+
+        with Pool(processes=num_processes) as pool:
+            pool_result = pool.starmap_async(process_batch, [(batch, nodes, progress_queue, function_list, scps) for batch in batches])
+
+            with Progress() as progress:
+                task = progress.add_task("[green]Processing Lambda edges...", total=total_nodes)
+
+                while not pool_result.ready():
+                    try:
+                        while not progress_queue.empty():
+                            progress.advance(task, progress_queue.get_nowait())
+                        time.sleep(0.1)
+                    except KeyboardInterrupt:
+                        pool.terminate()
+                        break
+
+                # Final drain in case any items are left in the queue
+                while not progress_queue.empty():
+                    progress.advance(task, progress_queue.get_nowait())
+
+        results = pool_result.get()
+        for result in results:
+            edges.extend(result)
+
+    return edges
+
+def process_batch(batch: List[Node], nodes: List[Node], progress_queue: Queue, function_list: List[dict], scps: Optional[List[List[dict]]] = None):
 
     result = []
-    for node_destination in nodes:
-        # check that destination is a role
-        if ':role/' not in node_destination.arn:
-            continue
-
+    for node_destination in batch:
         # check that the destination role can be assumed by Lambda
         sim_result = resource_policy_authorization(
             'lambda.amazonaws.com',
@@ -99,6 +141,7 @@ def generate_edges_locally(nodes: List[Node], function_list: List[dict], scps: O
         )
 
         if sim_result != ResourcePolicyEvalResult.SERVICE_MATCH:
+            progress_queue.put(1)
             continue  # Lambda wasn't auth'd to assume the role
 
         for node_source in nodes:
@@ -204,5 +247,7 @@ def generate_edges_locally(nodes: List[Node], function_list: List[dict], scps: O
                     )
                     result.append(new_edge)
                     break
+
+        progress_queue.put(1)
 
     return result

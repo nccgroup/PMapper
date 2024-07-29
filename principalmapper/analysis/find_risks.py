@@ -48,7 +48,7 @@ def gen_findings_and_print(graph: Graph, formatting: str) -> None:
     if formatting == 'text':
         print_report(report)
     else:  # format == 'json'
-        print(json.dumps(report.as_dictionary(), indent=4))
+        print(json.dumps(report.to_dictionary(), indent=4))
 
 
 def gen_report(graph: Graph) -> Report:

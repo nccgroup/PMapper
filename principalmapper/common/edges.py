@@ -56,3 +56,12 @@ class Edge(object):
             'reason': self.reason,
             'short_reason': self.short_reason
         }
+    
+    def to_dictionary_no_objects(self) -> dict:
+        """Returns a dictionary representation of this object for storage"""
+        return {
+            'source': self.source,
+            'destination': self.destination,
+            'reason': self.reason,
+            'short_reason': self.short_reason
+        }

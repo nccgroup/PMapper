@@ -26,6 +26,11 @@ from principalmapper.querying import query_interface
 from principalmapper.querying.local_policy_simulation import resource_policy_authorization, ResourcePolicyEvalResult
 from principalmapper.util import arns
 
+from multiprocessing import Pool, Manager, cpu_count
+from multiprocessing.queues import Queue
+from rich.progress import Progress
+import time
+
 
 logger = logging.getLogger(__name__)
 
@@ -51,13 +56,52 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
     """Generates and returns Edge objects. It is possible to use this method if you are operating offline (infra-as-code).
     """
 
+    edges = []
+    # check if destination is a role with an instance profile
+    role_nodes = [node for node in nodes if ':role/' in node.arn and node.instance_profile]
+
+    if not role_nodes:
+        return []
+    
+    total_nodes = len(role_nodes)
+
+    num_processes = max(cpu_count() - 1, 1)  # Number of CPU cores minus one, but at least 1
+    base_batch_size = len(role_nodes) // num_processes
+    remainder = len(role_nodes) % num_processes
+    batch_size = base_batch_size + (1 if remainder > 0 else 0)
+    
+    with Manager() as manager:
+        progress_queue = manager.Queue()
+
+        # Create batches of nodes
+        batches = [role_nodes[i:i + batch_size] for i in range(0, len(role_nodes), batch_size)]
+
+        with Pool(processes=num_processes) as pool:
+            pool_result = pool.starmap_async(process_batch, [(batch, nodes, progress_queue, scps) for batch in batches])
+
+            with Progress() as progress:
+                task = progress.add_task("[green]Processing SSM edges...", total=total_nodes)
+
+                while not pool_result.ready():
+                    try:
+                        while not progress_queue.empty():
+                            progress.advance(task, progress_queue.get_nowait())
+                        time.sleep(0.1)
+                    except KeyboardInterrupt:
+                        pool.terminate()
+                        break
+
+        results = pool_result.get()
+        for result in results:
+            edges.extend(result)
+
+    return edges
+
+def process_batch(batch: List[Node], nodes: List[Node], progress_queue: Queue, scps: Optional[List[List[dict]]] = None):
+
     result = []
 
-    for node_destination in nodes:
-        # check if destination is a role with an instance profile
-        if ':role/' not in node_destination.arn or node_destination.instance_profile is None:
-            continue
-
+    for node_destination in batch:
         # check if the destination can be assumed by EC2
         sim_result = resource_policy_authorization(
             'ec2.amazonaws.com',
@@ -69,11 +113,13 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
         )
 
         if sim_result != ResourcePolicyEvalResult.SERVICE_MATCH:
+            progress_queue.put(1)
             continue  # EC2 wasn't auth'd to assume the role
 
         # at this point, we make an assumption that some instance is operating with the given instance profile
         # we assume if the role can call ssmmessages:CreateControlChannel, anyone with ssm perms can access it
         if not query_interface.local_check_authorization(node_destination, 'ssmmessages:CreateControlChannel', '*', {}):
+            progress_queue.put(1)
             continue
 
         for node_source in nodes:
@@ -111,5 +157,7 @@ def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] =
                 if mfa_res_2:
                     reason = '(Requires MFA) ' + reason
                 result.append(Edge(node_source, node_destination, reason, 'SSM'))
+
+        progress_queue.put(1)
 
     return result
