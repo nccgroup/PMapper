@@ -48,15 +48,16 @@ def print_privesc_results(graph: Graph, nodes: List[Node], skip_admins: bool = F
             print('{} is an administrative principal'.format(node.searchable_name()))
             continue
 
-        privesc, edge_list = can_privesc(graph, node)
+        privesc, privesc_lists = can_privesc(graph, node)
         if privesc:
-            end_of_list = edge_list[-1].destination
-            # the node can access this admin node through the current edge list, print this info out
-            print('{} can escalate privileges by accessing the administrative principal {}:'.format(
-                node.searchable_name(), end_of_list.searchable_name()))
-            for edge in edge_list:
-                print('   {}'.format(edge.describe_edge()))
-            print()
+            for edge_list in privesc_lists:
+                end_of_list = edge_list[-1].destination
+                # the node can access this admin node through the current edge list, print this info out
+                print('{} can escalate privileges by accessing the administrative principal {}:'.format(
+                    node.searchable_name(), end_of_list.searchable_name()))
+                for edge in edge_list:
+                    print('   {}'.format(edge.describe_edge()))
+                print()
 
 
 def write_privesc_results(graph: Graph, nodes: List[Node], skip_admins: bool, output: io.StringIO) -> None:
@@ -71,17 +72,18 @@ def write_privesc_results(graph: Graph, nodes: List[Node], skip_admins: bool, ou
             output.write('{} is an administrative principal\n'.format(node.searchable_name()))
             continue
 
-        privesc, edge_list = can_privesc(graph, node)
+        privesc, privesc_lists = can_privesc(graph, node)
         if privesc:
-            end_of_list = edge_list[-1].destination
-            # the node can access this admin node through the current edge list, print this info out
-            output.write('{} can escalate privileges by accessing the administrative principal {}:\n'.format(
-                node.searchable_name(), end_of_list.searchable_name()))
-            for edge in edge_list:
-                output.write('   {}\n'.format(edge.describe_edge()))
+            for edge_list in privesc_lists:
+                end_of_list = edge_list[-1].destination
+                # the node can access this admin node through the current edge list, print this info out
+                output.write('{} can escalate privileges by accessing the administrative principal {}:\n'.format(
+                    node.searchable_name(), end_of_list.searchable_name()))
+                for edge in edge_list:
+                    output.write('   {}\n'.format(edge.describe_edge()))
 
 
-def can_privesc(graph: Graph, node: Node) -> (bool, List[Edge]):
+def can_privesc(graph: Graph, node: Node) -> (bool, List[List[Edge]]):
     """Method for determining if a given Node in a Graph can escalate privileges.
 
     Returns a bool, List[Edge] tuple. The bool indicates if there is a privesc risk, and the List[Edge] component
@@ -89,6 +91,9 @@ def can_privesc(graph: Graph, node: Node) -> (bool, List[Edge]):
     """
     edge_lists = get_search_list(graph, node)
     searched_nodes = []
+    privesc_lists = []
+
+
     for edge_list in edge_lists:
         # check if the node at the end of the list has been looked at yet, skip if so
         end_of_list = edge_list[-1].destination
@@ -98,5 +103,6 @@ def can_privesc(graph: Graph, node: Node) -> (bool, List[Edge]):
         # add end of list to the searched nodes and do the privesc check
         searched_nodes.append(end_of_list)
         if end_of_list.is_admin:
-            return True, edge_list
-    return False, None
+            privesc_lists.append(edge_list)
+
+    return len(privesc_lists) > 0, privesc_lists

@@ -700,6 +700,9 @@ def resource_policy_matching_statements(node_or_service: Union[Node, str], resou
                 if 'AWS' in statement['Principal']:
                     if _principal_matches_in_statement(node_or_service, _listify_string(statement['Principal']['AWS'])):
                         matches_principal = True
+                if 'Federated' in statement['Principal']:
+                    if _principal_matches_in_statement(node_or_service, _listify_string(statement['Principal']['Federated'])):
+                        matches_principal = True
             else:
                 if 'Service' in statement['Principal']:
                     if node_or_service in _listify_string(statement['Principal']['Service']):
@@ -709,6 +712,9 @@ def resource_policy_matching_statements(node_or_service: Union[Node, str], resou
             if isinstance(node_or_service, Node):
                 if 'AWS' in statement['NotPrincipal']:
                     if _principal_matches_in_statement(node_or_service, _listify_string(statement['NotPrincipal']['AWS'])):
+                        matches_principal = False
+                if 'Federated' in statement['NotPrincipal']:
+                    if _principal_matches_in_statement(node_or_service, _listify_string(statement['NotPrincipal']['Federated'])):
                         matches_principal = False
             else:
                 if 'Service' in statement['NotPrincipal']:
@@ -802,6 +808,11 @@ def resource_policy_authorization(node_or_service: Union[Node, str], resource_ow
                         for aws_principal in _listify_string(statement['Principal']['AWS']):
                             if node_or_service.arn == aws_principal:
                                 node_match = True
+                    if 'Federated' in statement['Principal']:
+                        for aws_principal in _listify_string(statement['Principal']['Federated']):
+                            if node_or_service.arn == aws_principal:
+                                node_match = True
+
             if node_match:
                 return ResourcePolicyEvalResult.NODE_MATCH
             else:

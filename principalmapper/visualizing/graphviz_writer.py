@@ -91,8 +91,9 @@ def write_privesc_graphviz(graph: Graph, filepath: str, file_format: str) -> Non
                 ranked_nodes[0] = []
             ranked_nodes[0].append(node)
         else:
-            pe, edge_list = can_privesc(graph, node)
+            pe, privesc_list = can_privesc(graph, node)
             if pe:
+                edge_list = privesc_list[0]
                 if len(edge_list) not in ranked_nodes:
                     ranked_nodes[len(edge_list)] = []
                 ranked_nodes[len(edge_list)].append(node)
@@ -107,11 +108,12 @@ def write_privesc_graphviz(graph: Graph, filepath: str, file_format: str) -> Non
                 s.add_node(pydot_node)
             else:
                 # draw the node + add edge
-                pe, edge_list = can_privesc(graph, node)
+                pe, privesc_list = can_privesc(graph, node)
                 pydot_node = pydot.Node(node.searchable_name(), style='filled', fillcolor='#FADBD8', shape='box')
                 pydot_nodes[node] = pydot_node
                 s.add_node(pydot_node)
 
+                edge_list = privesc_list[0]
                 edge_to_add = pydot.Edge(node.searchable_name(), edge_list[0].destination.searchable_name(),
                                          xlabel=edge_list[0].short_reason)
                 pydg.add_edge(edge_to_add)

@@ -75,8 +75,29 @@ class CloudFormationEdgeChecker(EdgeChecker):
                                'be caused by an authorization issue. Continuing.'.format(cf_client.meta.region_name))
                 logger.debug('Exception details: {}'.format(ex))
 
+        # grab existing cloudformation stack-sets
+        stack_set_list = []
+        for cf_client in cloudformation_clients:
+            logger.debug('Looking at region {}'.format(cf_client.meta.region_name))
+            try:
+                stack_set_ids = []
+                paginator = cf_client.get_paginator('list_stack_sets')
+
+                for page in paginator.paginate():
+                    for stack_set in page['Summaries']:
+                        if stack_set['Status'] not in ['DELETED']:  # ignore unusable stack-sets
+                            stack_set_ids.append(stack_set["StackSetId"])
+
+                for stack_set_id in stack_set_ids:
+                    stack_set = cf_client.describe_stack_set(StackSetName=stack_set_id)['StackSet']
+                    stack_set_list.append(stack_set)
+            except ClientError as ex:
+                logger.warning('Unable to search region {} for stack sets. The region may be disabled, or the error may '
+                               'be caused by an authorization issue. Continuing.'.format(cf_client.meta.region_name))
+                logger.debug('Exception details: {}'.format(ex))
+
         logger.info('Generating Edges based on data from CloudFormation.')
-        result = generate_edges_locally(nodes, stack_list, scps)
+        result = generate_edges_locally(nodes, stack_set_list, stack_list, scps)
 
         for edge in result:
             logger.info("Found new edge: {}".format(edge.describe_edge()))
@@ -118,6 +139,68 @@ def process_batch(batch: List[Node], nodes: List[Node], progress_queue: Queue, s
                 },
                 service_control_policy_groups=scps
             )
+
+            # See if source can make a new stack sets and pass the destination role
+            if can_pass_role:
+                can_create, need_mfa_create = query_interface.local_check_authorization_handling_mfa(
+                    node_source,
+                    'cloudformation:CreateStackSet',
+                    '*',
+                    {'cloudformation:RoleArn': node_destination.arn},
+                    service_control_policy_groups=scps
+                )
+                if can_create:
+                    reason = 'can create a stack set in CloudFormation to access'
+                    if need_mfa_passrole or need_mfa_create:
+                        reason = '(MFA required) ' + reason
+
+                    result.append(Edge(node_source, node_destination, reason, 'Cloudformation'))
+
+            relevant_stack_sets = []
+            for stack_set in stack_set_list:
+                if 'AdministrationRoleARN' in stack_set:
+                    if stack_set['AdministrationRoleARN'] == node_destination.arn:
+                        relevant_stack_sets.append(stack_set)
+
+            # See if source can call UpdateStackSet to use the current role of a stack set (setting a new template)
+            for stack_set in relevant_stack_sets:
+                can_update, need_mfa_update = query_interface.local_check_authorization_handling_mfa(
+                    node_source,
+                    'cloudformation:UpdateStackSet',
+                    stack_set['StackSetId'],
+                    {'cloudformation:RoleArn': node_destination.arn},
+                    service_control_policy_groups=scps
+                )
+                if can_update:
+                    reason = 'can update the CloudFormation stack set {} to access'.format(
+                        stack_set['StackSetId']
+                    )
+                    if need_mfa_update:
+                        reason = '(MFA required) ' + reason
+
+                    result.append(Edge(node_source, node_destination, reason, 'Cloudformation'))
+                    break  # let's save ourselves having to dig into every CF stack set edge possible
+
+            # See if source can call UpdateStackSet to pass a new role to a stack set and use it
+            if can_pass_role:
+                for stack_set in stack_set_list:
+                    can_update, need_mfa_update = query_interface.local_check_authorization_handling_mfa(
+                        node_source,
+                        'cloudformation:UpdateStackSet',
+                        stack_set['StackSetId'],
+                        {'cloudformation:RoleArn': node_destination.arn},
+                        service_control_policy_groups=scps
+                    )
+
+                    if can_update:
+                        reason = 'can update the CloudFormation stack set {} and pass the role to access'.format(
+                            stack_set['StackSetId']
+                        )
+                        if need_mfa_update or need_mfa_passrole:
+                            reason = '(MFA required) ' + reason
+
+                        result.append(Edge(node_source, node_destination, reason, 'Cloudformation'))
+                        break  # save ourselves from digging into all CF stack set edges possible
 
             # See if source can make a new stack and pass the destination role
             if can_pass_role:
@@ -215,7 +298,8 @@ def process_batch(batch: List[Node], nodes: List[Node], progress_queue: Queue, s
     return result
 
 
-def generate_edges_locally(nodes: List[Node], stack_list: List[dict], scps: Optional[List[List[dict]]] = None) -> List[Edge]:
+def generate_edges_locally(nodes: List[Node], stack_set_list: List[dict], stack_list: List[dict], scps: Optional[List[List[dict]]] = None) -> List[Edge]:
+
     """Generates and returns Edge objects. Works on the assumption that the param `stack_list` is the
     collected outputs from calling `cloudformation:DescribeStacks`. Thus, it is possible to
     create a similar output and feed it to this method if you are operating offline (infra-as-code).

@@ -21,11 +21,13 @@ import logging
 import os
 from typing import List, Optional
 
+from botocore.exceptions import ClientError
+
 from principalmapper.common import Edge, Node
 from principalmapper.graphing.edge_checker import EdgeChecker
 from principalmapper.querying import query_interface
 from principalmapper.querying.local_policy_simulation import resource_policy_authorization, ResourcePolicyEvalResult
-from principalmapper.util import arns
+from principalmapper.util import arns, botocore_tools
 
 from multiprocessing import Pool, Manager, cpu_count
 from multiprocessing.queues import Queue
@@ -44,8 +46,50 @@ class EC2EdgeChecker(EdgeChecker):
                      client_args_map: Optional[dict] = None) -> List[Edge]:
         """Fulfills expected method return_edges."""
 
-        logger.info('Generating Edges based on EC2.')
-        result = generate_edges_locally(nodes, scps)
+        logger.info('Pulling data on EC2 instances.')
+        iam_client = self.session.create_client('iam')
+        instance_profile_cache = dict()
+
+        if client_args_map is None:
+            cfargs = {}
+        else:
+            cfargs = client_args_map.get('ec2', {})
+
+        # Grab existing EC2 instances in each region
+        ec2_clients = []
+        if self.session is not None:
+            ec2_regions = botocore_tools.get_regions_to_search(self.session, 'ec2', region_allow_list, region_deny_list)
+            for region in ec2_regions:
+                ec2_clients.append(self.session.create_client('ec2', region_name=region, **cfargs))
+
+        # grab existing EC2 instances
+        ec2_list = []
+        for ec2_client in ec2_clients:
+            logger.debug('Looking at region {}'.format(ec2_client.meta.region_name))
+            try:
+                paginator = ec2_client.get_paginator('describe_instances')
+                for page in paginator.paginate():
+                    for ec2_reservation in page['Reservations']:
+                        for ec2_instance in ec2_reservation['Instances']:
+                            if ec2_instance['State']['Name'] not in ['terminated'] and 'IamInstanceProfile' in ec2_instance:
+                                instance_profile_arn = ec2_instance['IamInstanceProfile']['Arn']
+
+                                if instance_profile_arn in instance_profile_cache:
+                                    ec2_roles = instance_profile_cache[instance_profile_arn]
+                                else:
+                                    instance_profile_name = instance_profile_arn.split('/')[-1]
+                                    ec2_roles = iam_client.get_instance_profile(InstanceProfileName=instance_profile_name)['InstanceProfile']['Roles']
+                                    instance_profile_cache[instance_profile_arn] = ec2_roles
+
+                                ec2_instance['Roles'] = ec2_roles
+                                ec2_list.append(ec2_instance)
+            except ClientError as ex:
+                logger.warning('Unable to search region {} for EC2 instances. The region may be disabled, or the error may '
+                               'be caused by an authorization issue. Continuing.'.format(ec2_client.meta.region_name))
+                logger.debug('Exception details: {}'.format(ex))
+
+        logger.info('Generating Edges based on data from EC2.')
+        result = generate_edges_locally(nodes, ec2_list, scps)
 
         for edge in result:
             logger.info("Found new edge: {}".format(edge.describe_edge()))
@@ -53,10 +97,45 @@ class EC2EdgeChecker(EdgeChecker):
         return result
 
 
-def generate_edges_locally(nodes: List[Node], scps: Optional[List[List[dict]]] = None) -> List[Edge]:
+def generate_edges_locally(nodes: List[Node], ec2_list: List[dict], scps: Optional[List[List[dict]]] = None) -> List[Edge]:
+
     """Generates and returns Edge objects. It is possible to use this method if you are operating offline (infra-as-code).
     """
     edges = []
+
+    for ec2_instance in ec2_list:
+        for node_destination in _get_ec2_nodes(nodes, ec2_instance):
+            for node_source in nodes:
+                # skip self-access checks
+                if node_source == node_destination:
+                    continue
+
+                # check if source is an admin: if so, it can access destination but this is not tracked via an Edge
+                if node_source.is_admin:
+                    continue
+
+                # check if source can modify user data of EC2 instance
+                can_update, need_mfa_update = query_interface.local_check_authorization_handling_mfa(
+                    node_source,
+                    'ec2:ModifyInstanceAttribute',
+                    ec2_instance['InstanceId'],
+                    {'ec2:RoleArn': node_destination.arn},
+                    service_control_policy_groups=scps
+                )
+
+                if can_update:
+                    reason = 'can update EC2 user data to obtain access to'
+                    if need_mfa_update:
+                        reason = '(MFA required) ' + reason
+
+                    new_edge = Edge(
+                        node_source,
+                        node_destination,
+                        reason,
+                        'EC2'
+                    )
+                    result.append(new_edge)
+
     # Filter for roles
     role_nodes = [node for node in nodes if ':role/' in node.arn]
     total_nodes = len(role_nodes)
@@ -232,3 +311,15 @@ def process_batch(batch: List[Node], nodes: List[Node], progress_queue: Queue, s
         progress_queue.put(1)
     
     return result
+
+
+def _get_ec2_nodes(nodes, ec2_instance):
+    node_destinations = []
+
+    for ec2_role in ec2_instance['Roles']:
+        for node in nodes:
+            if node.arn == ec2_role['Arn']:
+                node_destinations.append(node)
+                break
+
+    return node_destinations

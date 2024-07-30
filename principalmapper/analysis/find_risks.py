@@ -88,9 +88,9 @@ def gen_privesc_findings(graph: Graph) -> List[Finding]:
     for node in graph.nodes:
         if node.is_admin:
             continue  # skip current admins
-        privesc_res, edge_list = can_privesc(graph, node)
+        privesc_res, privesc_list = can_privesc(graph, node)
         if privesc_res:
-            node_path_list.append((node, edge_list))
+            node_path_list.append((node, privesc_list))
 
     if len(node_path_list) > 0:
         description_preamble = 'In AWS, IAM Principals such as IAM Users or IAM Roles have their permissions defined ' \
@@ -103,13 +103,14 @@ def gen_privesc_findings(graph: Graph) -> List[Finding]:
                                'The following principals could escalate privileges:\n\n'
 
         description_body = ''
-        for node, edge_list in node_path_list:
-            end_of_list = edge_list[-1].destination
-            description_body += '* {} can escalate privileges by accessing the administrative principal {}:\n'.format(
-                node.searchable_name(), end_of_list.searchable_name())
-            for edge in edge_list:
-                description_body += '   * {}\n'.format(edge.describe_edge())
-            description_body += '\n'
+        for node, privesc_list in node_path_list:
+            for edge_list in privesc_list:
+                end_of_list = edge_list[-1].destination
+                description_body += '* {} can escalate privileges by accessing the administrative principal {}:\n'.format(
+                    node.searchable_name(), end_of_list.searchable_name())
+                for edge in edge_list:
+                    description_body += '   * {}\n'.format(edge.describe_edge())
+                description_body += '\n'
 
         result.append(Finding(
             'IAM {} Can Escalate Privileges'.format('Principals' if len(node_path_list) > 1 else 'Principal'),
