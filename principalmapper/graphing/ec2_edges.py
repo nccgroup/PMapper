@@ -102,6 +102,7 @@ def generate_edges_locally(nodes: List[Node], ec2_list: List[dict], scps: Option
     """Generates and returns Edge objects. It is possible to use this method if you are operating offline (infra-as-code).
     """
     edges = []
+    result = []
 
     for ec2_instance in ec2_list:
         for node_destination in _get_ec2_nodes(nodes, ec2_instance):
@@ -134,7 +135,8 @@ def generate_edges_locally(nodes: List[Node], ec2_list: List[dict], scps: Option
                         reason,
                         'EC2'
                     )
-                    result.append(new_edge)
+#                    result.append(new_edge)
+                    edges.extend(result)
 
     # Filter for roles
     role_nodes = [node for node in nodes if ':role/' in node.arn]
