@@ -19,7 +19,8 @@
 import logging
 from typing import Dict, List, Optional
 
-from botocore.exceptions import ClientError
+from botocore.config import Config
+from botocore.exceptions import ClientError, ConnectTimeoutError, EndpointConnectionError
 
 from principalmapper.common import Edge, Node
 from principalmapper.graphing.edge_checker import EdgeChecker
@@ -51,7 +52,11 @@ class CodeBuildEdgeChecker(EdgeChecker):
         if self.session is not None:
             cf_regions = botocore_tools.get_regions_to_search(self.session, 'codebuild', region_allow_list, region_deny_list)
             for region in cf_regions:
-                codebuild_clients.append(self.session.create_client('codebuild', region_name=region, **cbargs))
+                codebuild_clients.append(self.session.create_client(
+                    'codebuild', region_name=region,
+                    config=Config(connect_timeout=10, retries={'max_attempts': 0}),
+                    **cbargs
+                ))
 
         codebuild_projects = []
         for cb_client in codebuild_clients:
@@ -75,7 +80,7 @@ class CodeBuildEdgeChecker(EdgeChecker):
                                     'project_tags': project_data['tags']
                                 })
 
-            except ClientError as ex:
+            except (ClientError, ConnectTimeoutError, EndpointConnectionError) as ex:
                 logger.warning('Unable to search region {} for projects. The region may be disabled, or the error may '
                                'be caused by an authorization issue. Continuing.'.format(cb_client.meta.region_name))
                 logger.debug('Exception details: {}'.format(ex))
