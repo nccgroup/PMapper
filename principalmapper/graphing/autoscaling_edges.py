@@ -19,7 +19,8 @@
 import logging
 from typing import Dict, List, Optional
 
-from botocore.exceptions import ClientError
+from botocore.config import Config
+from botocore.exceptions import ClientError, ConnectTimeoutError, EndpointConnectionError
 
 from principalmapper.common import Edge, Node
 from principalmapper.graphing.edge_checker import EdgeChecker
@@ -50,7 +51,11 @@ class AutoScalingEdgeChecker(EdgeChecker):
         if self.session is not None:
             as_regions = botocore_tools.get_regions_to_search(self.session, 'autoscaling', region_allow_list, region_deny_list)
             for region in as_regions:
-                autoscaling_clients.append(self.session.create_client('autoscaling', region_name=region, **asargs))
+                autoscaling_clients.append(self.session.create_client(
+                    'autoscaling', region_name=region,
+                    config=Config(connect_timeout=10, retries={'max_attempts': 0}),
+                    **asargs
+                ))
 
         launch_configs = []
         for as_client in autoscaling_clients:
@@ -66,7 +71,7 @@ class AutoScalingEdgeChecker(EdgeChecker):
                                     'lc_iip': launch_config['IamInstanceProfile']
                                 })
 
-            except ClientError as ex:
+            except (ClientError, ConnectTimeoutError, EndpointConnectionError) as ex:
                 logger.warning('Unable to search region {} for launch configs. The region may be disabled, or the error may '
                                'be caused by an authorization issue. Continuing.'.format(as_client.meta.region_name))
                 logger.debug('Exception details: {}'.format(ex))

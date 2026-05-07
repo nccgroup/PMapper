@@ -22,6 +22,8 @@ import os
 
 import botocore.session
 import botocore.exceptions
+from botocore.config import Config
+from botocore.exceptions import ConnectTimeoutError, EndpointConnectionError
 import principalmapper
 from principalmapper.common import Node, Group, Policy, Graph, OrganizationTree, OrganizationNode, OrganizationAccount
 from principalmapper.graphing import edge_identification
@@ -337,7 +339,9 @@ def get_kms_key_policies(session: botocore.session.Session, region_allow_list: O
         try:
             # Grab the keys
             cmks = []
-            kmsclient = session.create_client('kms', region_name=kms_region, **kmsargs)
+            kmsclient = session.create_client('kms', region_name=kms_region,
+                                              config=Config(connect_timeout=10, retries={'max_attempts': 0}),
+                                              **kmsargs)
             kms_paginator = kmsclient.get_paginator('list_keys')
             for page in kms_paginator.paginate():
                 cmks.extend([x['KeyArn'] for x in page['Keys']])
@@ -351,7 +355,7 @@ def get_kms_key_policies(session: botocore.session.Session, region_allow_list: O
                     json.loads(policy_str)
                 ))
                 logger.info('Caching policy for {}'.format(cmk))
-        except botocore.exceptions.ClientError as ex:
+        except (botocore.exceptions.ClientError, ConnectTimeoutError, EndpointConnectionError) as ex:
             logger.info('Unable to search KMS in region {} for key policies. The region may be disabled, or the current principal may not be authorized to access the service. Continuing.'.format(kms_region))
             logger.debug('Exception was: {}'.format(ex))
             continue
@@ -376,7 +380,9 @@ def get_sns_topic_policies(session: botocore.session.Session, region_allow_list:
         try:
             # Grab the topics
             topics = []
-            snsclient = session.create_client('sns', region_name=sns_region, **snsargs)
+            snsclient = session.create_client('sns', region_name=sns_region,
+                                              config=Config(connect_timeout=10, retries={'max_attempts': 0}),
+                                              **snsargs)
             sns_paginator = snsclient.get_paginator('list_topics')
             for page in sns_paginator.paginate():
                 topics.extend([x['TopicArn'] for x in page['Topics']])
@@ -390,7 +396,7 @@ def get_sns_topic_policies(session: botocore.session.Session, region_allow_list:
                     json.loads(policy_str)
                 ))
                 logger.info('Caching policy for {}'.format(topic))
-        except botocore.exceptions.ClientError as ex:
+        except (botocore.exceptions.ClientError, ConnectTimeoutError, EndpointConnectionError) as ex:
             logger.info('Unable to search SNS in region {} for topic policies. The region may be disabled, or the current principal may not be authorized to access the service. Continuing.'.format(sns_region))
             logger.debug('Exception was: {}'.format(ex))
             continue
@@ -416,7 +422,9 @@ def get_sqs_queue_policies(session: botocore.session.Session, account_id: str,
         try:
             # Grab the queue names
             queue_urls = []
-            sqsclient = session.create_client('sqs', region_name=sqs_region, **sqsargs)
+            sqsclient = session.create_client('sqs', region_name=sqs_region,
+                                              config=Config(connect_timeout=10, retries={'max_attempts': 0}),
+                                              **sqsargs)
             response = sqsclient.list_queues()
             if 'QueueUrls' in response:
                 queue_urls.extend(response['QueueUrls'])
@@ -445,7 +453,7 @@ def get_sqs_queue_policies(session: botocore.session.Session, account_id: str,
                         }
                     ))
                     logger.info('Queue {} does not have a queue policy, adding a "stub" policy instead.'.format(queue_name))
-        except botocore.exceptions.ClientError as ex:
+        except (botocore.exceptions.ClientError, ConnectTimeoutError, EndpointConnectionError) as ex:
             logger.info('Unable to search SQS in region {} for queues. The region may be disabled, or the current principal may not be authorized to access the service. Continuing.'.format(sqs_region))
             logger.debug('Exception was: {}'.format(ex))
 
@@ -469,7 +477,9 @@ def get_secrets_manager_policies(session: botocore.session.Session, region_allow
         try:
             # Grab the ARNs of the secrets in this region
             secret_arns = []
-            smclient = session.create_client('secretsmanager', region_name=sm_region, **smargs)
+            smclient = session.create_client('secretsmanager', region_name=sm_region,
+                                             config=Config(connect_timeout=10, retries={'max_attempts': 0}),
+                                             **smargs)
             list_secrets_paginator = smclient.get_paginator('list_secrets')
             for page in list_secrets_paginator.paginate():
                 if 'SecretList' in page:
@@ -502,7 +512,7 @@ def get_secrets_manager_policies(session: botocore.session.Session, region_allow
                     ))
                     logger.info('Secret {} does not have a resource policy, inserting a "stub" policy instead'.format(secret_arn))
 
-        except botocore.exceptions.ClientError as ex:
+        except (botocore.exceptions.ClientError, ConnectTimeoutError, EndpointConnectionError) as ex:
             logger.info('Unable to search Secrets Manager in region {} for secrets. The region may be disabled, or '
                         'the current principal may not be authorized to access the service. '
                         'Continuing.'.format(sm_region))

@@ -20,7 +20,8 @@ import logging
 import os
 from typing import List, Optional
 
-from botocore.exceptions import ClientError
+from botocore.config import Config
+from botocore.exceptions import ClientError, ConnectTimeoutError, EndpointConnectionError
 
 from principalmapper.common import Edge, Node
 from principalmapper.graphing.edge_checker import EdgeChecker
@@ -51,7 +52,11 @@ class LambdaEdgeChecker(EdgeChecker):
         if self.session is not None:
             lambda_regions = botocore_tools.get_regions_to_search(self.session, 'lambda', region_allow_list, region_deny_list)
             for region in lambda_regions:
-                lambda_clients.append(self.session.create_client('lambda', region_name=region, **lambdaargs))
+                lambda_clients.append(self.session.create_client(
+                    'lambda', region_name=region,
+                    config=Config(connect_timeout=10, retries={'max_attempts': 0}),
+                    **lambdaargs
+                ))
 
         # grab existing lambda functions
         function_list = []
@@ -61,8 +66,8 @@ class LambdaEdgeChecker(EdgeChecker):
                 for page in paginator.paginate(PaginationConfig={'PageSize': 25}):
                     for func in page['Functions']:
                         function_list.append(func)
-            except ClientError as ex:
-                logger.warning('Unable to search region {} for stacks. The region may be disabled, or the error may '
+            except (ClientError, ConnectTimeoutError, EndpointConnectionError) as ex:
+                logger.warning('Unable to search region {} for functions. The region may be disabled, or the error may '
                                'be caused by an authorization issue. Continuing.'.format(lambda_client.meta.region_name))
                 logger.debug('Exception details: {}'.format(ex))
 
